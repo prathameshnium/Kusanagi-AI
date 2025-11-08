@@ -1,31 +1,29 @@
-# Kusanagi-AI
+# Kusanagi-AI: Free & Open-Source Local AI Toolkit for Researchers
 
-> A toolkit of local, privacy-focused AI applications built with Python. Includes a RAG-powered research assistant for PDFs, various chatbots, and visualization scripts.
+> Empowering researchers, particularly in Physics and Material Science, with accessible, privacy-focused AI tools designed to run efficiently on standard home laptops. Kusanagi-AI provides a robust, open-source platform for local AI experimentation and application, ensuring data ownership and control.
 
 ## About This Project
 
-I started Kusanagi-AI because I wanted to create a more privacy-focused and controlled environment to experiment with AI. I believe that running models locally is a fantastic way to learn, and it gives you complete ownership of your data and the entire process.
-
-This is not a professional, polished setup. Instead, it's a personal playground,  a collection of scripts and applications I'm building for fun and to deepen my understanding of AI.
+Kusanagi-AI was developed to address the growing need for accessible and privacy-conscious AI solutions within the research community. Our mission is to provide a free, open-source toolkit that enables researchers, especially those in Physics and Material Science, to leverage advanced AI capabilities directly on their personal computers. By focusing on local execution, Kusanagi-AI ensures complete data privacy and eliminates reliance on cloud services, making sophisticated AI analysis available without specialized hardware or extensive technical expertise. This project is a testament to the power of local AI, offering a controlled environment for deep learning and practical application.
 
 ## Features
 
-*   **Local & Private**: Everything is designed to run 100% offline. Your data never leaves your machine.
-*   **Research Assistant (Orochimaru)**: The main application in this toolkit.
-    *   Load and chat with your PDF documents using Retrieval-Augmented Generation (RAG).
-    *   Summarize and generate critical reviews of research papers.
-    *   Manages a local Ollama instance for model inference.
-*   **Experimental Chatbots**: Various simple chatbot scripts to test different models and ideas.
-*   **AI Visualizer**: Scripts to visualize AI-related data and concepts.
+*   **Local & Private**: All operations are performed 100% offline, guaranteeing your research data remains secure and private on your machine.
+*   **Research Assistant (Orochimaru)**: The flagship application, specifically tailored for academic use.
+    *   **PDF Interaction**: Engage in Retrieval-Augmented Generation (RAG) with your PDF documents for in-depth analysis and information extraction.
+    *   **Academic Review**: Generate concise summaries and critical peer reviews of research papers, aiding in literature analysis and understanding.
+    *   **Ollama Integration**: Seamlessly manages a local Ollama instance for efficient model inference, supporting a wide range of open-source language models.
+*   **Experimental Chatbots**: A collection of diverse chatbot scripts for exploring different AI models and conversational paradigms.
+*   **AI Visualizer**: Tools and scripts for visualizing AI-related data, concepts, and model outputs, enhancing understanding and interpretation.
 
 ## Getting Started
 
-Follow these steps to get the environment up and running.
+Follow these steps to set up your local AI research environment.
 
 ### Prerequisites
 
-*   Python 3.8+
-*   [Ollama](https://ollama.com/): You need to have Ollama installed to run the local models. The scripts can even start the Ollama server for you if the path is configured correctly.
+*   **Python 3.8+**: The core programming language for Kusanagi-AI.
+*   **Ollama**: Essential for running local large language models. Download and install Ollama from [https://ollama.com/](https://ollama.com/). Kusanagi-AI can also manage the Ollama server for you if configured correctly.
 
 ### Installation
 
@@ -36,50 +34,55 @@ Follow these steps to get the environment up and running.
     ```
 
 2.  **Install the required Python packages:**
-    It's recommended to use a virtual environment.
+    It is highly recommended to use a virtual environment to manage dependencies.
     ```sh
     pip install -r requirements.txt
     ```
 
 3.  **Configure the System:**
-    *   Open `System_Config.json`.
-    *   Ensure the `ollama_path` points to your Ollama executable (e.g., `F:\\Portable_AI_Assets\\ollama_main\\ollama.exe`).
-    *   Set the `model_folder` to where you store your Ollama models.
-    *   Make sure you have the embedding model specified in the config (default: `mxbai-embed-large`) and at least one chat model pulled via Ollama.
+    *   Open `System_Config.json` located in the project root.
+    *   Ensure `ollama_path` accurately points to your Ollama executable (e.g., `F:\Portable_AI_Assets\ollama_main\ollama.exe`).
+    *   Set `model_folder` to the directory where your Ollama models are stored.
+    *   **Download Models**: Pull the necessary models using the Ollama CLI. The default embedding model is `mxbai-embed-large`, and you'll need at least one chat model.
     ```sh
     ollama pull mxbai-embed-large
-    ollama pull llama3 # or any other model you prefer
+    ollama pull llama3 # or any other preferred chat model
     ```
 
 ## Usage
 
-The main application is the Research Assistant. To run it, execute the following command:
+The primary tool in this toolkit is the Research Assistant. To launch it, execute the following command:
 
 ```sh
-python Local_Research_Assistent.py
+python Orochimaru_Local_Research_Assistent.py
 ```
 
-You can explore and run the other scripts like `Chatapp.py` and `Visualize_AI.py` to see different experiments.
+Explore other scripts like `OneTail_Local_Chatapp.py` and `Visualize_AI.py` to discover additional functionalities and experiments.
 
 ## Portability and Included Assets
 
-To make this project as portable and self-contained as possible, it includes several key components within the `Portable_AI_Assets` directory. This means you can get started without having to download everything separately.
+Kusanagi-AI is designed for maximum portability and ease of use, incorporating several key components directly within the `Portable_AI_Assets` directory. This approach minimizes initial setup time and ensures a self-contained environment.
 
--   **Ollama:** The `ollama.exe` executable is included. Ollama is a fantastic tool for running large language models locally.
--   **Models:** To get you started right away, the following models are also included:
-    -   Gemma
-    -   Qwen
-    -   TinyLlama
+-   **Ollama Executable**: A pre-packaged `ollama.exe` is included for convenience, facilitating local model serving.
+-   **Starter Models**: To jumpstart your research, a selection of foundational models such as Gemma, Qwen, and TinyLlama are provided.
 
-**Important Note:** I do not claim any ownership over these open-source projects. They are the work of their respective creators, and I have included them here purely for convenience and to ensure the portability of this toolkit. I have immense respect for the open-source community and the developers behind these amazing tools.
+**Important Note on Open-Source Projects**: We deeply respect and acknowledge the intellectual property of the original creators of the included open-source projects. Kusanagi-AI merely integrates these tools for enhanced portability and user convenience. We do not claim ownership over these projects.
 
-Please find the original repositories for these projects below:
+Please refer to the original repositories for detailed information and licensing:
 
 -   **Ollama:** [https://github.com/ollama/ollama](https://github.com/ollama/ollama)
 -   **Gemma:** [https://github.com/google/gemma_pytorch](https://github.com/google/gemma_pytorch)
 -   **Qwen:** [https://github.com/QwenLM/Qwen](https://github.com/QwenLM/Qwen)
 -   **TinyLlama:** [https://github.com/jzhang38/TinyLlama](https://github.com/jzhang38/TinyLlama)
 
+## Contributing
+
+We welcome contributions from the community! Whether it's bug reports, feature suggestions, or code contributions, your input is valuable. Please refer to our contribution guidelines (if available) or open an issue on GitHub.
+
+## License
+
+This project is released under the [MIT License](https://opensource.org/licenses/MIT).
+
 ## Disclaimer
 
-This is a personal project created for fun and educational purposes. The code is experimental and provided as-is. Feel free to explore, fork, and modify it for your own learning journey!
+Kusanagi-AI is a open-source project provided for educational and research purposes. While designed for robust local AI operations, it is offered "as-is" without warranty. Users are encouraged to explore, adapt, and extend its functionalities for their specific needs.
