@@ -1,15 +1,29 @@
 # Kusanagi-AI: Free & Open-Source Local AI Toolkit for Researchers
 
-> Empowering researchers, particularly in Physics and Material Science, with accessible, privacy-focused AI tools designed to run efficiently on standard home laptops. Kusanagi-AI provides a robust, open-source platform for local AI experimentation and application, ensuring data ownership and control.
+<!-- Kusanagi-AI Logo Placeholder -->
+![Kusanagi-AI Logo](https://via.placeholder.com/800x200?text=Kusanagi-AI+Logo)
+
+> Empowering researchers, particularly in Physics and Material Science, with accessible, privacy-focused AI tools designed to run efficiently on standard home laptops. Kusanagi-AI provides a robust, open-source platform for local AI experimentation and application, ensuring data ownership and control. Built to leverage the power of [Ollama](https://ollama.com/) for local large language model inference, this toolkit allows you to run advanced AI capabilities, including multiple models simultaneously, even on a decent laptop.
 
 ## About This Project
 
 Kusanagi-AI was developed to address the growing need for accessible and privacy-conscious AI solutions within the research community. Our mission is to provide a free, open-source toolkit that enables researchers, especially those in Physics and Material Science, to leverage advanced AI capabilities directly on their personal computers. By focusing on local execution, Kusanagi-AI ensures complete data privacy and eliminates reliance on cloud services, making sophisticated AI analysis available without specialized hardware or extensive technical expertise. This project is a testament to the power of local AI, offering a controlled environment for deep learning and practical application.
 
+## Technology Stack
+
+Kusanagi-AI is built with a focus on local execution, privacy, and ease of use, leveraging powerful open-source technologies.
+
+| Technology | Description | Logo |
+| :--------- | :---------- | :--- |
+| **Python** | The entire frontend and application logic are developed in Python, ensuring readability, flexibility, and a vast ecosystem of libraries for AI development. | ![Python Logo](https://via.placeholder.com/50x50?text=Python) |
+| **Ollama** | Powers the local large language model inference, allowing Kusanagi-AI to run various models efficiently on your machine without cloud dependencies. It enables seamless management and interaction with models like Llama3, Gemma, Qwen, and TinyLlama. | ![Ollama Logo](https://via.placeholder.com/50x55?text=Ollama) |
+| **MXBAI Embeddings** | Utilizes the `mxbai-embed-large` model for high-quality document embeddings, crucial for Retrieval-Augmented Generation (RAG) and semantic search capabilities within the research assistant. | ![MXBAI Logo](https://via.placeholder.com/50x50?text=MXBAI) |
+
 ## Features
 
 *   **Local & Private**: All operations are performed 100% offline, guaranteeing your research data remains secure and private on your machine.
-*   **Research Assistant (Orochimaru)**: The flagship application, specifically tailored for academic use.
+*   **Efficient Local LLM Inference**: Designed to run up to three large language models concurrently on a decent laptop, providing robust AI capabilities without specialized hardware.
+*   **Research Assistant (Orochimaru)**: The flagship application, specifically tailored for academic use, with its frontend developed entirely in Python.
     *   **PDF Interaction**: Engage in Retrieval-Augmented Generation (RAG) with your PDF documents for in-depth analysis and information extraction.
     *   **Academic Review**: Generate concise summaries and critical peer reviews of research papers, aiding in literature analysis and understanding.
     *   **Ollama Integration**: Seamlessly manages a local Ollama instance for efficient model inference, supporting a wide range of open-source language models.
