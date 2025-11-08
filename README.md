@@ -1,7 +1,7 @@
 # Kusanagi-AI: Free & Open-Source Local AI Toolkit for Researchers
 
 <p align="center">
-  <img src="https://static.wikia.nocookie.net/sword/images/5/54/Orochimaru%27s_Sword_of_Kusanagi.png/revision/latest?cb=20240901080411" alt="Kusanagi-AI Logo" width="50"/>
+  <img src="https://static.wikia.nocookie.net/sword/images/5/54/Orochimaru%27s_Sword_of_Kusanagi.png/revision/latest?cb=20240901080411" alt="Kusanagi-AI Logo" width="30"/>
   <br>
   <small>Image from <a href="https://sword.fandom.com/wiki/Orochimaru's_Sword_of_Kusanagi">sword.fandom.com</a></small>
 </p>
