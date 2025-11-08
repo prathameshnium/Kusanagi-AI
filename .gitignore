@@ -1,0 +1,16 @@
+# Cache and logs
+caches/
+logs/
+vector_cache/
+*.log
+*.mmap
+
+# Python specific
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+
+# System configuration
+System_Config.json
