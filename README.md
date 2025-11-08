@@ -15,8 +15,8 @@ Kusanagi-AI is built with a focus on local execution, privacy, and ease of use, 
 
 | Technology | Description | Logo |
 | :--------- | :---------- | :--- |
-| **Python** | The entire frontend and application logic are developed in Python, ensuring readability, flexibility, and a vast ecosystem of libraries for AI development. | ![Python Logo](https://via.placeholder.com/50x50?text=Python) |
-| **Ollama** | Powers the local large language model inference, allowing Kusanagi-AI to run various models efficiently on your machine without cloud dependencies. It enables seamless management and interaction with models like Llama3, Gemma, Qwen, and TinyLlama. | ![Ollama Logo](https://via.placeholder.com/50x55?text=Ollama) |
+| **Python** | The entire frontend and application logic are developed in Python, ensuring readability, flexibility, and a vast ecosystem of libraries for AI development. | ![Python Logo](https://www.python.org/static/community_logos/python-logo-only.png) |
+| **Ollama** | Powers the local large language model inference, allowing Kusanagi-AI to run various models efficiently on your machine without cloud dependencies. It enables seamless management and interaction with models like Llama3, Gemma, Qwen, and TinyLlama. | ![Ollama Logo](https://seeklogo.com/images/O/ollama-logo-F62D6B7A7F-seeklogo.com.png) |
 | **MXBAI Embeddings** | Utilizes the `mxbai-embed-large` model for high-quality document embeddings, crucial for Retrieval-Augmented Generation (RAG) and semantic search capabilities within the research assistant. | ![MXBAI Logo](https://via.placeholder.com/50x50?text=MXBAI) |
 
 ## Features
