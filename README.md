@@ -61,6 +61,25 @@ python Local_Research_Assistent.py
 
 You can explore and run the other scripts like `Chatapp.py` and `Visualize_AI.py` to see different experiments.
 
+## Portability and Included Assets
+
+To make this project as portable and self-contained as possible, it includes several key components within the `Portable_AI_Assets` directory. This means you can get started without having to download everything separately.
+
+-   **Ollama:** The `ollama.exe` executable is included. Ollama is a fantastic tool for running large language models locally.
+-   **Models:** To get you started right away, the following models are also included:
+    -   Gemma
+    -   Qwen
+    -   TinyLlama
+
+**Important Note:** I do not claim any ownership over these open-source projects. They are the work of their respective creators, and I have included them here purely for convenience and to ensure the portability of this toolkit. I have immense respect for the open-source community and the developers behind these amazing tools.
+
+Please find the original repositories for these projects below:
+
+-   **Ollama:** [https://github.com/ollama/ollama](https://github.com/ollama/ollama)
+-   **Gemma:** [https://github.com/google/gemma_pytorch](https://github.com/google/gemma_pytorch)
+-   **Qwen:** [https://github.com/QwenLM/Qwen](https://github.com/QwenLM/Qwen)
+-   **TinyLlama:** [https://github.com/jzhang38/TinyLlama](https://github.com/jzhang38/TinyLlama)
+
 ## Disclaimer
 
 This is a personal project created for fun and educational purposes. The code is experimental and provided as-is. Feel free to explore, fork, and modify it for your own learning journey!
