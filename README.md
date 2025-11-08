@@ -1,7 +1,8 @@
 # Kusanagi-AI: Free & Open-Source Local AI Toolkit for Researchers
 
-<!-- Kusanagi-AI Logo Placeholder -->
-![Kusanagi-AI Logo](https://static.wikia.nocookie.net/sword/images/5/54/Orochimaru%27s_Sword_of_Kusanagi.png/revision/latest?cb=20240901080411)
+<p align="center">
+  <img src="https://static.wikia.nocookie.net/sword/images/5/54/Orochimaru%27s_Sword_of_Kusanagi.png/revision/latest?cb=20240901080411" alt="Kusanagi-AI Logo" width="100"/>
+</p>
 
 > Empowering researchers, particularly in Physics and Material Science, with accessible, privacy-focused AI tools designed to run efficiently on standard home laptops. Kusanagi-AI provides a robust, open-source platform for local AI experimentation and application, ensuring data ownership and control. Built to leverage the power of [Ollama](https://ollama.com/) for local large language model inference, this toolkit allows you to run advanced AI capabilities, including multiple models simultaneously, even on a decent laptop.
 
