@@ -335,7 +335,7 @@ class ResearchApp(tk.Tk):
         self.after(100, self.populate_models)
         self.after(1000, self.update_system_stats)
         self.add_placeholder()
-
+        
     def on_closing(self):
         self.stop_loading_event.set()
         self._stop_ollama_server()
@@ -871,45 +871,48 @@ class ResearchApp(tk.Tk):
         except Exception:
             print("No existing Ollama server found. Attempting to start a local one.")
 
-        if ollama_path and os.path.exists(ollama_path):
+            print(f"Ollama executable path from config: {ollama_path}")
+            print(f"Does ollama_path exist? {os.path.exists(ollama_path)}")
             try:
                 self.ollama_process = self._start_ollama_server(ollama_path, model_folder)
-                
-                # Set a longer timeout for operations
                 self.ollama_client = ollama.Client(host='127.0.0.1', timeout=120)
                 print("Waiting for local Ollama server to become responsive...")
-
-                max_wait_time = 60 # seconds
-                start_wait_time = time.time()
-                server_ready = False
-                while time.time() - start_wait_time < max_wait_time:
-                    try:
-                        # Use a lightweight request to check if the server is up
-                        self.ollama_client.list() 
-                        server_ready = True
-                        print("Local Ollama server is responsive.")
-                        break
-                    except Exception:
-                        self.after(0, lambda: self.status_label.config(text=f"Waiting... ({int(time.time() - start_wait_time)}s)"))
-                        time.sleep(1) # Wait 1 second before retrying
-                
-                if not server_ready:
-                    messagebox.showerror("Ollama Start Error", f"Local Ollama server did not respond within {max_wait_time} seconds. Check logs/ollama_server.log for details.")
-                    self.on_closing()
-                    return
-
+                self._check_server_readiness(time.time(), 60) # Start non-blocking check
             except Exception as e:
                 messagebox.showerror("Ollama Start Error", f"Failed to start local Ollama server: {e}")
                 self.ollama_client = None # Ensure client is None if startup fails
+                self.populate_models() # Attempt to populate models even if server start fails
         else:
             self.ollama_client = None # Ensure client is None if path is invalid
             print("Ollama executable path is not configured or invalid. Cannot start local server.")
             messagebox.showwarning("Ollama Not Found", "Could not find a running Ollama instance or start a local one. Please configure the path to ollama.exe in settings or start Ollama manually.")
+            self.populate_models() # Attempt to populate models to show connection error
+
+    def _check_server_readiness(self, start_time, max_wait):
+        """Non-blocking check for Ollama server readiness."""
+        elapsed_time = time.time() - start_time
+        if elapsed_time > max_wait:
+            messagebox.showerror("Ollama Start Error", f"Local Ollama server did not respond within {max_wait} seconds. Check logs/ollama_server.log for details.")
+            self.on_closing()
+            return
+
+        try:
+            # Use a lightweight request to check if the server is up
+            self.ollama_client.list()
+            print("Local Ollama server is responsive.")
+            # Now that the server is ready, populate the models.
+            self.populate_models()
+        except Exception:
+            # Server not ready, update status and schedule the next check
+            self.status_label.config(text=f"Waiting... ({int(elapsed_time)}s)")
+            self.after(1000, self._check_server_readiness, start_time, max_wait)
 
     def _start_ollama_server(self, ollama_path, model_folder):
         print(f"Attempting to start Ollama server from: {ollama_path}")
         env = os.environ.copy()
         if model_folder and os.path.exists(model_folder):
+            print(f"Ollama model folder from config: {model_folder}")
+            print(f"Does model_folder exist? {os.path.exists(model_folder)}")
             env["OLLAMA_MODELS"] = model_folder
             print(f"Setting OLLAMA_MODELS environment variable to: {model_folder}")
 
@@ -946,7 +949,7 @@ class ResearchApp(tk.Tk):
         default_config = {
             "ollama_path": "ollama/ollama.exe",
             "model_folder": "models",
-            "vector_cache_dir": "vector_cache",
+            "vector_cache_dir": "Portable_AI_Assets/vector_cache",
             "embedding_model_name": "mxbai-embed-large"
         }
 
