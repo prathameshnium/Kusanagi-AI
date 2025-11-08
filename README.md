@@ -1,7 +1,9 @@
 # Kusanagi-AI: Free & Open-Source Local AI Toolkit for Researchers
 
 <p align="center">
-  <img src="https://static.wikia.nocookie.net/sword/images/5/54/Orochimaru%27s_Sword_of_Kusanagi.png/revision/latest?cb=20240901080411" alt="Kusanagi-AI Logo" width="100"/>
+  <img src="https://static.wikia.nocookie.net/sword/images/5/54/Orochimaru%27s_Sword_of_Kusanagi.png/revision/latest?cb=20240901080411" alt="Kusanagi-AI Logo" width="50"/>
+  <br>
+  <small>Image from <a href="https://sword.fandom.com/wiki/Orochimaru's_Sword_of_Kusanagi">sword.fandom.com</a></small>
 </p>
 
 > Empowering researchers, particularly in Physics and Material Science, with accessible, privacy-focused AI tools designed to run efficiently on standard home laptops. Kusanagi-AI provides a robust, open-source platform for local AI experimentation and application, ensuring data ownership and control. Built to leverage the power of [Ollama](https://ollama.com/) for local large language model inference, this toolkit allows you to run advanced AI capabilities, including multiple models simultaneously, even on a decent laptop.
@@ -16,7 +18,7 @@ Kusanagi-AI is built with a focus on local execution, privacy, and ease of use, 
 
 | Technology | Description | Logo |
 | :--------- | :---------- | :--- |
-| **Python** | The entire frontend and application logic are developed in Python, ensuring readability, flexibility, and a vast ecosystem of libraries for AI development. | ![Python Logo](https://www.python.org/static/community_logos/python-logo-only.png) |
+| **Python** | The entire frontend and application logic are developed in Python, ensuring readability, flexibility, and a vast ecosystem of libraries for AI development. | ![Python Logo](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQkdgUkYVq9-UPHtkrQyNzA1t-hCdSG65-XYw&s) |
 | **Ollama** | Powers the local large language model inference, allowing Kusanagi-AI to run various models efficiently on your machine without cloud dependencies. It enables seamless management and interaction with models like Llama3, Gemma, Qwen, and TinyLlama. | ![Ollama Logo](https://seeklogo.com/images/O/ollama-logo-F62D6B7A7F-seeklogo.com.png) |
 | **MXBAI Embeddings** | Utilizes the `mxbai-embed-large` model from [Mixedbread AI](https://mixedbread.ai/) for high-quality document embeddings, crucial for Retrieval-Augmented Generation (RAG) and semantic search capabilities within the research assistant. | ![Mixedbread AI Logo](https://mixedbread.ai/favicon.ico) |
 
