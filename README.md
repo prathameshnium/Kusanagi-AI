@@ -1,14 +1,14 @@
 # Kusanagi-AI: Free & Open-Source Local AI Toolkit for Researchers
 
 <p align="center">
-  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Kusanagi-AI.png" alt="Kusanagi-AI Logo" width="200"/>
+  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Kusanagi-AI.png" alt="Kusanagi-AI Logo" width="300"/>
 </p>
 
 > Empowering researchers, particularly in Physics and Material Science, with accessible, privacy-focused AI tools designed to run efficiently on standard home laptops. Kusanagi-AI provides a robust, open-source platform for local AI experimentation and application, ensuring data ownership and control. Built to leverage the power of [Ollama](https://ollama.com/) for local large language model inference, this toolkit allows you to run advanced AI capabilities, including multiple models simultaneously, even on a decent laptop.
 
 ## About This Project
 
-Kusanagi-AI was developed to address the growing need for accessible and privacy-conscious AI solutions within the research community. Our mission is to provide a free, open-source toolkit that enables researchers, especially those in Physics and Material Science, to leverage advanced AI capabilities directly on their personal computers. By focusing on local execution, Kusanagi-AI ensures complete data privacy and eliminates reliance on cloud services, making sophisticated AI analysis available without specialized hardware or extensive technical expertise. This project is a testament to the power of local AI, offering a controlled environment for deep learning and practical application.
+Kusanagi-AI was developed to address the growing need for accessible and privacy-conscious AI solutions within the research community. Our mission is to provide a free, open-source toolkit that enables researchers, especially those in Physics and Materials Science, to leverage advanced AI capabilities directly on their personal computers. By focusing on local execution, Kusanagi-AI ensures complete data privacy and eliminates reliance on cloud services, making sophisticated AI analysis available without specialised hardware or extensive technical expertise. This project is a testament to the power of local AI, offering a controlled environment for deep learning and practical application.
 
 ## Technology Stack
 
@@ -18,7 +18,7 @@ Kusanagi-AI is built with a focus on local execution, privacy, and ease of use, 
 | :--------- | :---------- | :--- |
 | **Python** | The entire frontend and application logic are developed in Python, ensuring readability, flexibility, and a vast ecosystem of libraries for AI development. | ![Python Logo](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQkdgUkYVq9-UPHtkrQyNzA1t-hCdSG65-XYw&s) |
 | **Ollama** | Powers the local large language model inference, allowing Kusanagi-AI to run various models efficiently on your machine without cloud dependencies. It enables seamless management and interaction with models like Llama3, Gemma, Qwen, and TinyLlama. | ![Ollama Logo](https://seeklogo.com/images/O/ollama-logo-F62D6B7A7F-seeklogo.com.png) |
-| **MXBAI Embeddings** | Utilizes the `mxbai-embed-large` model from [Mixedbread AI](https://mixedbread.ai/) for high-quality document embeddings, crucial for Retrieval-Augmented Generation (RAG) and semantic search capabilities within the research assistant. | ![Mixedbread AI Logo](https://mixedbread.ai/favicon.ico) |
+| **MXBAI Embeddings** | Utilises the `mxbai-embed-large` model from [Mixedbread AI](https://mixedbread.ai/) for high-quality document embeddings, crucial for Retrieval-Augmented Generation (RAG) and semantic search capabilities within the research assistant. | ![Mixedbread AI Logo](https://mixedbread.ai/favicon.ico) |
 
 ## Features
 
@@ -29,7 +29,7 @@ Kusanagi-AI is built with a focus on local execution, privacy, and ease of use, 
     *   **Academic Review**: Generate concise summaries and critical peer reviews of research papers, aiding in literature analysis and understanding.
     *   **Ollama Integration**: Seamlessly manages a local Ollama instance for efficient model inference, supporting a wide range of open-source language models.
 *   **Experimental Chatbots**: A collection of diverse chatbot scripts for exploring different AI models and conversational paradigms.
-*   **AI Visualizer**: Tools and scripts for visualizing AI-related data, concepts, and model outputs, enhancing understanding and interpretation.
+*   **AI Visualizer**: Tools and scripts for visualising AI-related data, concepts, and model outputs, enhancing understanding and interpretation.
 
 ## Screenshots
 
