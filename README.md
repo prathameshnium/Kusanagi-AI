@@ -1,6 +1,6 @@
 # Kusanagi-AI: Free & Open-Source Local AI Toolkit for Researchers
 
-<p align="center">
+<p align="center" id="top">
   <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Kusanagi-AI.png" alt="Kusanagi-AI Logo" width="250"/>
 </p>
 
@@ -15,6 +15,24 @@
 
 > Empowering researchers, particularly in Physics and Material Science, with accessible, privacy-focused AI tools designed to run efficiently on standard home laptops. Kusanagi-AI provides a robust, open-source platform for local AI experimentation and application, ensuring data ownership and control. Built to leverage the power of [Ollama](https://ollama.com/) for local large language model inference, this toolkit allows you to run advanced AI capabilities, including multiple models simultaneously, even on a decent laptop.
 
+## Table of Contents
+
+- [About This Project](#about-this-project)
+- [Technology Stack](#technology-stack)
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+- [Advanced Configuration](#advanced-configuration)
+- [Usage](#usage)
+- [Portability and Included Assets](#portability-and-included-assets)
+- [Project Stats](#project-stats)
+- [Project Structure](#project-structure)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## About This Project
 
 Kusanagi-AI was developed to address the growing need for accessible and privacy-conscious AI solutions within the research community. Our mission is to provide a free, open-source toolkit that enables researchers, especially those in Physics and Materials Science, to leverage advanced AI capabilities directly on their personal computers. By focusing on local execution, Kusanagi-AI ensures complete data privacy and eliminates reliance on cloud services, making sophisticated AI analysis available without specialised hardware or extensive technical expertise. This project is a testament to the power of local AI, offering a controlled environment for deep learning and practical application.
@@ -24,7 +42,7 @@ Kusanagi-AI was developed to address the growing need for accessible and privacy
   <a href="https://www.python.org" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/python/python-original.svg" alt="python" width="40" height="40"/> </a>
   <a href="https://ollama.com/" target="_blank" rel="noreferrer"> <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/ollama.png" alt="ollama" width="45" height="45"/> </a>
   <a href="https://www.numpy.org" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/numpy/numpy-original.svg" alt="numpy" width="40" height="40"/> </a>
-  <a href="https://tkdocs.com/index.html" target="_blank" rel="noreferrer"> <img src="https://upload.wikimedia.org/wikipedia/commons/c/c6/Tk_logo.svg" alt="tkinter" width="35" height="35"/> </a>
+  <a href="https://tkdocs.com/index.html" target="_blank" rel="noreferrer"> <img src="http://pascal.ortiz.free.fr/_images/logo_tkinter.png" alt="tkinter" width="40" height="40"/> </a>
 </p>
 Kusanagi-AI is built with a focus on local execution, privacy, and ease of use. The core technologies include:
 -   **Python**: The entire frontend and application logic are developed in Python, leveraging its vast ecosystem of libraries for AI development.
@@ -36,16 +54,18 @@ Kusanagi-AI is built with a focus on local execution, privacy, and ease of use. 
 
 *   **Local & Private**: All operations are performed 100% offline, guaranteeing your research data remains secure and private on your machine.
 *   **Efficient Local LLM Inference**: Designed to run up to three large language models concurrently on a decent laptop, providing robust AI capabilities without specialized hardware.
-*   **Research Assistant (Orochimaru)**: The flagship application, specifically tailored for academic use, with its frontend developed entirely in Python.
+*   **Research Assistant (Orochimaru)**: A flagship RAG application tailored for academic use, with its frontend developed entirely in Python.
     *   **PDF Interaction**: Engage in Retrieval-Augmented Generation (RAG) with your PDF documents for in-depth analysis and information extraction.
     *   **Academic Review**: Generate concise summaries and critical peer reviews of research papers, aiding in literature analysis and understanding.
     *   **Ollama Integration**: Seamlessly manages a local Ollama instance for efficient model inference, supporting a wide range of open-source language models.
 *   **Experimental Chatbots**: A collection of diverse chatbot scripts for exploring different AI models and conversational paradigms.
 *   **AI Visualizer**: Tools and scripts for visualising AI-related data, concepts, and model outputs, enhancing understanding and interpretation.
-
+ 
 ## Screenshots
 
 ### Orochimaru - Local Research Assistant
+
+<p align="center"><i>A quick demonstration of Orochimaru's RAG capabilities with a research paper.</i><br><img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Demos/Orochimaru-Demo.gif" alt="Orochimaru Demo GIF" width="800"/></p>
 
 ![Orochimaru Screenshot](https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Orochimaru_Screenshot.jpg)
 
@@ -134,9 +154,9 @@ Kusanagi-AI is designed for maximum portability and ease of use, incorporating s
 -   **Starter Models**: To jumpstart your research, a selection of foundational models such as Gemma, Qwen, and TinyLlama are provided.
 
 <p align="center">
-  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Gemma.jpg" alt="Gemma" width="150"/>
-  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Qwen.jpg" alt="Qwen" width="130"/>
-  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Tinylamma.jpg" alt="TinyLlama" width="87"/>
+  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Gemma.jpg" alt="Gemma Logo" width="150"/>
+  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Qwen.jpg" alt="Qwen Logo" width="130"/>
+  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Tinylamma.jpg" alt="TinyLlama Logo" width="87"/>
 </p>
 
 **Important Note on Open-Source Projects**: We deeply respect and acknowledge the intellectual property of the original creators of the included open-source projects. Kusanagi-AI merely integrates these tools for enhanced portability and user convenience. We do not claim ownership over these projects.
@@ -147,6 +167,28 @@ Please refer to the original repositories for detailed information and licensing
 -   **Gemma:** [https://github.com/google/gemma_pytorch](https://github.com/google/gemma_pytorch)
 -   **Qwen:** [https://github.com/QwenLM/Qwen](https://github.com/QwenLM/Qwen)
 -   **TinyLlama:** [https://github.com/jzhang38/TinyLlama](https://github.com/jzhang38/TinyLlama)
+
+## Project Stats
+<p align="center">
+  <img src="https://github-readme-stats.vercel.app/api/top-langs/?username=prathameshnium&repo=Kusanagi-AI&layout=compact&theme=transparent&bg_color=193549&title_color=ffab40&text_color=ffffff" alt="Top Languages" />
+  &nbsp;
+  <img src="https://github-readme-activity-graph.vercel.app/graph?username=prathameshnium&repo=Kusanagi-AI&bg_color=193549&color=ffffff&line=ffab40&point=ffffff&area=true&hide_border=true" alt="Activity Graph" />
+</p>
+
+## Project Structure
+<details>
+  <summary>Click to expand</summary>
+
+```
+Kusanagi-AI/
+├── Portable_AI_Assets/
+├── Orochimaru_Local_Research_Assistent.py
+├── OneTail_Local_Chatapp.py
+├── Visualize_AI.py
+├── System_Config.json
+└── requirements.txt
+```
+</details>
 
 ## Roadmap
 
@@ -167,12 +209,16 @@ We are continuously working to enhance Kusanagi-AI. Here are some of the feature
 
 ## Contributing
 
-We welcome contributions from the community! Whether it's bug reports, feature suggestions, or code contributions, your input is valuable. Please refer to our contribution guidelines (if available) or open an issue on GitHub.
+This project is proudly developed and maintained by **Prathamesh Deshmukh**.
+
+We welcome contributions from the community! Whether it's bug reports, feature suggestions, or code contributions, your input is valuable. Please feel free to open an issue or submit a pull request on GitHub.
 
 ## License
 
-This project is released under the [MIT License](https://opensource.org/licenses/MIT).
+This project is released under the [MIT License](./License).
 
 ## Disclaimer
 
 Kusanagi-AI is a open-source project provided for educational and research purposes. While designed for robust local AI operations, it is offered "as-is" without warranty. Users are encouraged to explore, adapt, and extend its functionalities for their specific needs.
+
+<p align="right"><a href="#top">Back to top</a></p>
