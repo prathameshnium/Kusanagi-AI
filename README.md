@@ -8,6 +8,7 @@
     <a href="https://github.com/prathameshnium/Kusanagi-AI/stargazers"><img src="https://img.shields.io/github/stars/prathameshnium/Kusanagi-AI?style=for-the-badge&logo=github&color=ffab40&logoColor=white" alt="GitHub Stars"></a>
     <a href="https://github.com/prathameshnium/Kusanagi-AI/network/members"><img src="https://img.shields.io/github/forks/prathameshnium/Kusanagi-AI?style=for-the-badge&logo=github&color=ffab40&logoColor=white" alt="GitHub Forks"></a>
     <a href="https://github.com/prathameshnium/Kusanagi-AI/issues"><img src="https://img.shields.io/github/issues/prathameshnium/Kusanagi-AI?style=for-the-badge&logo=github&color=ffab40&logoColor=white" alt="GitHub Issues"></a>
+    <a href="https://prathameshdeshmukh.site/pages/Project_Kusanagi-AI.html"><img src="https://img.shields.io/badge/Project-Page-ffab40?style=for-the-badge&logo=read-the-docs&logoColor=white" alt="Project Page"></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/github/license/prathameshnium/Kusanagi-AI?style=for-the-badge&color=ffab40" alt="License"></a>
     <img src="https://img.shields.io/badge/python-3.8+-blue.svg?style=for-the-badge&logo=python&color=ffab40" alt="Python Version">
 </p>
@@ -97,6 +98,24 @@ Follow these steps to set up your local AI research environment.
       ```
     </details>
 
+## Advanced Configuration
+
+For more granular control, you can modify the `System_Config.json` file. This allows you to customize paths and model settings for different applications within the toolkit.
+
+<details>
+  <summary>Click to see configuration options</summary>
+
+```json
+{
+    "ollama_path": "Portable_AI_Assets/ollama_main/ollama.exe",
+    "model_folder": "Portable_AI_Assets/common-ollama-models",
+    "vector_cache_dir": "Portable_AI_Assets/vector_cache",
+    "embedding_model_name": "mxbai-embed-large",
+    "default_model": "tinyllama:latest"
+}
+```
+</details>
+
 ## Usage
 
 The primary tool in this toolkit is the Research Assistant. To launch it, execute the following command:
@@ -128,6 +147,23 @@ Please refer to the original repositories for detailed information and licensing
 -   **Gemma:** [https://github.com/google/gemma_pytorch](https://github.com/google/gemma_pytorch)
 -   **Qwen:** [https://github.com/QwenLM/Qwen](https://github.com/QwenLM/Qwen)
 -   **TinyLlama:** [https://github.com/jzhang38/TinyLlama](https://github.com/jzhang38/TinyLlama)
+
+## Roadmap
+
+We are continuously working to enhance Kusanagi-AI. Here are some of the features and improvements on our roadmap:
+
+-   **Enhanced RAG Capabilities**:
+    -   **Multi-Document Chat**: Enable querying and synthesizing information across multiple documents simultaneously.
+    -   **Fact-Checking Mode**: Implement the "Checker" feature to validate statements and claims against the provided text, highlighting supporting evidence.
+    -   **Advanced Reviewer Personas**: Introduce more specialized reviewer roles for nuanced academic feedback.
+
+-   **UI and UX Improvements**:
+    -   **Integrated Visualizer**: Merge the AI Visualizer into the main applications to provide real-time insights into model behavior.
+    -   **UI Theming**: Add options for users to customize the look and feel of the applications.
+
+-   **Core Functionality Expansion**:
+    -   **Support for More Filetypes**: Extend document processing capabilities beyond PDFs to include formats like `.docx`, `.txt`, and source code files.
+    -   **Model Fine-Tuning**: Provide scripts and guides for users to fine-tune models on their specific research datasets.
 
 ## Contributing
 
