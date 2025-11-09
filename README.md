@@ -16,9 +16,9 @@ Kusanagi-AI is built with a focus on local execution, privacy, and ease of use, 
 
 | Technology | Description | Logo |
 | :--------- | :---------- | :--- |
-| **Python** | The entire frontend and application logic are developed in Python, ensuring readability, flexibility, and a vast ecosystem of libraries for AI development. | ![Python Logo](https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQkdgUkYVq9-UPHtkrQyNzA1t-hCdSG65-XYw&s) |
-| **Ollama** | Powers the local large language model inference, allowing Kusanagi-AI to run various models efficiently on your machine without cloud dependencies. It enables seamless management and interaction with models like Llama3, Gemma, Qwen, and TinyLlama. | ![Ollama Logo](https://seeklogo.com/images/O/ollama-logo-F62D6B7A7F-seeklogo.com.png) |
-| **MXBAI Embeddings** | Utilises the `mxbai-embed-large` model from [Mixedbread AI](https://mixedbread.ai/) for high-quality document embeddings, crucial for Retrieval-Augmented Generation (RAG) and semantic search capabilities within the research assistant. | ![Mixedbread AI Logo](https://mixedbread.ai/favicon.ico) |
+| **Python** | The entire frontend and application logic are developed in Python, ensuring readability, flexibility, and a vast ecosystem of libraries for AI development. | <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Python.jpg" alt="Python Logo" width="100"/> |
+| **Ollama** | Powers the local large language model inference, allowing Kusanagi-AI to run various models efficiently on your machine without cloud dependencies. It enables seamless management and interaction with models like Llama3, Gemma, Qwen, and TinyLlama. | <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/ollama.png" alt="Ollama Logo" width="100"/> |
+| **MXBAI Embeddings** | Utilises the `mxbai-embed-large` model from Mixedbread AI for high-quality document embeddings, crucial for Retrieval-Augmented Generation (RAG) and semantic search capabilities within the research assistant. | <img src="https://mixedbread.ai/favicon.ico" alt="Mixedbread AI Logo" width="100"/> |
 
 ## Features
 
@@ -90,6 +90,12 @@ Kusanagi-AI is designed for maximum portability and ease of use, incorporating s
 
 -   **Ollama Executable**: A pre-packaged `ollama.exe` is included for convenience, facilitating local model serving.
 -   **Starter Models**: To jumpstart your research, a selection of foundational models such as Gemma, Qwen, and TinyLlama are provided.
+
+<p align="center">
+  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Gemma.jpg" alt="Gemma" width="150"/>
+  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Qwen.jpg" alt="Qwen" width="150"/>
+  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Tinylamma.jpg" alt="TinyLlama" width="150"/>
+</p>
 
 **Important Note on Open-Source Projects**: We deeply respect and acknowledge the intellectual property of the original creators of the included open-source projects. Kusanagi-AI merely integrates these tools for enhanced portability and user convenience. We do not claim ownership over these projects.
 
