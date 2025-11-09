@@ -1,7 +1,15 @@
 # Kusanagi-AI: Free & Open-Source Local AI Toolkit for Researchers
 
 <p align="center">
-  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Kusanagi-AI.png" alt="Kusanagi-AI Logo" width="300"/>
+  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Kusanagi-AI.png" alt="Kusanagi-AI Logo" width="250"/>
+</p>
+
+<p align="center">
+    <a href="https://github.com/prathameshnium/Kusanagi-AI/stargazers"><img src="https://img.shields.io/github/stars/prathameshnium/Kusanagi-AI?style=for-the-badge&logo=github&color=ffab40&logoColor=white" alt="GitHub Stars"></a>
+    <a href="https://github.com/prathameshnium/Kusanagi-AI/network/members"><img src="https://img.shields.io/github/forks/prathameshnium/Kusanagi-AI?style=for-the-badge&logo=github&color=ffab40&logoColor=white" alt="GitHub Forks"></a>
+    <a href="https://github.com/prathameshnium/Kusanagi-AI/issues"><img src="https://img.shields.io/github/issues/prathameshnium/Kusanagi-AI?style=for-the-badge&logo=github&color=ffab40&logoColor=white" alt="GitHub Issues"></a>
+    <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/github/license/prathameshnium/Kusanagi-AI?style=for-the-badge&color=ffab40" alt="License"></a>
+    <img src="https://img.shields.io/badge/python-3.8+-blue.svg?style=for-the-badge&logo=python&color=ffab40" alt="Python Version">
 </p>
 
 > Empowering researchers, particularly in Physics and Material Science, with accessible, privacy-focused AI tools designed to run efficiently on standard home laptops. Kusanagi-AI provides a robust, open-source platform for local AI experimentation and application, ensuring data ownership and control. Built to leverage the power of [Ollama](https://ollama.com/) for local large language model inference, this toolkit allows you to run advanced AI capabilities, including multiple models simultaneously, even on a decent laptop.
@@ -11,14 +19,17 @@
 Kusanagi-AI was developed to address the growing need for accessible and privacy-conscious AI solutions within the research community. Our mission is to provide a free, open-source toolkit that enables researchers, especially those in Physics and Materials Science, to leverage advanced AI capabilities directly on their personal computers. By focusing on local execution, Kusanagi-AI ensures complete data privacy and eliminates reliance on cloud services, making sophisticated AI analysis available without specialised hardware or extensive technical expertise. This project is a testament to the power of local AI, offering a controlled environment for deep learning and practical application.
 
 ## Technology Stack
-
-Kusanagi-AI is built with a focus on local execution, privacy, and ease of use, leveraging powerful open-source technologies.
-
-| Technology | Description | Logo |
-| :--------- | :---------- | :--- |
-| **Python** | The entire frontend and application logic are developed in Python, ensuring readability, flexibility, and a vast ecosystem of libraries for AI development. | <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Python.jpg" alt="Python Logo" width="100"/> |
-| **Ollama** | Powers the local large language model inference, allowing Kusanagi-AI to run various models efficiently on your machine without cloud dependencies. It enables seamless management and interaction with models like Llama3, Gemma, Qwen, and TinyLlama. | <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/ollama.png" alt="Ollama Logo" width="100"/> |
-| **MXBAI Embeddings** | Utilises the `mxbai-embed-large` model from Mixedbread AI for high-quality document embeddings, crucial for Retrieval-Augmented Generation (RAG) and semantic search capabilities within the research assistant. | <img src="https://mixedbread.ai/favicon.ico" alt="Mixedbread AI Logo" width="100"/> |
+<p align="center">
+  <a href="https://www.python.org" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/python/python-original.svg" alt="python" width="40" height="40"/> </a>
+  <a href="https://ollama.com/" target="_blank" rel="noreferrer"> <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/ollama.png" alt="ollama" width="45" height="45"/> </a>
+  <a href="https://www.numpy.org" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/numpy/numpy-original.svg" alt="numpy" width="40" height="40"/> </a>
+  <a href="https://tkdocs.com/index.html" target="_blank" rel="noreferrer"> <img src="https://upload.wikimedia.org/wikipedia/commons/c/c6/Tk_logo.svg" alt="tkinter" width="35" height="35"/> </a>
+</p>
+Kusanagi-AI is built with a focus on local execution, privacy, and ease of use. The core technologies include:
+-   **Python**: The entire frontend and application logic are developed in Python, leveraging its vast ecosystem of libraries for AI development.
+-   **Ollama**: Powers the local large language model inference, allowing Kusanagi-AI to run various models efficiently on your machine without cloud dependencies.
+-   **Tkinter**: Used for creating the native graphical user interfaces for the applications, ensuring they are lightweight and cross-platform.
+-   **MXBAI Embeddings**: Utilises the `mxbai-embed-large` model from Mixedbread AI for high-quality document embeddings, crucial for the RAG capabilities.
 
 ## Features
 
@@ -53,26 +64,38 @@ Follow these steps to set up your local AI research environment.
 ### Installation
 
 1.  **Clone the repository:**
-    ```sh
-    git clone https://github.com/your-username/Kusanagi-AI.git
-    cd Kusanagi-AI
-    ```
+    <details>
+      <summary>Click to expand</summary>
+      
+      ```sh
+      git clone https://github.com/prathameshnium/Kusanagi-AI.git
+      cd Kusanagi-AI
+      ```
+    </details>
 
 2.  **Install the required Python packages:**
     It is highly recommended to use a virtual environment to manage dependencies.
-    ```sh
-    pip install -r requirements.txt
-    ```
+    <details>
+      <summary>Click to expand</summary>
+      
+      ```sh
+      pip install -r requirements.txt
+      ```
+    </details>
 
 3.  **Configure the System:**
     *   Open `System_Config.json` located in the project root.
     *   Ensure `ollama_path` accurately points to your Ollama executable (e.g., `F:\Portable_AI_Assets\ollama_main\ollama.exe`).
     *   Set `model_folder` to the directory where your Ollama models are stored.
     *   **Download Models**: Pull the necessary models using the Ollama CLI. The default embedding model is `mxbai-embed-large`, and you'll need at least one chat model.
-    ```sh
-    ollama pull mxbai-embed-large
-    ollama pull llama3 # or any other preferred chat model
-    ```
+    <details>
+      <summary>Click to expand</summary>
+      
+      ```sh
+      ollama pull mxbai-embed-large
+      ollama pull llama3 # or any other preferred chat model
+      ```
+    </details>
 
 ## Usage
 
@@ -94,7 +117,7 @@ Kusanagi-AI is designed for maximum portability and ease of use, incorporating s
 <p align="center">
   <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Gemma.jpg" alt="Gemma" width="150"/>
   <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Qwen.jpg" alt="Qwen" width="130"/>
-  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Tinylamma.jpg" alt="TinyLlama" width="90"/>
+  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Tinylamma.jpg" alt="TinyLlama" width="87"/>
 </p>
 
 **Important Note on Open-Source Projects**: We deeply respect and acknowledge the intellectual property of the original creators of the included open-source projects. Kusanagi-AI merely integrates these tools for enhanced portability and user convenience. We do not claim ownership over these projects.
