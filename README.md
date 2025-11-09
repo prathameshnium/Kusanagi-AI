@@ -33,6 +33,16 @@ Kusanagi-AI is built with a focus on local execution, privacy, and ease of use, 
 *   **Experimental Chatbots**: A collection of diverse chatbot scripts for exploring different AI models and conversational paradigms.
 *   **AI Visualizer**: Tools and scripts for visualizing AI-related data, concepts, and model outputs, enhancing understanding and interpretation.
 
+## Screenshots
+
+### Orochimaru - Local Research Assistant
+
+![Orochimaru Screenshot](https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Orochimaru_Screenshot.jpg)
+
+### One Tail - Local Chat App
+
+![One Tail Screenshot](https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/One_Tail_Screenshot.jpg)
+
 ## Getting Started
 
 Follow these steps to set up your local AI research environment.
