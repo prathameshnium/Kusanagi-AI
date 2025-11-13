@@ -1,19 +1,32 @@
-# Cache and logs
-caches/
-logs/
-vector_cache/
-*.log
-*.mmap
-
-# Python specific
+# --- Python Cache ---
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
 
-# Environment variables
+# --- IDE & OS ---
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# --- Environment & Config ---
 .env
+# Keep System_Config.json in the repo, but ignore local changes
+# System_Config.json  <-- Keep this commented unless you want to hide it
 
-# System configuration
-System_Config.json
+# --- Build Artifacts (for your .exe) ---
+dist/
+build/
+*.spec
 
-# AI Model Assets
+# --- Logs & Cache ---
+logs/
+*.log
+vector_cache/
+*.mmap
+
+# --- CRITICAL: Ignore ALL AI Model Assets ---
+# This one line ignores everything inside this folder,
+# including AI-models, text_embedding_model, and ollama_main
 Portable_AI_Assets/

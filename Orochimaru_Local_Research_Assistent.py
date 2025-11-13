@@ -898,6 +898,7 @@ class ResearchApp(tk.Tk):
             self.ollama_client.list()
             print("Local Ollama server is responsive.")
             # Now that the server is ready, populate the models.
+            self.populate_models()
         except Exception:
             # Server not ready, update status and schedule the next check
             self.status_label.config(text=f"Waiting... ({int(elapsed_time)}s)")
@@ -907,10 +908,10 @@ class ResearchApp(tk.Tk):
         print(f"Attempting to start Ollama server from: {ollama_path}")
         env = os.environ.copy()
         if model_folder and os.path.exists(model_folder):
-            print(f"Ollama model folder from config: {model_folder}")
-            print(f"Does model_folder exist? {os.path.exists(model_folder)}")
             env["OLLAMA_MODELS"] = model_folder
             print(f"Setting OLLAMA_MODELS environment variable to: {model_folder}")
+        else:
+            print(f"Warning: Model folder '{model_folder}' not found. Ollama will use its default.")
 
         # Create a log file for the server process
         log_dir = "logs"
@@ -934,66 +935,91 @@ class ResearchApp(tk.Tk):
             print("Stopping Ollama server...")
             # Terminate the process group to ensure all child processes are killed
             self.ollama_process.terminate()
-            self.ollama_process.wait(timeout=5)
-            print("Ollama server stopped.")
+            try:
+                self.ollama_process.wait(timeout=5)
+                print("Ollama server stopped.")
+            except subprocess.TimeoutExpired:
+                print("Ollama server did not terminate in time. Forcing kill.")
+                self.ollama_process.kill()
+
 
     def _load_config(self):
         config_path = "System_Config.json"
-        # Get the directory where the script (or .exe) is located
-        if getattr(sys, 'frozen', False):
-            # If running as a bundled .exe
-            script_dir = os.path.dirname(sys.executable)
-        else:
-            # If running as a .py script
-            script_dir = os.path.dirname(os.path.abspath(__file__))
+        script_dir = os.path.dirname(os.path.abspath(__file__))
 
-        # Define default relative paths
+        # Define default relative paths. These are used if the config file is missing
+        # or if a specific key is not in the config file.
         default_config = {
             "ollama_path": os.path.join("Portable_AI_Assets", "ollama_main", "ollama.exe"),
-            "model_folder": os.path.join("Portable_AI_Assets", "common-ollama-models"),
+            # NOTE: Ollama can only be started with one model directory. This default prioritizes
+            # the embedding model for document analysis. To use other models (e.g., 'tinyllama'),
+            # they must be located within this same directory.
+            "model_folder": os.path.join("Portable_AI_Assets", "text_embedding_model"),
             "vector_cache_dir": os.path.join("Portable_AI_Assets", "vector_cache"),
             "embedding_model_name": "mxbai-embed-large"
         }
 
-        config_to_use = default_config.copy()
-
-        # Try to load from JSON
+        config_from_file = {}
         if os.path.exists(config_path):
             try:
                 with open(config_path, 'r') as f:
-                    loaded_config = json.load(f)
-                    # Update defaults with loaded values, but keep our smart path logic
-                    for key, value in loaded_config.items():
-                        if value: # Only overwrite if not empty
-                            config_to_use[key] = value
-            except (json.JSONDecodeError, IOError):
-                print("Warning: Could not read config file. Using defaults.")
+                    config_from_file = json.load(f)
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"Warning: Could not read or parse '{config_path}'. Using default settings. Error: {e}")
 
-        # --- THE MAGIC: Convert Relative Paths to Absolute ---
-        # This ensures it works on ANY drive (E:, F:, Z:)
-        for path_key in ["ollama_path", "model_folder", "vector_cache_dir"]:
-            raw_path = config_to_use[path_key]
+        # Start with defaults, then layer config from file on top
+        final_config = default_config.copy()
+        final_config.update(config_from_file)
+
+        print("--- Resolving Application Paths ---")
+        # All paths are treated as relative to the script's location for portability.
+        for key in ["ollama_path", "model_folder", "vector_cache_dir"]:
+            path_value = final_config[key]
             
-            # If the path in config is NOT absolute (e.g. doesn't start with F:/),
-            # assume it is relative to the app's folder.
-            if not os.path.isabs(raw_path):
-                config_to_use[path_key] = os.path.join(script_dir, raw_path)
-                print(f"Resolved relative path for {path_key}: {config_to_use[path_key]}")
+            # If path is not absolute, resolve it relative to the script directory
+            if not os.path.isabs(path_value):
+                absolute_path = os.path.normpath(os.path.join(script_dir, path_value))
             else:
-                print(f"Using absolute path for {path_key}: {raw_path}")
+                absolute_path = os.path.normpath(path_value)
 
-        # Create the vector cache dir if it doesn't exist
+            # If the resolved path from the config is invalid, fall back to the default path
+            if not os.path.exists(absolute_path) and key != "vector_cache_dir":
+                print(f"  - WARNING: Configured path for '{key}' not found: '{absolute_path}'")
+                default_relative_path = default_config[key]
+                absolute_path = os.path.normpath(os.path.join(script_dir, default_relative_path))
+                print(f"  - Falling back to default path: '{absolute_path}'")
+            
+            final_config[key] = absolute_path # Update config with the validated, absolute path
+            print(f"  - '{key}': '{final_config[key]}'")
+            if not os.path.exists(final_config[key]) and key != "vector_cache_dir":
+                 print(f"    - WARNING: The path does not exist.")
+        
+        # Ensure the vector cache directory exists.
         try:
-            os.makedirs(config_to_use["vector_cache_dir"], exist_ok=True)
+            os.makedirs(final_config["vector_cache_dir"], exist_ok=True)
         except OSError as e:
-            print(f"Error creating vector cache directory: {e}")
+            print(f"Error creating vector cache directory '{final_config['vector_cache_dir']}': {e}")
 
-        return config_to_use
+        return final_config
 
     def _save_config(self, config):
         config_path = "System_Config.json"
+        # When saving, try to make paths relative to the script dir for portability
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        relative_config = {}
+        for key, value in config.items():
+            if isinstance(value, str) and os.path.isabs(value) and key in ["ollama_path", "model_folder", "vector_cache_dir"]:
+                try:
+                    # This will make the path relative if it's on the same drive
+                    relative_config[key] = os.path.relpath(value, script_dir)
+                except ValueError:
+                    # Paths are on different drives, so keep the absolute path
+                    relative_config[key] = value
+            else:
+                relative_config[key] = value
+
         with open(config_path, 'w') as f:
-            json.dump(config, f, indent=4)
+            json.dump(relative_config, f, indent=4)
 
 class ConsoleRedirector:
 
