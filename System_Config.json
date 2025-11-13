@@ -1,0 +1,6 @@
+{
+    "ollama_path": "F:/GitHub/Kusanagi-AI/Portable_AI_Assets/ollama_main/ollama.exe",
+    "model_folder": "F:/GitHub/Kusanagi-AI/Portable_AI_Assets/common-ollama-models",
+    "vector_cache_dir": "f:\\GitHub\\Kusanagi-AI\\Portable_AI_Assets/vector_cache",
+    "embedding_model_name": "mxbai-embed-large"
+}

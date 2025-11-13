@@ -10,11 +10,28 @@ import os
 import subprocess
 
 # --- UI Constants ---
-UI_FONT = ("Inter", 12)
-BG_COLOR = "#2E3440"    # Nord Polar Night
-FG_COLOR = "#D8DEE9"    # Nord Snow Storm
-ACCENT_COLOR = "#88C0D0" # Nord Frost
-FG_MUTED = "#4C566A"    # Nord Polar Night (Muted)
+class Style:
+    UI_FONT = ("Segoe UI", 11)
+    CHAT_FONT = ("Segoe UI", 11)
+    TITLE_FONT = ("Segoe UI", 18, "bold")
+    LOG_FONT = ("Courier New", 9)
+    BG_PRIMARY = "#193549"
+    BG_SECONDARY = "#002240"
+    BG_TERTIARY = "#25435A"
+    FG_PRIMARY = "#FFFFFF"
+    FG_SECONDARY = "#97B1C2"
+    ACCENT = "#ffab40"
+    ACCENT_FG = "#002240"
+    ERROR = "#FF628C"
+    LOG_COLOR = "#F1FA8C"
+    ICON_LOAD = "📄"
+    ICON_SAVE = "💾"
+    ICON_CLEAR = "🗑️"
+    ICON_SEND = "➤"
+    ICON_UNMUTE = "🔊"
+    ICON_MUTE = "🔇"
+    ICON_NEW_CHAT = "➕"
+    ICON_DELETE = "➖"
 
 # --- Global Variables ---
 update_queue = queue.Queue()
@@ -59,6 +76,17 @@ def _load_config():
             
     config = config_to_use
     print(f"Info: Using configuration: {config}")
+
+def _save_config(config):
+    """Saves the current configuration to System_Config.json."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    config_path = os.path.join(script_dir, "System_Config.json")
+    try:
+        with open(config_path, 'w') as f:
+            json.dump(config, f, indent=4)
+        print(f"Info: Configuration saved to {config_path}")
+    except IOError as e:
+        print(f"Warning: Could not save configuration to {config_path}. Error: {e}")
 
 def _start_ollama_server(ollama_path, model_folder):
     """Starts the Ollama server as a detached subprocess."""
@@ -136,7 +164,7 @@ def initialize_ollama():
                     break
                 except Exception:
                     wait_time = int(time.time() - start_wait_time)
-                    status_label.config(text=f"Starting...({wait_time}s)", fg=ACCENT_COLOR)
+                    status_label.config(text=f"Starting...({wait_time}s)", fg=Style.ACCENT)
                     root.update() # Force UI update
                     time.sleep(1)
             
@@ -154,7 +182,7 @@ def initialize_ollama():
 
 def get_next_word_predictions(prompt, temperature, num_predictions=5):
     """
-    Generates multiple next-word predictions using a more refined sampling approach.
+    Generates multiple next-word predictions using a single Ollama API call.
     """
     global ollama_client
     
@@ -174,28 +202,33 @@ def get_next_word_predictions(prompt, temperature, num_predictions=5):
         print(f"Debug: Prediction skipped, invalid model name: '{model_name}'")
         return {"Error": -1}
 
-    # The number of times we'll call the API to build a sample distribution.
-    # More calls give a better sample but are slower.
-    num_api_calls = num_predictions * 3 
-
     try:
-        for _ in range(num_api_calls):
-            response = ollama_client.generate(
-                model=model_name,
-                prompt=prompt,
-                stream=False,
-                options={
-                    'temperature': temperature,
-                    'num_predict': 10,  # Predict more tokens to get at least one full word.
-                    'stop': ['\n', '.', ',', ' '], # Stop at common word delimiters.
-                }
-            )
-            # The response might be empty or just whitespace.
-            word = response['response'].strip()
-            
-            # We only care about single, non-empty word predictions.
-            if word and ' ' not in word:
-                predictions[word] = predictions.get(word, 0) + 1
+        # Make a single API call to generate a longer sequence of text
+        response = ollama_client.generate(
+            model=model_name,
+            prompt=prompt,
+            stream=False,
+            options={
+                'temperature': temperature,
+                'num_predict': 50,  # Predict more tokens to get a good sample of next words
+                'top_k': 40,        # Consider top_k tokens for sampling
+                'top_p': 0.9,       # Use nucleus sampling
+            }
+        )
+        
+        generated_text = response['response'].strip()
+        
+        # Split the generated text into words and count occurrences
+        words = generated_text.split()
+        
+        # Consider only the first few words as potential "next words"
+        # This is a heuristic; a more sophisticated approach might involve
+        # analyzing token probabilities directly if the API exposed them.
+        for i, word in enumerate(words[:num_predictions * 2]): # Look at a few more words than requested
+            # Clean up word (remove punctuation, convert to lowercase for consistency)
+            cleaned_word = word.strip('.,!?;:"\'').lower()
+            if cleaned_word:
+                predictions[cleaned_word] = predictions.get(cleaned_word, 0) + 1
 
     except Exception as e:
         print(f"Error calling Ollama: {e}")
@@ -282,8 +315,8 @@ def populate_models():
 
     if not ollama_client:
         print("Debug: populate_models - ollama_client is None, exiting.")
-        status_light.config(foreground="#E74C3C")  # Red
-        status_label.config(text="Ollama Not Found", fg="#E74C3C")
+        status_light.config(foreground=Style.ERROR)  # Red
+        status_label.config(text="Ollama Not Found", fg=Style.ERROR)
         error_message = "Ollama not found"
         # Use a placeholder for selected_model to avoid crashes
         if not selected_model:
@@ -293,13 +326,13 @@ def populate_models():
         
         # Avoid adding multiple error labels
         if not any(isinstance(w, ttk.Label) and "Ollama not found" in w.cget("text") for w in sidebar_frame.winfo_children()):
-            error_label = ttk.Label(sidebar_frame, text=error_message, foreground="#FF4444", background=BG_COLOR)
+            error_label = ttk.Label(sidebar_frame, text=error_message, foreground=Style.ERROR, background=Style.BG_PRIMARY)
             error_label.pack(fill=tk.X, pady=(5, 10))
         return
 
     try:
         print("Debug: populate_models - trying to fetch models.")
-        status_label.config(text="Fetching models...", fg=FG_MUTED)
+        status_label.config(text="Fetching models...", fg=Style.FG_SECONDARY)
         root.update()
 
         response_data = ollama_client.list()
@@ -381,23 +414,23 @@ def populate_models():
         if model_frame:
             model_frame.destroy()
 
-        model_frame = tk.Frame(sidebar_frame, bg=BG_COLOR)
+        model_frame = tk.Frame(sidebar_frame, bg=Style.BG_PRIMARY)
         model_frame.pack(fill=tk.X, pady=(5, 10))
 
         for name in model_names:
             rb = ttk.Radiobutton(model_frame, text=name, variable=selected_model, value=name, style='Sidebar.TRadiobutton', command=on_text_changed)
             rb.pack(fill=tk.X, anchor='w')
         
-        status_light.config(foreground="#2ECC71")  # Green
-        status_label.config(text="Ready", fg="#2ECC71")
+        status_light.config(foreground=Style.ACCENT)  # Green
+        status_label.config(text="Ready", fg=Style.ACCENT)
         print("Debug: populate_models finished successfully.")
 
     except Exception as e:
         import traceback
         print(f"ERROR: Connection failed during model population: {e}")
         traceback.print_exc()
-        status_light.config(foreground="#E74C3C")
-        status_label.config(text="Connection Failed", fg="#E74C3C")
+        status_light.config(foreground=Style.ERROR)
+        status_label.config(text="Connection Failed", fg=Style.ERROR)
         error_message = "Connection Failed"
         if not selected_model:
             selected_model = tk.StringVar(value=error_message)
@@ -405,7 +438,7 @@ def populate_models():
             selected_model.set(error_message)
         
         if not any(isinstance(w, ttk.Label) and "Connection Failed" in w.cget("text") for w in sidebar_frame.winfo_children()):
-            error_label = ttk.Label(sidebar_frame, text=error_message, foreground="#FF4444", background=BG_COLOR)
+            error_label = ttk.Label(sidebar_frame, text=error_message, foreground=Style.ERROR, background=Style.BG_PRIMARY)
             error_label.pack(fill=tk.X, pady=(5, 10))
         print("Debug: populate_models finished with an exception.")
 
@@ -418,69 +451,69 @@ def on_closing():
 root = tk.Tk()
 root.title("Next Word Prediction Visualizer")
 root.geometry("600x450")
-root.configure(bg=BG_COLOR)
+root.configure(bg=Style.BG_PRIMARY)
 root.protocol("WM_DELETE_WINDOW", on_closing) # Handle window closing
 
 # --- Style ---
 style = ttk.Style(root)
 style.theme_use('clam')
-style.configure('.', font=UI_FONT, background=BG_COLOR, foreground=FG_COLOR)
-style.configure('TFrame', background=BG_COLOR)
-style.configure('TLabel', background=BG_COLOR, foreground=FG_COLOR)
-style.map('TScale', background=[('!focus', BG_COLOR)])
+style.configure('.', font=Style.UI_FONT, background=Style.BG_PRIMARY, foreground=Style.FG_PRIMARY)
+style.configure('TFrame', background=Style.BG_PRIMARY)
+style.configure('TLabel', background=Style.BG_PRIMARY, foreground=Style.FG_PRIMARY)
+style.map('TScale', background=[('!focus', Style.BG_PRIMARY)])
 style.configure('TMenubutton', 
-                background=BG_COLOR, foreground=FG_COLOR, 
-                borderwidth=0, arrowcolor=FG_COLOR)
+                background=Style.BG_PRIMARY, foreground=Style.FG_PRIMARY, 
+                borderwidth=0, arrowcolor=Style.FG_PRIMARY)
 style.configure('Sidebar.TRadiobutton',
-                background=BG_COLOR,
-                foreground=FG_COLOR,
-                indicatorcolor=BG_COLOR,
-                bordercolor=BG_COLOR)
+                background=Style.BG_PRIMARY,
+                foreground=Style.FG_PRIMARY,
+                indicatorcolor=Style.BG_PRIMARY,
+                bordercolor=Style.BG_PRIMARY)
 style.map('Sidebar.TRadiobutton',
-          background=[('active', '#34495E')],
-          indicatorcolor=[('selected', ACCENT_COLOR), ('!selected', FG_COLOR)])
+          background=[('active', Style.BG_SECONDARY)],
+          indicatorcolor=[('selected', Style.ACCENT), ('!selected', Style.FG_PRIMARY)])
 
 # --- Main Frame ---
 main_frame = ttk.Frame(root, padding="10")
 main_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
 # --- Right Sidebar for Controls ---
-sidebar_frame = ttk.Frame(root, padding="10", width=180)
+sidebar_frame = ttk.Frame(root, padding="10", width=180, style='TFrame')
 sidebar_frame.pack(side=tk.RIGHT, fill=tk.Y)
 sidebar_frame.pack_propagate(False)
 
 # --- Connection Status Indicator ---
-status_frame = tk.Frame(sidebar_frame, bg=BG_COLOR)
+status_frame = ttk.Frame(sidebar_frame, style='TFrame')
 status_frame.pack(fill=tk.X, pady=5, anchor='n')
-status_light = tk.Label(status_frame, text="●", font=("Segoe UI", 12), bg=BG_COLOR)
+status_light = ttk.Label(status_frame, text="●", font=("Segoe UI", 12), style='TLabel')
 status_light.pack(side=tk.LEFT)
-status_label = tk.Label(status_frame, text="Initializing...", font=UI_FONT, bg=BG_COLOR, fg=FG_MUTED)
+status_label = ttk.Label(status_frame, text="Initializing...", font=Style.UI_FONT, style='TLabel', foreground=Style.FG_SECONDARY)
 status_label.pack(side=tk.LEFT, padx=5)
 
 # --- Input Text Area ---
-text_input = tk.Text(main_frame, height=8, wrap=tk.WORD, bg="#1C2833", fg=FG_COLOR,
-                     insertbackground=ACCENT_COLOR, selectbackground=ACCENT_COLOR,
-                     borderwidth=0, highlightthickness=0, font=(UI_FONT[0], 13))
+text_input = tk.Text(main_frame, height=8, wrap=tk.WORD, bg=Style.BG_TERTIARY, fg=Style.FG_PRIMARY,
+                     insertbackground=Style.ACCENT, selectbackground=Style.ACCENT,
+                     borderwidth=0, highlightthickness=0, font=(Style.UI_FONT[0], 13))
 text_input.pack(fill=tk.X, pady=(0, 10), padx=5)
 text_input.config(padx=10, pady=10)
 text_input.bind("<KeyRelease>", on_text_changed)
 
 # --- Temperature Slider ---
-ttk.Label(sidebar_frame, text="Temperature", font=(UI_FONT[0], 12, "bold")).pack(anchor='center', pady=(0, 5))
+ttk.Label(sidebar_frame, text="Temperature", font=(Style.UI_FONT[0], 12, "bold"), style='TLabel').pack(anchor='center', pady=(0, 5))
 temperature_slider = ttk.Scale(sidebar_frame, from_=2.0, to=0.0, orient=tk.VERTICAL,
                                command=on_text_changed, length=200)
 temperature_slider.set(0.7)
 temperature_slider.pack(anchor='center', pady=10)
 
 # --- Model Selection ---
-ttk.Label(sidebar_frame, text="Model", font=(UI_FONT[0], 12, "bold")).pack(anchor='center', pady=(20, 5))
+ttk.Label(sidebar_frame, text="Model", font=(Style.UI_FONT[0], 12, "bold"), style='TLabel').pack(anchor='center', pady=(20, 5))
 
 # --- Prediction Listbox ---
-ttk.Label(main_frame, text="Next Word Suggestions:", font=(UI_FONT[0], 12, "bold")).pack(anchor='w', pady=(10, 5))
-prediction_list = tk.Listbox(main_frame, bg="#1C2833", fg=FG_COLOR,
+ttk.Label(main_frame, text="Next Word Suggestions:", font=(Style.UI_FONT[0], 12, "bold'), style='TLabel').pack(anchor='w', pady=(10, 5))
+prediction_list = tk.Listbox(main_frame, bg=Style.BG_TERTIARY, fg=Style.FG_PRIMARY,
                              borderwidth=0, highlightthickness=0,
-                             font=("Fira Code", 12), selectbackground=ACCENT_COLOR,
-                             selectforeground="#1C2833",
+                             font=(Style.CHAT_FONT[0], 12), selectbackground=Style.ACCENT,
+                             selectforeground=Style.BG_TERTIARY,
                              exportselection=False)
 prediction_list.pack(fill=tk.BOTH, expand=True)
 prediction_list.insert(tk.END, "  Initializing...")
@@ -500,7 +533,7 @@ if not ollama_client:
 elif selected_model and "No models" in selected_model.get():
     prediction_list.delete(0, tk.END)
     prediction_list.insert(tk.END, "  No Ollama models found.")
-    status_label.config(text="No Models", fg=FG_MUTED)
+    status_label.config(text="No Models", fg=Style.FG_SECONDARY)
 elif selected_model and "Error" in selected_model.get():
     prediction_list.delete(0, tk.END)
     prediction_list.insert(tk.END, "  Error during model setup.")

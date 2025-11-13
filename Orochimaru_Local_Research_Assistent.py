@@ -109,7 +109,6 @@ class ResearchApp(tk.Tk):
         self.ollama_client = None # Initialize to None
         self.ollama_process = None # To store the subprocess
         self.vector_cache_dir = self.config.get("vector_cache_dir", "vector_cache")
-        self._initialize_ollama()
         os.makedirs(self.vector_cache_dir, exist_ok=True)
         self.title("Orochimaru - Local RAG AI")
         self.geometry("1200x800")
@@ -119,6 +118,7 @@ class ResearchApp(tk.Tk):
         self.embedding_model_name = self.config.get("embedding_model_name", "mxbai-embed-large")
         self.reviewer_var = tk.StringVar()
         self.create_widgets()
+        self._initialize_ollama() # Moved after create_widgets
         self.start_services()
         self.stop_loading_event = threading.Event()
         self.is_muted = False
@@ -332,7 +332,6 @@ class ResearchApp(tk.Tk):
         if pyttsx3: 
             print("Starting TTS worker thread...")
             threading.Thread(target=tts_worker, daemon=True).start()
-        self.after(100, self.populate_models)
         self.after(1000, self.update_system_stats)
         self.add_placeholder()
         
@@ -881,12 +880,10 @@ class ResearchApp(tk.Tk):
             except Exception as e:
                 messagebox.showerror("Ollama Start Error", f"Failed to start local Ollama server: {e}")
                 self.ollama_client = None # Ensure client is None if startup fails
-                self.populate_models() # Attempt to populate models even if server start fails
         else:
             self.ollama_client = None # Ensure client is None if path is invalid
             print("Ollama executable path is not configured or invalid. Cannot start local server.")
             messagebox.showwarning("Ollama Not Found", "Could not find a running Ollama instance or start a local one. Please configure the path to ollama.exe in settings or start Ollama manually.")
-            self.populate_models() # Attempt to populate models to show connection error
 
     def _check_server_readiness(self, start_time, max_wait):
         """Non-blocking check for Ollama server readiness."""
@@ -901,7 +898,6 @@ class ResearchApp(tk.Tk):
             self.ollama_client.list()
             print("Local Ollama server is responsive.")
             # Now that the server is ready, populate the models.
-            self.populate_models()
         except Exception:
             # Server not ready, update status and schedule the next check
             self.status_label.config(text=f"Waiting... ({int(elapsed_time)}s)")

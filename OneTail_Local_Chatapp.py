@@ -335,7 +335,13 @@ class ResearchApp(tk.Tk):
             model_names = sorted([m['model'] for m in models_list])
             self.status_light.config(foreground="#3AD900"); self.status_label.config(text="Connected")
             chat_models = [name for name in model_names if "embed" not in name]
-            self.model_selector['values'] = chat_models or ["No models found"]
+            
+            if not chat_models: # If no chat models are found
+                self.model_selector['values'] = ["No models found."]
+                self.model_var.set("No models found.")
+                return # Exit to prevent further processing until model is pulled
+
+            self.model_selector['values'] = chat_models
             
             if self.model_selector.get() not in chat_models:
                 self.model_var.set(chat_models[0] if chat_models else "")
@@ -434,7 +440,8 @@ class ResearchApp(tk.Tk):
 
         if ollama_path and os.path.exists(ollama_path):
             try:
-                self.ollama_process = self._start_ollama_server(ollama_path)
+                model_folder = self.config.get("model_folder")
+                self.ollama_process = self._start_ollama_server(ollama_path, model_folder)
                 
                 # Set a longer timeout for operations
                 self.ollama_client = ollama.Client(host='127.0.0.1', timeout=120)
@@ -467,9 +474,14 @@ class ResearchApp(tk.Tk):
             print("Ollama executable path is not configured or invalid. Cannot start local server.")
             messagebox.showwarning("Ollama Not Found", "Could not find a running Ollama instance or start a local one. Please configure the path to ollama.exe in settings or start Ollama manually.")
 
-    def _start_ollama_server(self, ollama_path):
+    def _start_ollama_server(self, ollama_path, model_folder):
         print(f"Attempting to start Ollama server from: {ollama_path}")
         env = os.environ.copy()
+        if model_folder and os.path.exists(model_folder):
+            print(f"Ollama model folder from config: {model_folder}")
+            print(f"Does model_folder exist? {os.path.exists(model_folder)}")
+            env["OLLAMA_MODELS"] = model_folder
+            print(f"Setting OLLAMA_MODELS environment variable to: {model_folder}")
 
         # Create a log file for the server process
         log_dir = "logs"
@@ -502,8 +514,8 @@ class ResearchApp(tk.Tk):
 
         # Define default portable paths and settings
         default_config = {
-            "ollama_path": "F:\\GitHub_assets\\Kusanagi-Assets\\Portable_AI_Assets\\ollama_main\\ollama.exe",
-            "model_folder": "F:\\GitHub_assets\\Kusanagi-Assets\\Portable_AI_Assets\\common-ollama-models"
+            "ollama_path": "Portable_AI_Assets/ollama_main/ollama.exe",
+            "model_folder": "Portable_AI_Assets/common-ollama-models"
         }
 
         config_to_use = default_config.copy()
