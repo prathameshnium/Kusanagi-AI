@@ -1,0 +1,9 @@
+/* Custom scrollbar for a professional look */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: #193549; } /* primary */
+::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #718096; }
+.listbox-item.active {
+    background-color: #193549; /* primary */
+    border-color: #ffab40; /* accent */
+}
