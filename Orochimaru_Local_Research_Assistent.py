@@ -939,33 +939,55 @@ class ResearchApp(tk.Tk):
 
     def _load_config(self):
         config_path = "System_Config.json"
-        script_dir = os.path.dirname(os.path.abspath(__file__))
+        # Get the directory where the script (or .exe) is located
+        if getattr(sys, 'frozen', False):
+            # If running as a bundled .exe
+            script_dir = os.path.dirname(sys.executable)
+        else:
+            # If running as a .py script
+            script_dir = os.path.dirname(os.path.abspath(__file__))
 
-        # Define default portable paths and settings
+        # Define default relative paths
         default_config = {
-            "ollama_path": "ollama/ollama.exe",
-            "model_folder": "models",
-            "vector_cache_dir": "Portable_AI_Assets/vector_cache",
+            "ollama_path": os.path.join("Portable_AI_Assets", "ollama_main", "ollama.exe"),
+            "model_folder": os.path.join("Portable_AI_Assets", "common-ollama-models"),
+            "vector_cache_dir": os.path.join("Portable_AI_Assets", "vector_cache"),
             "embedding_model_name": "mxbai-embed-large"
         }
 
         config_to_use = default_config.copy()
 
+        # Try to load from JSON
         if os.path.exists(config_path):
             try:
                 with open(config_path, 'r') as f:
                     loaded_config = json.load(f)
-                    config_to_use.update(loaded_config)
+                    # Update defaults with loaded values, but keep our smart path logic
+                    for key, value in loaded_config.items():
+                        if value: # Only overwrite if not empty
+                            config_to_use[key] = value
             except (json.JSONDecodeError, IOError):
-                pass  # Use defaults if file is corrupt or unreadable
+                print("Warning: Could not read config file. Using defaults.")
 
-        # Resolve paths to be absolute
+        # --- THE MAGIC: Convert Relative Paths to Absolute ---
+        # This ensures it works on ANY drive (E:, F:, Z:)
         for path_key in ["ollama_path", "model_folder", "vector_cache_dir"]:
-            if path_key in config_to_use and not os.path.isabs(config_to_use[path_key]):
-                config_to_use[path_key] = os.path.join(script_dir, config_to_use[path_key])
+            raw_path = config_to_use[path_key]
+            
+            # If the path in config is NOT absolute (e.g. doesn't start with F:/),
+            # assume it is relative to the app's folder.
+            if not os.path.isabs(raw_path):
+                config_to_use[path_key] = os.path.join(script_dir, raw_path)
+                print(f"Resolved relative path for {path_key}: {config_to_use[path_key]}")
+            else:
+                print(f"Using absolute path for {path_key}: {raw_path}")
 
-        # Save the (potentially updated) config
-        self._save_config(config_to_use)
+        # Create the vector cache dir if it doesn't exist
+        try:
+            os.makedirs(config_to_use["vector_cache_dir"], exist_ok=True)
+        except OSError as e:
+            print(f"Error creating vector cache directory: {e}")
+
         return config_to_use
 
     def _save_config(self, config):
