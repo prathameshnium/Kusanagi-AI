@@ -1,7 +1,7 @@
 # Kusanagi-AI: Free & Open-Source Local AI Toolkit for Researchers
 
 <p align="center" id="top">
-  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Kusanagi-AI.png" alt="Kusanagi-AI Logo" width="250"/>
+  <img src="https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/logo/Kusanagi-AI.png" alt="Kusanagi-AI Logo" width="250"/>
 </p>
 
 <p align="center">
@@ -39,9 +39,9 @@ Kusanagi-AI was developed to address the growing need for accessible and privacy
 
 ## Technology Stack
 <p align="center">
-  <a href="https://www.python.org" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/python/python-original.svg" alt="python" width="40" height="40"/> </a>
-  <a href="https://ollama.com/" target="_blank" rel="noreferrer"> <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/ollama.png" alt="ollama" width="45" height="45"/> </a>
-  <a href="https://www.numpy.org" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/devicons/devicon/master/icons/numpy/numpy-original.svg" alt="numpy" width="40" height="40"/> </a>
+  <a href="https://www.python.org" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/prathameshnium/static-files/main/icons/python.svg" alt="python" width="40" height="40"/> </a>
+  <a href="https://ollama.com/" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/prathameshnium/static-files/main/icons/ollama.png" alt="ollama" width="45" height="45"/> </a>
+  <a href="https://www.numpy.org" target="_blank" rel="noreferrer"> <img src="https://raw.githubusercontent.com/prathameshnium/static-files/main/icons/numpy.svg" alt="numpy" width="40" height="40"/> </a>
   <a href="https://tkdocs.com/index.html" target="_blank" rel="noreferrer"> <img src="http://pascal.ortiz.free.fr/_images/logo_tkinter.png" alt="tkinter" width="40" height="40"/> </a>
 </p>
 Kusanagi-AI is built with a focus on local execution, privacy, and ease of use. The core technologies include:
@@ -67,11 +67,11 @@ Kusanagi-AI is built with a focus on local execution, privacy, and ease of use. 
 
 <p align="center"><i>A quick demonstration of Orochimaru's RAG capabilities with a research paper.</i><br><img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Demos/Orochimaru-Demo.gif" alt="Orochimaru Demo GIF" width="800"/></p>
 
-![Orochimaru Screenshot](https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Orochimaru_Screenshot.jpg)
+![Orochimaru Screenshot](https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/Orochimaru_Screenshot.jpg)
 
 ### One Tail - Local Chat App
 
-![One Tail Screenshot](https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/One_Tail_Screenshot.jpg)
+![One Tail Screenshot](https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/One_Tail_Screenshot.jpg)
 
 ## Getting Started
 
@@ -154,9 +154,9 @@ Kusanagi-AI is designed for maximum portability and ease of use, incorporating s
 -   **Starter Models**: To jumpstart your research, a selection of foundational models such as Gemma, Qwen, and TinyLlama are provided.
 
 <p align="center">
-  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Gemma.jpg" alt="Gemma Logo" width="150"/>
-  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Qwen.jpg" alt="Qwen Logo" width="130"/>
-  <img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Images/Tinylamma.jpg" alt="TinyLlama Logo" width="87"/>
+  <img src="https://raw.githubusercontent.com/prathameshnium/static-files/main/icons/Gemma.jpg" alt="Gemma Logo" width="150"/>
+  <img src="https://raw.githubusercontent.com/prathameshnium/static-files/main/icons/Qwen.jpg" alt="Qwen Logo" width="130"/>
+  <img src="https://raw.githubusercontent.com/prathameshnium/static-files/main/icons/Tinylamma.jpg" alt="TinyLlama Logo" width="87"/>
 </p>
 
 **Important Note on Open-Source Projects**: We deeply respect and acknowledge the intellectual property of the original creators of the included open-source projects. Kusanagi-AI merely integrates these tools for enhanced portability and user convenience. We do not claim ownership over these projects.
