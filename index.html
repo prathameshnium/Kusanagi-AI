@@ -3,11 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kusanagi - Local RAG AI</title>
+    <title>Kakashi - Local RAG AI</title> <!-- CHANGED -->
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Custom CSS -->
-    <link rel="stylesheet" href="static/style.css">
+    <style>
+        /* Custom scrollbar for a professional look */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #193549; } /* primary */
+        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #718096; }
+        .listbox-item.active {
+            background-color: #193549; /* primary */
+            border-color: #ffab40; /* accent */
+        }
+    </style>
     <script>
         tailwind.config = {
             theme: {
@@ -34,13 +43,13 @@
             <!-- Header -->
             <div class="flex items-center space-x-3 mb-5 px-1">
                 <div class="p-2 bg-accent rounded-lg">
-                    <!-- Kusanagi/Book Icon -->
+                    <!-- Kakashi/Book Icon -->
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-accent-fg">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
                     </svg>                      
                 </div>
                 <div>
-                    <h1 class="text-xl font-bold text-accent">Kusanagi</h1>
+                    <h1 class="text-xl font-bold text-accent">Kakashi</h1> <!-- CHANGED -->
                     <p class="text-xs text-fg-secondary">Local RAG AI Assistant</p>
                 </div>
             </div>
@@ -49,7 +58,7 @@
             <div class="flex-grow flex flex-col overflow-y-hidden space-y-4">
                 <!-- General Chats -->
                 <div class="flex flex-col h-1/3">
-                    <h2 class="text-sm font-semibold text-fg-secondary uppercase tracking-wide mb-2 px-1">General Chats</h2>
+                    <h2 class="text-sm font-semibold text-fg-secondary uppercase tracking-wide mb-2 px-1">⛩️ General Chats</h2> <!-- CHANGED -->
                     <div class="flex-grow bg-tertiary p-2 rounded-lg overflow-y-auto space-y-1">
                         <div class="listbox-item p-3 rounded-md cursor-pointer hover:bg-primary">
                             <h3 class="font-semibold text-fg-primary truncate">Chat 1: Brainstorming</h3>
@@ -60,7 +69,7 @@
 
                 <!-- Loaded Documents -->
                 <div class="flex flex-col flex-grow">
-                    <h2 class="text-sm font-semibold text-fg-secondary uppercase tracking-wide mb-2 px-1">Loaded Documents</h2>
+                    <h2 class="text-sm font-semibold text-fg-secondary uppercase tracking-wide mb-2 px-1">📜 Loaded Documents</h2> <!-- CHANGED -->
                     <button class="w-full bg-accent text-accent-fg font-bold py-2 px-4 rounded-lg mb-2 hover:bg-yellow-400 transition duration-200 text-sm">
                         + Upload New Document
                     </button>
@@ -81,6 +90,23 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Project Info -->
+            <div class="mt-auto pt-5 border-t border-tertiary text-center text-xs text-fg-secondary space-y-2">
+                <p>
+                    A demo for local AI apps like <b class="font-semibold text-fg-primary">Orochimaru</b> for private and safe RAG.
+                </p>
+                <p class="italic text-accent/90">This UI is a placeholder. Full functionality coming soon!</p>
+                
+                <div class="pt-2">
+                    <p>Developed by</p>
+                    <a href="https://github.com/prathameshnium" target="_blank" class="font-semibold text-accent hover:underline">Prathamesh Deshmukh</a>
+                </div>
+                
+                <a href="https://github.com/prathameshnium/Kusanagi-AI/tree/main" target="_blank" class="inline-block pt-2 text-accent hover:underline">
+                    View on GitHub
+                </a>
             </div>
         </aside>
 
@@ -104,7 +130,7 @@
                 <div class="flex items-start space-x-4">
                     <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent">AI</div>
                     <div class="bg-tertiary p-4 rounded-lg max-w-2xl">
-                        <p class="font-bold text-accent mb-1">Kusanagi</p>
+                        <p class="font-bold text-accent mb-1">Kakashi</p> <!-- CHANGED -->
                         <p>Document "History_of_Science_101.pdf" is loaded. How can I help you analyze it today?</p>
                     </div>
                 </div>
@@ -115,7 +141,7 @@
                 <div class="flex items-center space-x-2">
                     <button id="btn-sage-mode" class="bg-primary text-accent py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition font-bold">Sage Mode (ON)</button>
                     <span class="border-l border-gray-600 h-5"></span>
-                    <button id="btn-kage-summit" class="bg-primary text-fg-secondary py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition">Kage Summit</button>
+                    <button id="btn-kage-summit" class="bg-primary text-fg-secondary py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition">👑 Kage Summit</button>
                     <button class="bg-primary text-fg-secondary py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition">Summarize Doc</button>
                     <button class="bg-primary text-fg-secondary py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition">Explain Concept</button>
                     <button class="bg-primary text-fg-secondary py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition">Generate Questions</button>
@@ -136,7 +162,143 @@
         </main>
     </div>
 
-    <!-- Custom JavaScript -->
-    <script src="static/script.js"></script>
+    <script>
+        // --- MOCK JAVASCRIPT to simulate the app's functionality ---
+        const chatHistory = document.getElementById('chat-history');
+        const chatInput = document.getElementById('chat-input');
+        const sendButton = document.getElementById('send-button');
+        const kageSummitButton = document.getElementById('btn-kage-summit');
+
+        // --- Event Listeners ---
+        sendButton.addEventListener('click', handleSend);
+        chatInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') handleSend();
+        });
+        // Special listener for the Kage Summit button
+        kageSummitButton.addEventListener('click', () => {
+            let prompt = chatInput.value.trim();
+            if (prompt === '') {
+                prompt = "Provide a general peer review of this document.";
+            }
+            handleSend(prompt, true); // Pass 'true' to trigger Kage Summit
+        });
+
+        // --- Main Send Function ---
+        const handleSend = (prompt, isKageSummit = false) => {
+            if (!prompt) {
+                prompt = chatInput.value.trim();
+            }
+            if (prompt === '') return;
+
+            addMessage('user', prompt);
+            chatInput.value = '';
+            
+            // Disable all inputs
+            setInputsDisabled(true);
+
+            if (isKageSummit) {
+                // --- KAGE SUMMIT SIMULATION ---
+                simulateKageSummit(prompt);
+            } else {
+                // --- NORMAL CHAT SIMULATION ---
+                addMessage('ai', 'Thinking...', true); // Add thinking message
+                setTimeout(() => {
+                    removeThinkingMessage();
+                    const aiResponse = "According to the document, Marie Curie was a physicist and chemist... [Source 4, Page 27]";
+                    addMessage('ai', aiResponse);
+                    setInputsDisabled(false);
+                }, 1500);
+            }
+        };
+        
+        // --- Kage Summit Simulation ---
+        async function simulateKageSummit(prompt) {
+            addMessage('ai', 'Assembling Kage Summit...', true);
+            
+            // This 'await' simulates the time for RAG/embedding
+            await sleep(1500);
+            removeThinkingMessage();
+
+            const reviews = [
+                { expert: "Physicist", review: "The theoretical models presented are sound. However, the interpretation of the diffraction data on page 12 could be clearer." },
+                { expert: "Chemist", review: "The material synthesis section is robust and reproducible. I question the purity of the precursors mentioned in [Source 8, Page 19]." },
+                { expert: "Chief Editor", review: "A strong paper. The council agrees that the methodology is sound, but the conclusion needs to more directly address the chemical purity concerns raised by the Chemist." }
+            ];
+
+            for (const review of reviews) {
+                addMessage(review.expert, 'Thinking...', true, review.expert);
+                await sleep(1500); // Wait 1.5s for each expert
+                removeThinkingMessage(review.expert);
+                addMessage(review.expert, review.review);
+            }
+            
+            setInputsDisabled(false);
+        }
+
+        // --- Helper Functions ---
+        const addMessage = (role, text, isThinking = false, id = null) => {
+            const messageWrapper = document.createElement('div');
+            let messageId = isThinking ? (id ? `thinking-${id}` : 'thinking') : '';
+
+            if (role === 'user') {
+                messageWrapper.className = "flex items-start space-x-4 justify-end";
+                messageWrapper.innerHTML = `
+                    <div class="bg-accent text-accent-fg p-4 rounded-lg max-w-2xl">
+                        <p class="font-bold mb-1">You</p>
+                        <p>${text}</p>
+                    </div>
+                    <div class="flex-shrink-0 w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center font-bold">You</div>
+                `;
+            } else {
+                messageWrapper.className = "flex items-start space-x-4";
+                if (messageId) messageWrapper.id = messageId;
+                
+                let author = "Kakashi"; // CHANGED
+                let authorColor = "text-accent";
+                let avatar = "AI";
+
+                // Check for special roles
+                if (role !== 'ai') {
+                    author = role;
+                    avatar = role.substring(0, 2).toUpperCase();
+                }
+
+                let messageContent = `
+                    <p class="font-bold ${authorColor} mb-1">${author}</p>
+                    <p>${text}</p>
+                `;
+                
+                if (isThinking) {
+                    messageContent = `<p class="text-fg-secondary italic">${text}</p>`;
+                }
+
+                messageWrapper.innerHTML = `
+                    <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold ${authorColor}">${avatar}</div>
+                    <div class="bg-tertiary p-4 rounded-lg max-w-2xl">
+                        ${messageContent}
+                    </div>
+                `;
+            }
+            chatHistory.appendChild(messageWrapper);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        };
+
+        const removeThinkingMessage = (id = null) => {
+            const thinkingId = id ? `thinking-${id}` : 'thinking';
+            const thinkingMessage = document.getElementById(thinkingId);
+            if (thinkingMessage) {
+                thinkingMessage.remove();
+            }
+        };
+
+        const setInputsDisabled = (isDisabled) => {
+            chatInput.disabled = isDisabled;
+            sendButton.disabled = isDisabled;
+            if (!isDisabled) chatInput.focus();
+        };
+
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    </script>
 </body>
 </html>
