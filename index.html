@@ -1,20 +1,51 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kusanagi - Local RAG AI</title> <!-- CHANGED -->
-    <!-- Load Tailwind CSS -->
+    <title>Kusanagi AI - Researcher-Oriented AI Suite</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Custom scrollbar for a professional look */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #193549; } /* primary */
-        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #718096; }
-        .listbox-item.active {
-            background-color: #193549; /* primary */
-            border-color: #ffab40; /* accent */
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
+        body {
+            font-family: 'Roboto', sans-serif;
+        }
+        .btn-glow:hover {
+            box-shadow: 0 0 15px rgba(255, 171, 64, 0.5), 0 0 5px rgba(255, 171, 64, 0.3);
+        }
+        .typewriter-cursor {
+            display: inline-block;
+            width: 3px;
+            height: 1em;
+            background-color: #ffab40; /* accent color */
+            animation: blink 0.7s infinite;
+            vertical-align: middle;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        .fade-in-section {
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+        }
+        .fade-in-section.is-visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        .content-card {
+            opacity: 0;
+            transition: opacity 0.5s ease-in;
+        }
+        .content-card.is-visible {
+            opacity: 1;
+        }
+        .roadmap-item .content-card {
+            background-color: #193549;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            width: 200px;
         }
     </style>
     <script>
@@ -22,283 +53,222 @@
             theme: {
                 extend: {
                     colors: {
-                        'primary': '#193549',   // Main content dark blue
-                        'secondary': '#002240', // Sidebar darker blue
-                        'tertiary': '#25435A',   // Input fields
-                        'accent': '#ffab40',    // Orange/Yellow accent
-                        'accent-fg': '#002240', // Text on accent
+                        'primary': '#193549',
+                        'secondary': '#002240',
+                        'tertiary': '#25435A',
+                        'accent': '#ffab40',
+                        'accent-fg': '#002240',
                         'fg-primary': '#FFFFFF',
-                        'fg-secondary': '#97B1C2', // Muted text
+                        'fg-secondary': '#97B1C2',
                     }
                 }
             }
         }
     </script>
 </head>
-<body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden">
-    <div class="flex h-full max-h-screen">
-        
-        <!-- === Sidebar === -->
-        <aside class="w-80 flex-shrink-0 bg-secondary flex flex-col p-5">
-            <!-- Header -->
-            <div class="flex items-center space-x-3 mb-5 px-1">
-                <div class="p-2 bg-accent rounded-lg">
-                    <!-- Kakashi/Book Icon -->
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-accent-fg">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-                    </svg>                      
-                </div>
-                <div>
-                    <h1 class="text-xl font-bold text-accent">Kakashi</h1> <!-- CHANGED -->
-                    <p class="text-xs text-fg-secondary">Local RAG AI Assistant</p>
-                </div>
-            </div>
+<body class="bg-secondary text-fg-primary overflow-x-hidden">
 
-            <!-- Context Lists -->
-            <div class="flex-grow flex flex-col overflow-y-hidden space-y-4">
-                <!-- General Chats -->
-                <div class="flex flex-col h-1/3">
-                    <h2 class="text-sm font-semibold text-fg-secondary uppercase tracking-wide mb-2 px-1">⛩️ General Chats</h2> <!-- CHANGED -->
-                    <div class="flex-grow bg-tertiary p-2 rounded-lg overflow-y-auto space-y-1">
-                        <div class="listbox-item p-3 rounded-md cursor-pointer hover:bg-primary">
-                            <h3 class="font-semibold text-fg-primary truncate">Chat 1: Brainstorming</h3>
-                            <p class="text-sm text-fg-secondary">Last message: ...</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Loaded Documents -->
-                <div class="flex flex-col flex-grow">
-                    <h2 class="text-sm font-semibold text-fg-secondary uppercase tracking-wide mb-2 px-1">📜 Loaded Documents</h2> <!-- CHANGED -->
-                    <button class="w-full bg-accent text-accent-fg font-bold py-2 px-4 rounded-lg mb-2 hover:bg-yellow-400 transition duration-200 text-sm">
-                        + Upload New Document
-                    </button>
-                    <div class="flex-grow bg-tertiary p-2 rounded-lg overflow-y-auto space-y-1">
-                        <!-- Active Document -->
-                        <div class="listbox-item active p-3 rounded-md cursor-pointer border border-accent bg-primary">
-                            <h3 class="font-semibold text-fg-primary truncate">History_of_Science_101.pdf</h3>
-                            <p class="text-sm text-fg-secondary">124 Pages | 42 chunks</p>
-                        </div>
-                        <!-- Inactive Documents -->
-                        <div class="listbox-item p-3 rounded-md cursor-pointer hover:bg-primary">
-                            <h3 class="font-semibold text-fg-primary truncate">Intro_to_Physics_Lab.pdf</h3>
-                            <p class="text-sm text-fg-secondary">38 Pages | 12 chunks</p>
-                        </div>
-                        <div class="listbox-item p-3 rounded-md cursor-pointer hover:bg-primary">
-                            <h3 class="font-semibold text-fg-primary truncate">Student_Essays_Batch_1.pdf</h3>
-                            <p class="text-sm text-fg-secondary">52 Pages | 20 chunks</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Project Info -->
-            <div class="mt-auto pt-5 border-t border-tertiary text-center text-xs text-fg-secondary space-y-2">
-                <p>
-                    A demo for local AI apps like <b class="font-semibold text-fg-primary">Orochimaru</b> and tailed apps for local chat, ensuring private and safe data.
-                </p>
-                <p class="italic text-accent/90">This is just a demo page, will get it working soon.</p>
-                
-                <div class="pt-2">
-                    <p>Developed by</p>
-                    <a href="https://github.com/prathameshnium" target="_blank" class="font-semibold text-accent hover:underline">Prathamesh Deshmukh</a>
-                </div>
-                
-                <a href="https://github.com/prathameshnium/Kusanagi-AI/tree/main" target="_blank" class="inline-block pt-2 text-accent hover:underline">
-                    View on GitHub
-                </a>
-            </div>
-        </aside>
-
-        <!-- === Main Chat Area === -->
-        <main class="flex-1 flex flex-col max-h-screen">
-            <!-- Top Bar -->
-            <header class="flex-shrink-0 bg-primary border-b border-tertiary flex justify-between items-center p-4">
-                <h2 id="chat-title" class="text-lg font-semibold">History_of_Science_101.pdf</h2>
-                <div class="text-xs text-fg-secondary flex items-center space-x-3">
-                    <span id="status-text" class="text-green-400">● Connected</span>
-                    <span>|</span>
-                    <span>RAM: 25%</span>
-                    <span>|</span>
-                    <span>qwen:1.8b-chat</span>
-                </div>
-            </header>
-
-            <!-- Chat History -->
-            <div id="chat-history" class="flex-grow p-6 overflow-y-auto space-y-6">
-                <!-- Mockup of an AI greeting -->
-                <div class="flex items-start space-x-4">
-                    <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent">AI</div>
-                    <div class="bg-tertiary p-4 rounded-lg max-w-2xl">
-                        <p class="font-bold text-accent mb-1">Kakashi</p> <!-- CHANGED -->
-                        <p>Document "History_of_Science_101.pdf" is loaded. How can I help you analyze it today?</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Jutsu Arsenal (Tool Bar) -->
-            <div class="flex-shrink-0 bg-tertiary p-3 mx-6 mb-2 rounded-lg">
-                <div class="flex items-center space-x-2">
-                    <button id="btn-sage-mode" class="bg-primary text-accent py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition font-bold">Sage Mode (ON)</button>
-                    <span class="border-l border-gray-600 h-5"></span>
-                    <button id="btn-kage-summit" class="bg-primary text-fg-secondary py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition">👑 Kage Summit</button>
-                    <button class="bg-primary text-fg-secondary py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition">Summarize Doc</button>
-                    <button class="bg-primary text-fg-secondary py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition">Explain Concept</button>
-                    <button class="bg-primary text-fg-secondary py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition">Generate Questions</button>
-                </div>
-            </div>
-
-            <!-- Input Bar -->
-            <footer class="flex-shrink-0 p-6 pt-0">
-                <div class="flex bg-tertiary rounded-lg p-2">
-                    <input id="chat-input" type="text" placeholder="Ask a question or request a review..." class="w-full bg-transparent p-3 text-fg-primary placeholder-fg-secondary focus:outline-none">
-                    <button id="send-button" class="bg-accent text-accent-fg rounded-md p-3 ml-2 hover:bg-yellow-400 transition duration-200">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.875L6 12z" />
-                        </svg>
-                    </button>
-                </div>
-            </footer>
-        </main>
+    <div class="container mx-auto px-4 py-16 md:py-24 text-center">
+        <h1 id="headline" data-text="Kusanagi AI" class="text-5xl md:text-7xl font-bold mb-4 min-h-[1.2em]"></h1>
+        <p id="tagline" data-text="A suite of free, open-source AI programs designed for researchers." class="text-xl md:text-2xl text-fg-secondary mb-8 max-w-3xl mx-auto min-h-[3.6em]"></p>
+        <div id="main-buttons" class="flex justify-center items-center space-x-4 mb-12 opacity-0 transition-opacity duration-500">
+            <a href="https://github.com/prathameshnium/Kusanagi-AI" target="_blank" class="bg-accent hover:bg-yellow-400 text-accent-fg font-bold py-3 px-8 rounded-lg text-lg transition-transform transform hover:scale-105 btn-glow">Download Local AI</a>
+            <a href="Kakashi.html" class="bg-accent hover:bg-yellow-400 text-accent-fg font-bold py-3 px-8 rounded-lg text-lg transition-transform transform hover:scale-105 btn-glow">Web-based Tools</a>
+        </div>
     </div>
 
-    <script>
-        // --- MOCK JAVASCRIPT to simulate the app's functionality ---
-        const chatHistory = document.getElementById('chat-history');
-        const chatInput = document.getElementById('chat-input');
-        const sendButton = document.getElementById('send-button');
-        const kageSummitButton = document.getElementById('btn-kage-summit');
+    <div class="container mx-auto px-4 pb-24">
+        <!-- Features Section -->
+        <div id="features-section" class="fade-in-section mt-16 mb-20 text-left">
+            <h2 id="features-title" data-text="Core Features" class="text-3xl font-bold text-center mb-12"></h2>
+            <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div class="content-card bg-primary p-6 rounded-lg">
+                    <svg class="w-8 h-8 mb-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    <h3 class="text-xl font-bold mb-2">Local First</h3>
+                    <p class="text-fg-secondary">All your data stays on your machine, ensuring complete privacy and control.</p>
+                </div>
+                <div class="content-card bg-primary p-6 rounded-lg" style="transition-delay: 100ms;">
+                    <svg class="w-8 h-8 mb-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path d="M12 14l9-5-9-5-9 5 9 5z"></path><path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-5.998 12.078 12.078 0 01.665-6.479L12 14z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0v3.422A12.083 12.083 0 0112 20.055a12.083 12.083 0 01-7.165-6.633V9l7.165 4.002z"></path></svg>
+                    <h3 class="text-xl font-bold mb-2">Researcher Focused</h3>
+                    <p class="text-fg-secondary">Tools for thought, analysis, and discovery, built to aid your research workflow.</p>
+                </div>
+                <div class="content-card bg-primary p-6 rounded-lg" style="transition-delay: 200ms;">
+                    <svg class="w-8 h-8 mb-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                    <h3 class="text-xl font-bold mb-2">Open Source</h3>
+                    <p class="text-fg-secondary">Completely free and open for contributions. Fork, modify, and build upon it.</p>
+                </div>
+                <div class="content-card bg-primary p-6 rounded-lg" style="transition-delay: 300ms;">
+                    <svg class="w-8 h-8 mb-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    <h3 class="text-xl font-bold mb-2">RAG Powered</h3>
+                    <p class="text-fg-secondary">Chat with your documents and data using Retrieval-Augmented Generation.</p>
+                </div>
+            </div>
+        </div>
 
-        // --- Event Listeners ---
-        sendButton.addEventListener('click', handleSend);
-        chatInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') handleSend();
-        });
-        // Special listener for the Kage Summit button
-        kageSummitButton.addEventListener('click', () => {
-            let prompt = chatInput.value.trim();
-            if (prompt === '') {
-                prompt = "Provide a general peer review of this document.";
-            }
-            handleSend(prompt, true); // Pass 'true' to trigger Kage Summit
-        });
+        <!-- Tools Showcase -->
+        <div id="tools-section" class="fade-in-section mb-20 text-left">
+            <h2 id="tools-title" data-text="The Tool Suite" class="text-3xl font-bold text-center mb-12"></h2>
+            <div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+                <div class="content-card bg-primary p-6 rounded-lg">
+                    <h3 class="text-2xl font-bold mb-2 text-accent">Kakashi</h3>
+                    <p class="text-fg-secondary mb-4">A web-based RAG AI assistant to chat with your documents.</p>
+                    <a href="Kakashi.html" class="text-accent font-bold hover:underline">Use Kakashi →</a>
+                </div>
+                <div class="content-card bg-primary p-6 rounded-lg" style="transition-delay: 100ms;">
+                    <h3 class="text-2xl font-bold mb-2 text-accent">Orochimaru</h3>
+                    <p class="text-fg-secondary mb-4">A local research assistant for deeper data analysis and exploration.</p>
+                    <a href="#" class="text-fg-secondary font-bold cursor-not-allowed">Coming Soon</a>
+                </div>
+            </div>
+        </div>
 
-        // --- Main Send Function ---
-        const handleSend = (prompt, isKageSummit = false) => {
-            if (!prompt) {
-                prompt = chatInput.value.trim();
-            }
-            if (prompt === '') return;
-
-            addMessage('user', prompt);
-            chatInput.value = '';
-            
-            // Disable all inputs
-            setInputsDisabled(true);
-
-            if (isKageSummit) {
-                // --- KAGE SUMMIT SIMULATION ---
-                simulateKageSummit(prompt);
-            } else {
-                // --- NORMAL CHAT SIMULATION ---
-                addMessage('ai', 'Thinking...', true); // Add thinking message
-                setTimeout(() => {
-                    removeThinkingMessage();
-                    const aiResponse = "According to the document, Marie Curie was a physicist and chemist... [Source 4, Page 27]";
-                    addMessage('ai', aiResponse);
-                    setInputsDisabled(false);
-                }, 1500);
-            }
-        };
+        <!-- Getting Started -->
+        <div id="getting-started-section" class="fade-in-section mb-20 text-left max-w-4xl mx-auto">
+            <h2 id="getting-started-title" data-text="Getting Started Locally" class="text-3xl font-bold text-center mb-12"></h2>
+            <div class="content-card bg-primary p-6 rounded-lg">
+                <pre class="bg-secondary p-4 rounded-md text-fg-primary overflow-x-auto"><code>git clone https://github.com/prathameshnium/Kusanagi-AI.git
+cd Kusanagi-AI
+pip install -r requirements.txt
+python OneTail_Local_Chatapp.py</code></pre>
+            </div>
+        </div>
         
-        // --- Kage Summit Simulation ---
-        async function simulateKageSummit(prompt) {
-            addMessage('ai', 'Assembling Kage Summit...', true);
-            
-            // This 'await' simulates the time for RAG/embedding
-            await sleep(1500);
-            removeThinkingMessage();
-
-            const reviews = [
-                { expert: "Physicist", review: "The theoretical models presented are sound. However, the interpretation of the diffraction data on page 12 could be clearer." },
-                { expert: "Chemist", review: "The material synthesis section is robust and reproducible. I question the purity of the precursors mentioned in [Source 8, Page 19]." },
-                { expert: "Chief Editor", review: "A strong paper. The council agrees that the methodology is sound, but the conclusion needs to more directly address the chemical purity concerns raised by the Chemist." }
-            ];
-
-            for (const review of reviews) {
-                addMessage(review.expert, 'Thinking...', true, review.expert);
-                await sleep(1500); // Wait 1.5s for each expert
-                removeThinkingMessage(review.expert);
-                addMessage(review.expert, review.review);
-            }
-            
-            setInputsDisabled(false);
-        }
-
-        // --- Helper Functions ---
-        const addMessage = (role, text, isThinking = false, id = null) => {
-            const messageWrapper = document.createElement('div');
-            let messageId = isThinking ? (id ? `thinking-${id}` : 'thinking') : '';
-
-            if (role === 'user') {
-                messageWrapper.className = "flex items-start space-x-4 justify-end";
-                messageWrapper.innerHTML = `
-                    <div class="bg-accent text-accent-fg p-4 rounded-lg max-w-2xl">
-                        <p class="font-bold mb-1">You</p>
-                        <p>${text}</p>
+        <!-- Roadmap -->
+        <div id="roadmap-section" class="fade-in-section text-left max-w-4xl mx-auto">
+            <h2 id="roadmap-title" data-text="Roadmap" class="text-3xl font-bold text-center mb-24"></h2>
+            <div class="relative w-full h-[400px] md:h-[300px]">
+                <svg class="absolute top-0 left-0 w-full h-full" preserveAspectRatio="none" viewBox="0 0 800 300">
+                    <path d="M 50 50 C 250 300, 550 -50, 750 250" stroke="#25435A" stroke-width="3" fill="none" stroke-dasharray="10,10"/>
+                </svg>
+                <div class="roadmap-item absolute" style="top: 5%; left: 5%;">
+                    <div class="content-card">
+                        <h4 class="font-bold">Core RAG Pipeline</h4>
+                        <p class="text-fg-secondary text-sm">Initial release of Kakashi and local chat app.</p>
                     </div>
-                    <div class="flex-shrink-0 w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center font-bold">You</div>
-                `;
-            } else {
-                messageWrapper.className = "flex items-start space-x-4";
-                if (messageId) messageWrapper.id = messageId;
-                
-                let author = "Kakashi"; // CHANGED
-                let authorColor = "text-accent";
-                let avatar = "AI";
+                </div>
+                <div class="roadmap-item absolute" style="top: 55%; left: 45%; transform: translate(-50%, -50%);">
+                    <div class="content-card" style="transition-delay: 100ms;">
+                        <h4 class="font-bold">Orochimaru Release</h4>
+                        <p class="text-fg-secondary text-sm">Advanced research agent with multi-step analysis.</p>
+                    </div>
+                </div>
+                <div class="roadmap-item absolute" style="top: 45%; left: 90%; transform: translate(-50%, -50%);">
+                    <div class="content-card" style="transition-delay: 200ms;">
+                        <h4 class="font-bold">Multi-modal Support</h4>
+                        <p class="text-fg-secondary text-sm">Enable analysis of images and other file types.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                // Check for special roles
-                if (role !== 'ai') {
-                    author = role;
-                    avatar = role.substring(0, 2).toUpperCase();
+    <footer class="fade-in-section text-center py-8 border-t border-primary mt-12">
+        <div class="content-card">
+            <p>Developed by <a href="https://github.com/prathameshnium" target="_blank" class="text-accent hover:underline">Prathamesh Deshmukh</a></p>
+        </div>
+    </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const TYPE_SPEED_HEADLINE = 100;
+            const TYPE_SPEED_TAGLINE = 40;
+            const TYPE_SPEED_NORMAL = 70;
+            const INITIAL_DELAY = 800;
+
+            function typeWriter(element, speed, callback) {
+                const textToType = element.dataset.text;
+                if (!element || !textToType) {
+                    if (callback) callback();
+                    return;
                 }
 
-                let messageContent = `
-                    <p class="font-bold ${authorColor} mb-1">${author}</p>
-                    <p>${text}</p>
-                `;
+                const computedStyle = window.getComputedStyle(element);
+                const originalColor = computedStyle.color;
+                const isCentered = computedStyle.textAlign === 'center';
+
+                element.textContent = textToType;
+                element.style.color = 'transparent';
+                element.style.position = 'relative';
+
+                const overlay = document.createElement('div');
+                overlay.style.position = 'absolute';
+                overlay.style.top = '0';
+                overlay.style.left = '0';
+                overlay.style.width = '100%';
+                overlay.style.height = '100%';
+                overlay.style.color = originalColor;
+                overlay.style.textAlign = computedStyle.textAlign;
                 
-                if (isThinking) {
-                    messageContent = `<p class="text-fg-secondary italic">${text}</p>`;
+                element.appendChild(overlay);
+
+                let i = 0;
+                let contentHTML = '<span class="typewriter-text"></span><span class="typewriter-cursor"></span>';
+                
+                if (isCentered) {
+                    contentHTML = `<div style="display: inline-block; text-align: left;">${contentHTML}</div>`;
                 }
+                overlay.innerHTML = contentHTML;
 
-                messageWrapper.innerHTML = `
-                    <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold ${authorColor}">${avatar}</div>
-                    <div class="bg-tertiary p-4 rounded-lg max-w-2xl">
-                        ${messageContent}
-                    </div>
-                `;
+                const textSpan = overlay.querySelector('.typewriter-text');
+                const cursorSpan = overlay.querySelector('.typewriter-cursor');
+                
+                function type() {
+                    if (i < textToType.length) {
+                        textSpan.textContent += textToType.charAt(i);
+                        i++;
+                        setTimeout(type, speed);
+                    } else {
+                        if (cursorSpan) cursorSpan.style.display = 'none';
+                        element.removeChild(overlay);
+                        element.style.color = originalColor;
+                        element.style.position = '';
+                        if (callback) callback();
+                    }
+                }
+                type();
             }
-            chatHistory.appendChild(messageWrapper);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-        };
+            
+            const sectionObserver = new IntersectionObserver((entries, observer) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        const section = entry.target;
+                        section.classList.add('is-visible');
+                        const title = section.querySelector('h2');
+                        
+                        const startContentAnimation = () => {
+                            const content = Array.from(section.querySelectorAll('.content-card'));
+                            content.forEach(card => {
+                                card.classList.add('is-visible');
+                            });
+                        };
 
-        const removeThinkingMessage = (id = null) => {
-            const thinkingId = id ? `thinking-${id}` : 'thinking';
-            const thinkingMessage = document.getElementById(thinkingId);
-            if (thinkingMessage) {
-                thinkingMessage.remove();
+                        if (title && title.dataset.text) {
+                            typeWriter(title, TYPE_SPEED_NORMAL, startContentAnimation);
+                        } else {
+                            startContentAnimation();
+                        }
+                        observer.unobserve(section);
+                    }
+                });
+            }, { threshold: 0.1 });
+
+            function startScrollObserver() {
+                document.querySelectorAll('.fade-in-section').forEach(section => {
+                    sectionObserver.observe(section);
+                });
             }
-        };
 
-        const setInputsDisabled = (isDisabled) => {
-            chatInput.disabled = isDisabled;
-            sendButton.disabled = isDisabled;
-            if (!isDisabled) chatInput.focus();
-        };
-
-        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-
+            // --- Hero Animation ---
+            setTimeout(() => {
+                typeWriter(document.getElementById('headline'), TYPE_SPEED_HEADLINE, () => {
+                    typeWriter(document.getElementById('tagline'), TYPE_SPEED_TAGLINE, () => {
+                        document.getElementById('main-buttons').style.opacity = 1;
+                        startScrollObserver();
+                    });
+                });
+            }, INITIAL_DELAY);
+        });
     </script>
+
 </body>
 </html>
