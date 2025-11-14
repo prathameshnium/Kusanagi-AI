@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OneTail - Web Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #193549; }
+        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #718096; }
+        body { font-family: 'Segoe UI', sans-serif; }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Segoe UI', 'sans-serif'] },
+                    colors: {
+                        'primary': '#193549',
+                        'secondary': '#002240',
+                        'tertiary': '#25435A',
+                        'accent': '#ffab40',
+                        'accent-fg': '#002240',
+                        'fg-primary': '#FFFFFF',
+                        'fg-secondary': '#97B1C2',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden">
+    <div class="flex h-full max-h-screen">
+        
+        <!-- === Sidebar === -->
+        <aside class="w-64 flex-shrink-0 bg-secondary flex flex-col p-4">
+            <!-- Header -->
+            <div class="px-1">
+                <h1 class="text-2xl font-bold text-accent">OneTail Chat</h1>
+                <p class="text-sm font-bold text-accent">Developed by Prathamesh Deshmukh</p>
+                <p class="text-sm text-fg-secondary mt-1">Simple Local Chat</p>
+            </div>
+
+            <!-- Status -->
+            <div class="flex items-center space-x-2 px-2 mt-4">
+                <span id="status-light" class="text-green-400 text-lg">●</span>
+                <span id="status-label" class="text-sm text-fg-primary">Connected</span>
+            </div>
+
+            <hr class="border-tertiary my-4">
+
+            <!-- Model Controls -->
+            <div class="px-1 space-y-3">
+                <div>
+                    <label for="model-selector" class="text-sm font-semibold text-fg-primary">Chat Model:</label>
+                    <select id="model-selector" class="w-full bg-tertiary text-fg-primary p-2 rounded-md mt-1 focus:outline-none focus:ring-2 focus:ring-accent">
+                        <option>qwen:1.8b-chat</option>
+                        <option>llama3:8b</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-sm font-semibold text-fg-primary flex justify-between">
+                        <span>Temperature:</span>
+                        <span id="temp-value">0.00</span>
+                    </label>
+                    <input id="temperature-slider" type="range" min="0" max="1" step="0.01" value="0" class="w-full h-2 bg-tertiary rounded-lg appearance-none cursor-pointer mt-1">
+                </div>
+            </div>
+
+            <hr class="border-tertiary my-4">
+
+            <!-- Chat History -->
+            <div class="flex-grow flex flex-col mt-4 overflow-hidden">
+                <div class="flex-shrink-0 flex justify-between items-center mb-2">
+                    <h2 class="text-lg font-semibold">Chats</h2>
+                    <div class="flex space-x-1">
+                        <button class="bg-tertiary hover:bg-primary p-2 rounded-md text-fg-primary">➕</button>
+                        <button class="bg-tertiary hover:bg-primary p-2 rounded-md text-fg-primary">➖</button>
+                    </div>
+                </div>
+                <div class="flex-grow bg-tertiary rounded-b-md p-1 space-y-1 overflow-y-auto">
+                    <div class="p-2 rounded-md cursor-pointer bg-primary border border-accent">
+                        <h3 class="font-semibold text-fg-primary truncate">Chat 1</h3>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- === Main Chat Area === -->
+        <main class="flex-1 flex flex-col max-h-screen p-2">
+            <!-- Top Bar -->
+            <header class="flex-shrink-0 flex justify-between items-center p-2">
+                <h2 id="chat-title" class="text-lg font-bold">New Chat</h2>
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-fg-secondary">RAM: --% | Tok/s: --</span>
+                    <button class="text-lg text-fg-secondary hover:text-fg-primary">🔊</button>
+                    <button class="text-lg text-fg-secondary hover:text-fg-primary">💾</button>
+                    <button class="text-lg text-fg-secondary hover:text-fg-primary">🗑️</button>
+                    <button class="text-lg text-fg-secondary hover:text-fg-primary">⚙️</button>
+                </div>
+            </header>
+
+            <!-- Chat History -->
+            <div id="chat-history" class="flex-grow p-4 overflow-y-auto space-y-6 bg-primary rounded-md">
+                <!-- Greeting -->
+                <div class="flex items-start space-x-4">
+                    <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent">AI</div>
+                    <div class="bg-tertiary p-4 rounded-lg max-w-2xl">
+                        <p class="font-bold text-accent mb-1">OneTail</p>
+                        <p>Ask me anything.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Bar -->
+            <div class="flex-shrink-0 p-2 mt-2">
+                <div class="flex bg-tertiary rounded-md p-1.5">
+                    <input id="chat-input" type="text" placeholder="Ask a question..." class="w-full bg-transparent p-2 text-lg text-fg-primary placeholder-fg-secondary focus:outline-none">
+                    <button id="send-button" class="bg-accent text-accent-fg rounded-md p-3 ml-2 hover:bg-yellow-600 transition duration-200">
+                        <span class="font-bold text-2xl leading-none">➤</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Basic interactivity for the demo
+        document.addEventListener('DOMContentLoaded', () => {
+            const tempSlider = document.getElementById('temperature-slider');
+            const tempValue = document.getElementById('temp-value');
+            tempSlider.addEventListener('input', () => {
+                tempValue.textContent = parseFloat(tempSlider.value).toFixed(2);
+            });
+
+            const sendButton = document.getElementById('send-button');
+            const chatInput = document.getElementById('chat-input');
+            const chatHistory = document.getElementById('chat-history');
+
+            const handleSend = () => {
+                const prompt = chatInput.value.trim();
+                if (!prompt) return;
+
+                // Add user message
+                chatHistory.innerHTML += `
+                <div class="flex items-start space-x-4 justify-end">
+                    <div class="bg-accent text-accent-fg p-4 rounded-lg max-w-2xl">
+                        <p class="font-bold mb-1">You</p><p>${prompt}</p>
+                    </div>
+                </div>`;
+                chatInput.value = '';
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            };
+
+            sendButton.addEventListener('click', handleSend);
+            chatInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') handleSend();
+            });
+        });
+    </script>
+</body>
+</html>

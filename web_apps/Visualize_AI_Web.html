@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Visualizer - Web</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; }
+        .suggestion-bar {
+            background: linear-gradient(to right, #ffab40 var(--p, 0%), #25435A var(--p, 0%));
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Segoe UI', 'sans-serif'] },
+                    colors: {
+                        'primary': '#193549',
+                        'secondary': '#002240',
+                        'tertiary': '#25435A',
+                        'accent': '#ffab40',
+                        'accent-fg': '#002240',
+                        'fg-primary': '#FFFFFF',
+                        'fg-secondary': '#97B1C2',
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-secondary text-fg-primary font-sans antialiased flex items-center justify-center h-full">
+
+    <div class="w-full max-w-4xl h-[600px] bg-primary rounded-lg shadow-2xl flex p-4 gap-4">
+
+        <!-- Main Content -->
+        <main class="flex-1 flex flex-col">
+            <h1 class="text-2xl font-bold text-accent mb-4">Next Word Prediction Visualizer</h1>
+            
+            <!-- Input Text Area -->
+            <div class="flex-grow flex flex-col">
+                <textarea id="text-input" placeholder="Start typing here..." class="w-full h-48 bg-tertiary text-fg-primary p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-accent resize-none text-lg"></textarea>
+                
+                <!-- Suggestions -->
+                <h2 class="text-lg font-semibold mt-4 mb-2">Suggestions</h2>
+                <div id="prediction-list" class="flex-grow bg-tertiary rounded-md p-3 space-y-2 overflow-y-auto">
+                    <p class="text-fg-secondary">Type to get suggestions...</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Sidebar -->
+        <aside class="w-56 flex-shrink-0 bg-secondary p-4 rounded-lg flex flex-col">
+            <!-- Status -->
+            <div class="flex items-center space-x-2 mb-4">
+                <span class="text-green-400 text-lg">●</span>
+                <span class="text-sm text-fg-primary">Ready</span>
+            </div>
+
+            <!-- Temperature -->
+            <div class="mb-6">
+                <label class="text-sm font-semibold text-fg-primary flex justify-between">
+                    <span>Temperature</span>
+                    <span id="temp-value">0.70</span>
+                </label>
+                <input id="temperature-slider" type="range" min="0" max="2" step="0.01" value="0.7" class="w-full h-2 bg-tertiary rounded-lg appearance-none cursor-pointer mt-1">
+            </div>
+
+            <!-- Model Selection -->
+            <div>
+                <h3 class="text-sm font-semibold text-fg-primary mb-2">Model</h3>
+                <div id="model-list" class="space-y-1">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="radio" name="model" class="form-radio bg-tertiary text-accent" checked>
+                        <span>tinyllama:latest</span>
+                    </label>
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <input type="radio" name="model" class="form-radio bg-tertiary text-accent">
+                        <span>qwen:1.8b</span>
+                    </label>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const tempSlider = document.getElementById('temperature-slider');
+            const tempValue = document.getElementById('temp-value');
+            const textInput = document.getElementById('text-input');
+            const predictionList = document.getElementById('prediction-list');
+
+            tempSlider.addEventListener('input', () => {
+                tempValue.textContent = parseFloat(tempSlider.value).toFixed(2);
+                updatePredictions();
+            });
+
+            textInput.addEventListener('input', updatePredictions);
+
+            function updatePredictions() {
+                const text = textInput.value;
+                if (text.trim() === '') {
+                    predictionList.innerHTML = '<p class="text-fg-secondary">Type to get suggestions...</p>';
+                    return;
+                }
+
+                // Mock predictions
+                const words = ["the", "a", "is", "in", "and"];
+                let html = '';
+                words.forEach(word => {
+                    const prob = Math.random();
+                    html += `
+                    <div class="p-2 rounded-md hover:bg-primary cursor-pointer" onclick="addWord('${word}')">
+                        <div class="flex justify-between items-center">
+                            <span class="font-mono font-semibold">${word}</span>
+                            <span class="text-xs text-fg-secondary">${(prob * 100).toFixed(0)}%</span>
+                        </div>
+                        <div class="w-full bg-tertiary rounded-full h-1.5 mt-1">
+                            <div class="bg-accent h-1.5 rounded-full" style="width: ${prob * 100}%"></div>
+                        </div>
+                    </div>
+                    `;
+                });
+                predictionList.innerHTML = html;
+            }
+
+            window.addWord = (word) => {
+                textInput.value += word + ' ';
+                textInput.focus();
+                updatePredictions();
+            }
+        });
+    </script>
+</body>
+</html>
