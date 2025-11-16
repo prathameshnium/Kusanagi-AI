@@ -22,6 +22,7 @@
 - [Features](#features)
 - [Screenshots](#screenshots)
 - [Getting Started](#getting-started)
+  - [Application Suite](#application-suite)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
 - [Advanced Configuration](#advanced-configuration)
@@ -63,19 +64,33 @@ Kusanagi-AI is built with a focus on local execution, privacy, and ease of use. 
  
 ## Screenshots
 
-### Orochimaru - Local Research Assistant
+### Kakashi - Local RAG Assistant
+
+<p align="center"><i>The primary RAG application, inspired by the copy-ninja himself. Chat with documents, summarize findings, and convene a "Kage Summit" of AI experts for a peer review.</i><br><img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Demos/Kakashi-Demo.gif" alt="Kakashi Demo GIF" width="800"/></p>
+
+![Kakashi Screenshot](https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/Kakashi_Screenshot.png)
+
+### Orochimaru - Advanced Research Agent
 
 <p align="center"><i>A quick demonstration of Orochimaru's RAG capabilities with a research paper.</i><br><img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Demos/Orochimaru-Demo.gif" alt="Orochimaru Demo GIF" width="800"/></p>
 
 ![Orochimaru Screenshot](https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/Orochimaru_Screenshot.jpg)
 
-### One Tail - Local Chat App
+### OneTail - Local Chat App
 
 ![One Tail Screenshot](https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/One_Tail_Screenshot.jpg)
 
 ## Getting Started
 
 Follow these steps to set up your local AI research environment.
+
+### Application Suite
+
+Kusanagi-AI includes several applications. The main applications are:
+-   **`Kakashi_Local_RAG_App.py`**: The primary, full-featured RAG assistant for document analysis and chat.
+-   **`Orochimaru_Local_Research_Assistent.py`**: An alternative, advanced RAG assistant.
+-   **`OneTail_Local_Chatapp.py`**: A simple, lightweight chat application.
+-   **`Visualize_AI.py`**: A tool to see next-word predictions from a model in real-time.
 
 ### Prerequisites
 
@@ -138,9 +153,13 @@ For more granular control, you can modify the `System_Config.json` file. This al
 
 ## Usage
 
-The primary tool in this toolkit is the Research Assistant. To launch it, execute the following command:
+The primary tool in this toolkit is the **Kakashi RAG Assistant**. To launch it, navigate to the `local_apps` directory and execute the following command:
 
 ```sh
+cd local_apps
+python Kakashi_Local_RAG_App.py
+```
+You can also run other tools like `Orochimaru_Local_Research_Assistent.py` or `OneTail_Local_Chatapp.py` in the same way.
 python Orochimaru_Local_Research_Assistent.py
 ```
 

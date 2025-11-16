@@ -78,6 +78,11 @@
     <div class="container mx-auto px-4 py-16 md:py-24 text-center">
         <h1 id="headline" data-text="Kusanagi AI" class="text-5xl md:text-7xl font-bold mb-4 min-h-[1.2em] headline-gradient"></h1>
         <p id="tagline" data-text="A suite of free, open-source AI programs designed for researchers." class="text-xl md:text-2xl text-fg-secondary mb-8 max-w-3xl mx-auto min-h-[3.6em]"></p>
+        
+        <div id="heads-up-container" class="bg-tertiary border border-accent rounded-lg p-4 max-w-3xl mx-auto mb-8 opacity-0 transition-opacity duration-500">
+            <p id="heads-up-text" data-text="Heads Up! This project is brand new, so some features might be broken or incomplete. Thanks for checking it out!" class="text-fg-secondary"></p>
+        </div>
+
         <div id="main-buttons" class="flex justify-center items-center space-x-4 mb-12 opacity-0 transition-opacity duration-500 group">
             <a href="#getting-started-section" class="bg-accent-light hover:bg-accent text-accent-fg font-bold py-3 px-8 rounded-lg text-lg transition-transform transform hover:scale-105 btn-glow">Install Local Suite</a>
             <a href="#tools-section" class="bg-accent-light hover:bg-accent text-accent-fg font-bold py-3 px-8 rounded-lg text-lg transition-transform transform hover:scale-105 btn-glow">Launch Web Apps</a>
@@ -159,7 +164,7 @@
                     </div>
                     <div class="content-card bg-primary p-6 rounded-lg" style="transition-delay: 200ms;">
                         <h3 class="text-2xl font-bold mb-2 text-accent">Kakashi RAG</h3>
-                        <p class="text-fg-secondary mb-4">A local desktop app for document analysis and chat, providing an alternative to Orochimaru.</p>
+                        <p class="text-fg-secondary mb-4">The primary local desktop app for document analysis, summarization, and multi-persona peer reviews.</p>
                         <a href="#getting-started-section" class="text-accent font-bold hover:underline">Get Started →</a>
                     </div>
                     <div class="content-card bg-primary p-6 rounded-lg" style="transition-delay: 300ms;">
@@ -182,7 +187,7 @@
                 <pre class="bg-secondary p-4 rounded-md text-fg-primary overflow-x-auto"><code id="code-to-copy"><span class="text-fg-secondary/50 select-none mr-2">$</span>git clone https://github.com/prathameshnium/Kusanagi-AI.git
 <span class="text-fg-secondary/50 select-none mr-2">$</span>cd Kusanagi-AI
 <span class="text-fg-secondary/50 select-none mr-2">$</span>pip install -r requirements.txt
-<span class="text-fg-secondary/50 select-none mr-2">$</span>python OneTail_Local_Chatapp.py
+<span class="text-fg-secondary/50 select-none mr-2">$</span>python local_apps/Kakashi_Local_RAG_App.py
 </code></pre>
             </div>
         </div>
