@@ -329,8 +329,24 @@
             setTimeout(() => {
                 typeWriter(document.getElementById('headline'), TYPE_SPEED_HEADLINE, () => {
                     typeWriter(document.getElementById('tagline'), TYPE_SPEED_TAGLINE, () => {
+                        const TYPE_SPEED_NOTICE = 25; // Faster speed for the notice
+
+                        // Animate "Heads Up" and the rest of the page in parallel
+
+                        // 1. Start the "Heads Up" animation (it will appear after it's done typing)
+                        typeWriter(document.getElementById('heads-up-text'), TYPE_SPEED_NOTICE, () => {
+                            const el = document.getElementById('heads-up-text');
+                            if (el) {
+                                el.innerHTML = el.innerHTML.replace('Heads Up!', '<span class="font-bold text-accent">Heads Up!</span>');
+                            }
+                            const headsUpContainer = document.getElementById('heads-up-container');
+                            if (headsUpContainer) {
+                                headsUpContainer.style.opacity = 1;
+                            }
+                        });
+
+                        // 2. Immediately show buttons and animate the rest of the page
                         document.getElementById('main-buttons').style.opacity = 1;
-                        // Animate the rest of the page right after the hero animation
                         animateRestOfPage();
                     });
                 });
