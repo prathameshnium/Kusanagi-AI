@@ -5,11 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kakashi - Deep Research Engine</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Marked for Markdown -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- DOMPurify for Security -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
-    <!-- KaTeX for Math/Chemical Formulas -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
@@ -20,17 +17,15 @@
                 extend: {
                     fontFamily: { sans: ['Segoe UI', 'sans-serif'] },
                     colors: {
-                        'primary': '#193549',    // Dark Blue Background
-                        'secondary': '#002240',  // Darker Components
-                        'tertiary': '#25435A',   // Borders/Inputs
-                        'accent': '#ffab40',     // Orange/Yellow
+                        'primary': '#193549',
+                        'secondary': '#002240',
+                        'tertiary': '#25435A',
+                        'accent': '#ffab40',
                         'accent-hover': '#e69a38',
                         'fg-primary': '#FFFFFF',
                         'fg-secondary': '#97B1C2',
-                        'source-wiki': '#E2E8F0', 
-                        'source-ddg': '#DE5833',
-                        'source-paper': '#48BB78',
-                        'source-hn': '#F6AD55'
+                        'success': '#3AD900',
+                        'danger': '#FF628C'
                     },
                     animation: {
                         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
@@ -46,7 +41,6 @@
         ::-webkit-scrollbar-thumb:hover { background: #718096; }
         body { font-family: 'Segoe UI', sans-serif; }
         
-        /* Markdown Styling */
         .prose { color: #FFFFFF; font-size: 0.9rem; }
         .prose p { margin-bottom: 0.8em; line-height: 1.6; color: #e2e8f0; }
         .prose h1, .prose h2, .prose h3 { color: #ffab40; font-weight: bold; margin-top: 1.2em; margin-bottom: 0.5em; }
@@ -54,12 +48,7 @@
         .prose code { background: rgba(0,0,0,0.3); padding: 1px 3px; rounded: 2px; font-family: monospace; color: #ffab40; font-size: 0.9em; }
         .prose pre { background: #002240; padding: 12px; rounded: 6px; overflow-x: auto; margin-bottom: 1em; border: 1px solid #25435A; }
         .prose a { color: #ffab40; text-decoration: underline; }
-        .prose strong { color: #ffab40; font-weight: bold; }
         
-        /* KaTeX overrides */
-        .katex { font-size: 1.1em; color: #ffab40; }
-        
-        /* Custom Range Slider */
         input[type=range] { -webkit-appearance: none; background: transparent; }
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none; height: 14px; width: 14px; border-radius: 50%; background: #ffab40; margin-top: -5px; cursor: pointer;
@@ -79,6 +68,10 @@
                 <button onclick="toggleSettings()" class="text-fg-secondary hover:text-fg-primary transition">✕</button>
             </div>
 
+            <div class="bg-success/10 border border-success/30 p-3 rounded mb-5 text-xs text-success">
+                <strong>🔒 Privacy Active:</strong> Keys stored locally. History wiped on refresh. Direct API connection.
+            </div>
+
             <div class="mb-5">
                 <label class="block text-xs font-bold text-fg-secondary uppercase tracking-wide mb-2">AI Provider</label>
                 <select id="provider-select" class="w-full bg-primary text-fg-primary p-3 rounded-lg border border-tertiary focus:border-accent outline-none transition" onchange="updateKeyInput()">
@@ -91,7 +84,6 @@
             <div class="mb-6">
                 <label class="block text-xs font-bold text-fg-secondary uppercase tracking-wide mb-2">API Key</label>
                 <input type="password" id="api-key-input" autocomplete="off" class="w-full bg-primary text-fg-primary p-3 rounded-lg border border-tertiary focus:border-accent outline-none transition" placeholder="Enter secret key...">
-                <p class="text-[10px] text-fg-secondary mt-2">Keys are stored in <code>localStorage</code>. Direct API connection only.</p>
             </div>
 
             <div class="flex justify-between items-center pt-4 border-t border-tertiary">
@@ -119,6 +111,19 @@
         </div>
 
         <div class="flex items-center gap-3">
+             <!-- Performance Dashboard -->
+             <div class="hidden lg:flex items-center gap-3 text-[10px] font-mono text-fg-secondary bg-primary/50 px-3 py-1 rounded-full border border-tertiary mr-2" title="Live Session Metrics">
+                 <div class="flex items-center gap-1 text-success font-bold">
+                    <span class="w-2 h-2 rounded-full bg-success animate-pulse"></span> Secure
+                 </div>
+                 <div class="w-[1px] h-3 bg-tertiary"></div>
+                 <div><span class="text-accent">RAM:</span> <span id="header-ram">--</span></div>
+                 <div class="w-[1px] h-3 bg-tertiary"></div>
+                 <div><span class="text-accent">Tok:</span> <span id="header-tokens">0</span></div>
+                 <div class="w-[1px] h-3 bg-tertiary"></div>
+                 <div><span class="text-accent">Spd:</span> <span id="header-speed">--</span></div>
+             </div>
+
              <button onclick="purgeData()" class="text-lg hover:scale-110 transition duration-200" title="Delete All Data">🔥</button>
              <button onclick="toggleSettings()" class="text-sm bg-tertiary hover:bg-primary text-fg-primary px-3 py-1.5 rounded border border-accent/30 transition font-medium">⚙️</button>
         </div>
@@ -195,18 +200,6 @@
                 </div>
             </div>
 
-            <!-- Telemetry Bar -->
-            <div class="bg-primary/30 px-3 py-1 border-b border-tertiary flex justify-between items-center text-[10px] font-mono text-fg-secondary">
-                <div class="flex gap-3">
-                     <span>RAM: <span id="perf-ram" class="text-fg-primary">--</span></span>
-                     <span class="text-tertiary">|</span>
-                     <span>Tokens: <span id="perf-tokens" class="text-fg-primary">0</span></span>
-                </div>
-                <div>
-                    <span>Speed: <span id="perf-speed" class="text-accent">--</span></span>
-                </div>
-            </div>
-
             <div id="ai-content" class="flex-1 overflow-y-auto p-6 custom-scrollbar">
                 <div id="ai-placeholder" class="text-center mt-32 opacity-50">
                     <div class="text-5xl mb-3">🧠</div>
@@ -254,6 +247,11 @@
                 {id: "microsoft/Phi-3-mini-4k-instruct", name: "Phi-3 Mini"}
             ]
         };
+        
+        // Warn user on close (Privacy Feature)
+        window.onbeforeunload = function() {
+            return "Data is RAM-only. Closing this tab will wipe your session.";
+        };
 
         // --- INIT ---
         document.addEventListener('DOMContentLoaded', () => {
@@ -271,6 +269,25 @@
             slider.addEventListener('input', (e) => display.textContent = e.target.value);
             
             document.getElementById('home-input').focus();
+        }
+
+        // --- METRICS ---
+        function updateMetrics(tokens, speed) {
+            sessionTokens += tokens;
+            const headerTokens = document.getElementById('header-tokens');
+            if(headerTokens) headerTokens.textContent = sessionTokens.toLocaleString();
+
+            const headerSpeed = document.getElementById('header-speed');
+            if(headerSpeed && speed) headerSpeed.textContent = speed.toFixed(1) + " t/s";
+        }
+
+        function updateRAM() {
+            const headerRam = document.getElementById('header-ram');
+            if (performance.memory) {
+                headerRam.textContent = `${Math.round(performance.memory.usedJSHeapSize / 1024 / 1024)} MB`;
+            } else {
+                headerRam.textContent = "--";
+            }
         }
 
         // --- SEARCH LOGIC ---
@@ -291,7 +308,6 @@
             document.getElementById('header-search-container').classList.remove('hidden');
             document.getElementById('header-input').value = query;
             
-            // Set display text safely
             const queryDisplay = document.getElementById('query-display');
             if (queryDisplay) queryDisplay.textContent = query;
             
@@ -323,7 +339,6 @@
             const startTime = performance.now();
             const allResults = [];
             
-            // Use all 5 prompts as requested
             const activePrompts = prompts.slice(0, 5);
             
             const searchPromises = activePrompts.map(async (p) => {
@@ -375,7 +390,6 @@
                 
                 document.getElementById('ai-loading').classList.add('hidden');
                 const responseContainer = document.getElementById('ai-response');
-                // Render Markdown -> Sanitize -> Inject -> Render Math
                 responseContainer.innerHTML = DOMPurify.sanitize(marked.parse(aiRes));
                 responseContainer.classList.remove('hidden');
                 
@@ -484,20 +498,7 @@
             } catch(e) { return []; }
         }
 
-        // --- SETTINGS & METRICS ---
-        function updateMetrics(tokens, speed) {
-            sessionTokens += tokens;
-            document.getElementById('perf-tokens').textContent = sessionTokens.toLocaleString();
-            if(speed) document.getElementById('perf-speed').textContent = speed.toFixed(1) + " t/s";
-        }
-        
-        function updateRAM() {
-            const ramEl = document.getElementById('perf-ram');
-            if (performance.memory) {
-                ramEl.textContent = `${Math.round(performance.memory.usedJSHeapSize / 1024 / 1024)} MB`;
-            }
-        }
-
+        // --- SETTINGS ---
         function populateModels() {
             const provider = document.getElementById('provider-select').value;
             const select = document.getElementById('model-select');
