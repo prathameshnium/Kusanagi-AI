@@ -14,6 +14,11 @@ body {
     --accent-hover: #ffc371;
     --card-bg: #1e293b;
     --border: #334155;
+    --primary: #193549;
+    --secondary: #002240;
+    --tertiary: #25435A;
+    --fg-primary: #FFFFFF;
+    --fg-secondary: #97B1C2;
 }
 
 .home-button {
@@ -22,17 +27,59 @@ body {
     left: 20px;
     background-color: var(--accent);
     color: #0f172a;
-    padding: 10px 20px;
-    border-radius: 8px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     text-decoration: none;
     font-weight: bold;
     transition: background-color 0.3s ease;
     z-index: 1000;
+    border: 2px solid #0f172a;
 }
 
 .home-button:hover {
     background-color: var(--accent-hover);
 }
+
+/* Form elements */
+input[type="text"],
+input[type="password"],
+input[type="number"],
+textarea,
+select {
+    background-color: var(--tertiary) !important;
+    color: var(--fg-primary) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 0.5rem !important;
+    padding: 0.75rem !important;
+    width: 100% !important;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease !important;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus,
+input[type="number"]:focus,
+textarea:focus,
+select:focus {
+    outline: none !important;
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 2px rgba(255, 171, 64, 0.5) !important;
+}
+
+/* Settings Modal */
+.settings-modal {
+    background-color: rgba(15, 23, 42, 0.9) !important;
+    backdrop-filter: blur(8px) !important;
+}
+
+.settings-modal > div {
+    background-color: var(--secondary) !important;
+    border: 1px solid var(--border) !important;
+}
+
 
 /* Custom scrollbar for a professional look */
 ::-webkit-scrollbar { width: 6px; }
