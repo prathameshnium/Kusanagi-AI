@@ -360,12 +360,6 @@
             // Deduplicate by URL
             const uniqueResults = [];
             const urls = new Set();
-            
-            // Add External Cards first (Federated Search)
-            uniqueResults.push({ source: 'DuckDuckGo', title: `Search DuckDuckGo for '${query}'`, snippet: "Privacy-focused search engine.", url: `https://duckduckgo.com/?q=${encodeURIComponent(query)}`, meta: 'External' });
-            uniqueResults.push({ source: 'Qwant', title: `Search Qwant for '${query}'`, snippet: "Private European search engine results.", url: `https://www.qwant.com/?q=${encodeURIComponent(query)}`, meta: 'External' });
-            uniqueResults.push({ source: 'SearXNG', title: `Search SearXNG for '${query}'`, snippet: "Open-source metasearch engine aggregator.", url: `https://searx.space/?q=${encodeURIComponent(query)}`, meta: 'External' });
-            
             allResults.forEach(r => {
                 if (!urls.has(r.url)) {
                     urls.add(r.url);
