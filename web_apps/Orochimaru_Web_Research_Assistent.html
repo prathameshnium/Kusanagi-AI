@@ -242,7 +242,9 @@
                 </div>
 
                 <div class="flex items-center gap-3">
-                    <button onclick="speakLastResponse()" class="text-fg-secondary hover:text-accent text-lg" title="Read Aloud">🔊</button>
+                    <!-- TTS Button with ID for logic -->
+                    <button id="tts-btn" onclick="toggleTTS()" class="text-fg-secondary hover:text-accent text-lg" title="Read Aloud">🔊</button>
+                    
                     <div class="h-4 w-[1px] bg-tertiary"></div>
                     <button onclick="clearChat()" class="text-fg-secondary hover:text-danger text-sm" title="Clear Chat History">🗑️ Clear</button>
                 </div>
@@ -291,6 +293,7 @@
         let loadedDocuments = {};
         let lastAIResponse = ""; 
         let sessionTotalTokens = 0;
+        let isSpeaking = false; // Track TTS state
 
         const MODELS = {
             gemini: [
@@ -725,12 +728,54 @@
             }
         }
 
-        // --- TTS ---
+        // --- TTS (Text-to-Speech) with Stop Logic ---
+        function toggleTTS() {
+            const btn = document.getElementById('tts-btn');
+            
+            if (isSpeaking) {
+                // STOP action
+                window.speechSynthesis.cancel();
+                isSpeaking = false;
+                resetTTSButton(btn);
+            } else {
+                // START action
+                if (!lastAIResponse) return;
+                
+                // Cancel any background speech just in case
+                window.speechSynthesis.cancel();
+
+                const utterance = new SpeechSynthesisUtterance(lastAIResponse);
+                
+                utterance.onstart = () => {
+                    isSpeaking = true;
+                    btn.innerHTML = "⏹️"; // Stop icon
+                    btn.title = "Stop Speaking";
+                    btn.classList.add("text-accent", "animate-pulse");
+                };
+
+                utterance.onend = () => {
+                    isSpeaking = false;
+                    resetTTSButton(btn);
+                };
+
+                utterance.onerror = () => {
+                    isSpeaking = false;
+                    resetTTSButton(btn);
+                };
+
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function resetTTSButton(btn) {
+            btn.innerHTML = "🔊";
+            btn.title = "Read Aloud";
+            btn.classList.remove("text-accent", "animate-pulse");
+        }
+        
+        // Old function alias for backward compatibility if needed, redirected
         function speakLastResponse() {
-            if (!lastAIResponse) return;
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(lastAIResponse);
-            window.speechSynthesis.speak(utterance);
+            toggleTTS();
         }
 
         // --- UI HELPERS ---
