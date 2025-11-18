@@ -4,113 +4,426 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Visualizer - Web</title>
+    <link rel="icon" href="https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/logo/Kusanagi-AI.png">
     <script src="https://cdn.tailwindcss.com"></script>
-
-
-    <link rel="stylesheet" href="../static/style.css">
+    <style>
+        /* Theme & Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #193549; }
+        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #718096; }
+        body { font-family: 'Segoe UI', sans-serif; }
+        
+        /* Probability Bar Animation */
+        .prob-bar-bg {
+            background: #25435A;
+            border-radius: 4px;
+            overflow: hidden;
+            height: 8px;
+            margin-top: 6px;
+        }
+        .prob-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ffab40 0%, #ffc371 100%);
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            width: 0%;
+        }
+        
+        /* Custom Range Slider */
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 14px; width: 14px; border-radius: 50%; background: #ffab40; margin-top: -5px; cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #25435A; border-radius: 2px; }
+    </style>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'primary': '#193549',
+                        'secondary': '#002240',
+                        'tertiary': '#25435A',
+                        'accent': '#ffab40',
+                        'accent-fg': '#002240',
+                        'fg-primary': '#FFFFFF',
+                        'fg-secondary': '#97B1C2',
+                        'success': '#3AD900',
+                        'danger': '#FF628C'
+                    }
+                }
+            }
+        }
+    </script>
 </head>
-<body class="bg-secondary text-fg-primary font-sans antialiased flex items-center justify-center h-full">
-    <a href="https://prathameshnium.github.io/Kusanagi-AI" class="home-button">Home</a>
+<body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden">
 
-    <div class="w-full max-w-4xl h-[600px] bg-primary rounded-lg shadow-2xl flex p-4 gap-4">
+    <!-- SETTINGS MODAL -->
+    <div id="settings-modal" class="hidden absolute inset-0 bg-black/90 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-secondary p-6 rounded-lg shadow-2xl max-w-md w-full border border-tertiary">
+            <div class="flex justify-between items-start mb-4">
+                <h2 class="text-xl font-bold text-accent">Configuration</h2>
+                <button onclick="toggleSettings()" class="text-fg-secondary hover:text-fg-primary">✕</button>
+            </div>
 
-        <!-- Main Content -->
-        <main class="flex-1 flex flex-col">
-            <h1 class="text-2xl font-bold text-accent mb-4">Next Word Prediction Visualizer</h1>
+            <div class="bg-blue-900/20 border border-blue-900 p-3 rounded mb-4 text-xs text-blue-200">
+                <strong>🔒 Privacy Note:</strong> API Keys are stored locally. The visualizer sends text fragments to the AI to estimate next-token probabilities.
+            </div>
             
-            <!-- Input Text Area -->
-            <div class="flex-grow flex flex-col">
-                <textarea id="text-input" placeholder="Start typing here..." class="w-full h-48 bg-tertiary text-fg-primary p-3 rounded-md focus:outline-none focus:ring-2 focus:ring-accent resize-none text-lg"></textarea>
-                
-                <!-- Suggestions -->
-                <h2 class="text-lg font-semibold mt-4 mb-2">Suggestions</h2>
-                <div id="prediction-list" class="flex-grow bg-tertiary rounded-md p-3 space-y-2 overflow-y-auto">
-                    <p class="text-fg-secondary">Type to get suggestions...</p>
-                </div>
-            </div>
-        </main>
-
-        <!-- Sidebar -->
-        <aside class="w-56 flex-shrink-0 bg-secondary p-4 rounded-lg flex flex-col">
-            <!-- Status -->
-            <div class="flex items-center space-x-2 mb-4">
-                <span class="text-green-400 text-lg">●</span>
-                <span class="text-sm text-fg-primary">Ready</span>
+            <div class="mb-4">
+                <label class="block text-sm text-fg-secondary mb-2">AI Provider</label>
+                <select id="provider-select" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none" onchange="updateKeyInput()">
+                    <option value="gemini">Google Gemini</option>
+                    <option value="groq">Groq (Fastest)</option>
+                    <option value="hf">Hugging Face</option>
+                </select>
             </div>
 
-            <!-- Temperature -->
             <div class="mb-6">
-                <label class="text-sm font-semibold text-fg-primary flex justify-between">
-                    <span>Temperature</span>
-                    <span id="temp-value">0.70</span>
-                </label>
-                <input id="temperature-slider" type="range" min="0" max="2" step="0.01" value="0.7" class="w-full h-2 bg-tertiary rounded-lg appearance-none cursor-pointer mt-1">
+                <label class="block text-sm text-fg-secondary mb-2">API Key</label>
+                <input type="password" id="api-key-input" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none" placeholder="Enter key...">
             </div>
 
-            <!-- Model Selection -->
-            <div>
-                <h3 class="text-sm font-semibold text-fg-primary mb-2">Model</h3>
-                <div id="model-list" class="space-y-1">
-                    <label class="flex items-center space-x-2 cursor-pointer">
-                        <input type="radio" name="model" class="form-radio bg-tertiary text-accent" checked>
-                        <span>tinyllama:latest</span>
-                    </label>
-                    <label class="flex items-center space-x-2 cursor-pointer">
-                        <input type="radio" name="model" class="form-radio bg-tertiary text-accent">
-                        <span>qwen:1.8b</span>
-                    </label>
+            <div class="flex justify-end gap-2">
+                <button onclick="toggleSettings()" class="px-4 py-2 text-fg-secondary hover:text-fg-primary">Cancel</button>
+                <button onclick="saveSettings()" class="px-4 py-2 bg-accent text-accent-fg rounded font-bold hover:bg-yellow-500">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="flex h-full max-h-screen">
+        
+        <!-- === Sidebar === -->
+        <aside class="w-72 flex-shrink-0 bg-secondary flex flex-col p-4 border-r border-tertiary">
+            <!-- Header -->
+            <div class="px-1 mb-6">
+                <h1 class="text-2xl font-bold text-accent flex items-center gap-2">
+                    Visualizer
+                    <span class="text-[10px] bg-tertiary text-fg-secondary px-2 py-0.5 rounded border border-tertiary">Web</span>
+                </h1>
+                <p class="text-xs text-fg-secondary mt-1">LLM Probability Inspector</p>
+            </div>
+
+            <!-- Status -->
+            <div class="bg-tertiary/30 rounded-lg p-3 mb-6 border border-tertiary">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-xs font-bold text-fg-secondary uppercase">Status</span>
+                    <span id="status-indicator" class="text-xs font-bold text-danger">● Offline</span>
                 </div>
+                <div class="text-[10px] text-fg-secondary" id="model-display">Model: None</div>
+            </div>
+
+            <!-- Controls -->
+            <div class="space-y-4 mb-6">
+                <div>
+                    <div class="flex justify-between text-xs text-fg-secondary mb-1">
+                        <label>Temperature</label>
+                        <span id="temp-val" class="text-accent font-mono">1.0</span>
+                    </div>
+                    <input type="range" id="temp-slider" min="0" max="2" step="0.1" value="1.0" class="w-full">
+                </div>
+                
+                <div>
+                    <div class="flex justify-between text-xs text-fg-secondary mb-1">
+                        <label>Top K (Suggestions)</label>
+                        <span id="topk-val" class="text-accent font-mono">5</span>
+                    </div>
+                    <input type="range" id="topk-slider" min="1" max="10" step="1" value="5" class="w-full">
+                </div>
+            </div>
+
+            <div class="mt-auto pt-4 border-t border-tertiary">
+                 <button onclick="toggleSettings()" class="flex items-center gap-2 text-sm text-fg-secondary hover:text-accent transition w-full justify-center p-2 hover:bg-tertiary rounded">
+                    <span>⚙️</span> Configure API
+                 </button>
             </div>
         </aside>
+
+        <!-- === Main Area === -->
+        <main class="flex-1 flex flex-col h-full relative bg-primary p-6">
+            
+            <!-- Top Bar -->
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-xl font-bold text-fg-primary">Next Token Prediction</h2>
+                    <p class="text-xs text-fg-secondary">Type below. Click a bar to choose the path.</p>
+                </div>
+                <button onclick="clearText()" class="text-sm text-fg-secondary hover:text-danger transition flex items-center gap-1 border border-tertiary px-3 py-1 rounded hover:bg-secondary">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    Clear
+                </button>
+            </div>
+
+            <div class="flex-1 flex flex-col md:flex-row gap-6 overflow-hidden">
+                
+                <!-- Input Area -->
+                <div class="flex-1 flex flex-col h-full">
+                    <div class="flex-1 bg-tertiary/20 rounded-xl border border-tertiary p-4 relative focus-within:border-accent transition-colors flex flex-col">
+                        <textarea id="text-input" class="w-full h-full bg-transparent text-lg text-fg-primary placeholder-fg-secondary/30 focus:outline-none resize-none font-mono leading-relaxed" placeholder="The future of AI is..." spellcheck="false"></textarea>
+                        
+                        <!-- Manual Trigger Button -->
+                        <button onclick="getPredictions()" class="absolute bottom-4 right-12 bg-accent hover:bg-accent-fg text-accent-fg font-bold text-xs px-3 py-1.5 rounded shadow transition">
+                            Predict
+                        </button>
+
+                        <!-- Loading Spinner -->
+                        <div id="loading" class="hidden absolute bottom-4 right-4 bg-primary/80 rounded-full p-2">
+                            <svg class="animate-spin h-5 w-5 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        </div>
+                    </div>
+                    <div class="flex justify-between mt-2 px-1">
+                        <p class="text-xs text-fg-secondary">Updates automatically when you stop typing.</p>
+                        <p class="text-xs text-fg-secondary" id="char-count">0 chars</p>
+                    </div>
+                </div>
+
+                <!-- Visualization Area -->
+                <div class="w-full md:w-80 flex flex-col bg-secondary rounded-xl border border-tertiary overflow-hidden">
+                    <div class="p-3 bg-tertiary/30 border-b border-tertiary">
+                        <h3 class="text-xs font-bold text-fg-secondary uppercase">Probable Next Tokens</h3>
+                    </div>
+                    <div id="prediction-list" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                        <div class="text-center text-fg-secondary text-xs mt-10 opacity-50">
+                            Start typing to see<br>AI probabilities.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
     </div>
 
     <script>
+        // --- CONFIG & STATE ---
+        let config = {
+            provider: localStorage.getItem('vis_provider') || 'gemini',
+            apiKey: localStorage.getItem('vis_key') || ''
+        };
+
+        let debounceTimer;
+
+        // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {
-            const tempSlider = document.getElementById('temperature-slider');
-            const tempValue = document.getElementById('temp-value');
+            checkStatus();
+            document.getElementById('provider-select').value = config.provider;
+            document.getElementById('api-key-input').value = config.apiKey;
+
+            // Listeners
             const textInput = document.getElementById('text-input');
-            const predictionList = document.getElementById('prediction-list');
+            textInput.addEventListener('input', handleInput);
+            textInput.focus();
 
-            tempSlider.addEventListener('input', () => {
-                tempValue.textContent = parseFloat(tempSlider.value).toFixed(2);
-                updatePredictions();
+            // Sliders
+            setupSlider('temp-slider', 'temp-val');
+            setupSlider('topk-slider', 'topk-val');
+        });
+
+        function setupSlider(id, displayId) {
+            const slider = document.getElementById(id);
+            const display = document.getElementById(displayId);
+            slider.addEventListener('input', () => display.textContent = slider.value);
+        }
+
+        // --- CORE LOGIC ---
+        function handleInput(e) {
+            const text = e.target.value;
+            document.getElementById('char-count').textContent = `${text.length} chars`;
+            
+            // Clear previous timer
+            clearTimeout(debounceTimer);
+            
+            if (text.trim() === '') {
+                document.getElementById('prediction-list').innerHTML = '<div class="text-center text-fg-secondary text-xs mt-10 opacity-50">Start typing to see<br>AI probabilities.</div>';
+                return;
+            }
+
+            // Aggressive Debounce: Wait 1.5s after typing stops to avoid Rate Limits on Free Tier
+            debounceTimer = setTimeout(getPredictions, 1500);
+        }
+
+        async function getPredictions() {
+            if (!config.apiKey) return;
+
+            const text = document.getElementById('text-input').value;
+            if(!text) return;
+
+            const loading = document.getElementById('loading');
+            loading.classList.remove('hidden');
+
+            try {
+                const topK = document.getElementById('topk-slider').value;
+                const temp = document.getElementById('temp-slider').value;
+                
+                const predictions = await callAISimulation(text, topK, temp);
+                renderPredictions(predictions);
+            } catch (e) {
+                console.error(e);
+                document.getElementById('prediction-list').innerHTML = `<div class="text-xs text-danger p-2"><strong>Error:</strong> ${e.message}</div>`;
+            } finally {
+                loading.classList.add('hidden');
+            }
+        }
+
+        function renderPredictions(predictions) {
+            const container = document.getElementById('prediction-list');
+            container.innerHTML = '';
+
+            predictions.forEach(pred => {
+                const width = Math.max(pred.prob * 100, 1); 
+                
+                const item = document.createElement('div');
+                item.className = "p-2 rounded hover:bg-tertiary/50 cursor-pointer transition group";
+                item.onclick = () => selectToken(pred.token);
+                
+                item.innerHTML = `
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-mono text-sm text-accent font-bold">"${pred.token}"</span>
+                        <span class="text-xs text-fg-secondary font-mono">${(pred.prob * 100).toFixed(1)}%</span>
+                    </div>
+                    <div class="prob-bar-bg">
+                        <div class="prob-bar-fill" style="width: 0%"></div>
+                    </div>
+                `;
+                container.appendChild(item);
+
+                requestAnimationFrame(() => {
+                    item.querySelector('.prob-bar-fill').style.width = `${width}%`;
+                });
             });
+        }
 
-            textInput.addEventListener('input', updatePredictions);
+        function selectToken(token) {
+            const input = document.getElementById('text-input');
+            input.value += token;
+            input.focus();
+            getPredictions(); // Trigger immediately on click as user intent is clear
+            document.getElementById('char-count').textContent = `${input.value.length} chars`;
+        }
 
-            function updatePredictions() {
-                const text = textInput.value;
-                if (text.trim() === '') {
-                    predictionList.innerHTML = '<p class="text-fg-secondary">Type to get suggestions...</p>';
-                    return;
+        function clearText() {
+            document.getElementById('text-input').value = '';
+            document.getElementById('prediction-list').innerHTML = '';
+            document.getElementById('text-input').focus();
+        }
+
+        // --- AI SIMULATION LAYER ---
+        async function callAISimulation(context, topK, temp) {
+            const prompt = `You are a token probability engine. 
+            Given the text: "${context}"
+            List the ${topK} most likely single words/tokens to follow next.
+            Assign a probability (0.0-1.0) to each based on your internal model.
+            
+            Return ONLY JSON format:
+            [{"token": "word1", "prob": 0.85}, {"token": "word2", "prob": 0.10}]`;
+
+            let responseText = "";
+
+            try {
+                if (config.provider === 'gemini') {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${config.apiKey}`;
+                    const resp = await fetch(url, {
+                        method: "POST", headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    });
+                    
+                    // Handle Rate Limits (429)
+                    if (resp.status === 429) {
+                        throw new Error("Rate limit exceeded. Please wait a moment.");
+                    }
+                    
+                    if (!resp.ok) {
+                        const errorData = await resp.json().catch(() => ({}));
+                        throw new Error(errorData.error?.message || `Gemini API Error: ${resp.status}`);
+                    }
+
+                    const data = await resp.json();
+                    
+                    // Robust check for candidates
+                    if (!data.candidates || !data.candidates[0] || !data.candidates[0].content) {
+                        if (data.promptFeedback?.blockReason) {
+                            throw new Error(`Blocked: ${data.promptFeedback.blockReason}`);
+                        }
+                        throw new Error("No prediction returned from Gemini.");
+                    }
+                    
+                    responseText = data.candidates[0].content.parts[0].text;
+                } 
+                else if (config.provider === 'groq') {
+                    const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                        method: "POST", headers: {"Authorization": `Bearer ${config.apiKey}`, "Content-Type": "application/json"},
+                        body: JSON.stringify({ model: "llama3-8b-8192", messages: [{role: "user", content: prompt}], temperature: 0.1 })
+                    });
+                    
+                    if (!resp.ok) {
+                        const errorData = await resp.json().catch(() => ({}));
+                        throw new Error(errorData.error?.message || `Groq API Error: ${resp.status}`);
+                    }
+
+                    const data = await resp.json();
+                    responseText = data.choices[0].message.content;
+                }
+                else {
+                    // HF
+                    const resp = await fetch("https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3", {
+                        method: "POST", headers: {"Authorization": `Bearer ${config.apiKey}`, "Content-Type": "application/json"},
+                        body: JSON.stringify({ inputs: prompt, parameters: { max_new_tokens: 100, return_full_text: false } })
+                    });
+                    
+                    if (!resp.ok) {
+                        throw new Error(`HF API Error: ${resp.status}`);
+                    }
+
+                    const data = await resp.json();
+                    responseText = Array.isArray(data) ? data[0].generated_text : data.generated_text;
                 }
 
-                // Mock predictions
-                const words = ["the", "a", "is", "in", "and"];
-                let html = '';
-                words.forEach(word => {
-                    const prob = Math.random();
-                    html += `
-                    <div class="p-2 rounded-md hover:bg-primary cursor-pointer" onclick="addWord('${word}')">
-                        <div class="flex justify-between items-center">
-                            <span class="font-mono font-semibold">${word}</span>
-                            <span class="text-xs text-fg-secondary">${(prob * 100).toFixed(0)}%</span>
-                        </div>
-                        <div class="w-full bg-tertiary rounded-full h-1.5 mt-1">
-                            <div class="bg-accent h-1.5 rounded-full" style="width: ${prob * 100}%"></div>
-                        </div>
-                    </div>
-                    `;
-                });
-                predictionList.innerHTML = html;
+                // Parse JSON
+                const cleanJson = responseText.replace(/```json|```/g, '').trim();
+                return JSON.parse(cleanJson);
+            } catch (e) {
+                console.error("AI Simulation Error", e);
+                if(e.message.includes("Rate limit")) {
+                    return [{token: "Rate Limited...", prob: 0}, {token: "Wait 5s", prob: 0}];
+                }
+                // Simple fallback to avoid breaking UI
+                return [
+                    {token: "...", prob: 0.0},
+                    {token: "error", prob: 0.0}
+                ];
             }
+        }
 
-            window.addWord = (word) => {
-                textInput.value += word + ' ';
-                textInput.focus();
-                updatePredictions();
+        // --- SETTINGS LOGIC ---
+        function toggleSettings() {
+            document.getElementById('settings-modal').classList.toggle('hidden');
+        }
+
+        function updateKeyInput() {
+            // Visual update if needed
+        }
+
+        function saveSettings() {
+            config.provider = document.getElementById('provider-select').value;
+            config.apiKey = document.getElementById('api-key-input').value.trim();
+            localStorage.setItem('vis_provider', config.provider);
+            localStorage.setItem('vis_key', config.apiKey);
+            checkStatus();
+            toggleSettings();
+        }
+
+        function checkStatus() {
+            const el = document.getElementById('status-indicator');
+            const modelEl = document.getElementById('model-display');
+            if (config.apiKey) {
+                el.textContent = "● Online";
+                el.className = "text-xs font-bold text-success";
+                modelEl.textContent = `Provider: ${config.provider.toUpperCase()}`;
+            } else {
+                el.textContent = "● Offline";
+                el.className = "text-xs font-bold text-danger";
+                modelEl.textContent = "Model: None";
             }
-        });
+        }
     </script>
 </body>
 </html>
