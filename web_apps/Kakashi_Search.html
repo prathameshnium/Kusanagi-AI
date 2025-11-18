@@ -126,7 +126,7 @@
                 <div id="search-strategy" class="hidden mb-4">
                     <div class="bg-secondary/50 border border-tertiary rounded p-3">
                         <p class="text-[10px] text-fg-secondary font-bold uppercase mb-2">Agentic Strategy</p>
-                        <div id="strategy-list" class="flex flex-wrap gap-2"></div>
+                        <div id="strategy-list" class="space-y-3"></div>
                     </div>
                 </div>
 
@@ -294,7 +294,43 @@
             // Render Strategy
             const stratContainer = document.getElementById('strategy-list');
             document.getElementById('search-strategy').classList.remove('hidden');
-            stratContainer.innerHTML = prompts.map(p => `<span class="text-[10px] bg-primary border border-tertiary px-2 py-1 rounded text-fg-secondary truncate max-w-[150px]" title="${p}">🔍 ${p}</span>`).join('');
+            stratContainer.innerHTML = ''; // Clear it
+            stratContainer.className = 'space-y-3'; // Ensure vertical stacking
+
+            const searchEngines = [
+                { name: 'Google', url: 'https://www.google.com/search?q=' },
+                { name: 'StartPage', url: 'https://www.startpage.com/do/search?query=' },
+                { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=' },
+                { name: 'Brave', url: 'https://search.brave.com/search?q=' },
+                { name: 'Qwant', url: 'https://www.qwant.com/?q=' },
+                { name: 'SearXNG', url: 'https://searx.space/?q=' }
+            ];
+
+            prompts.forEach(p => {
+                const promptEl = document.createElement('div');
+                promptEl.className = "bg-primary border border-tertiary p-2 rounded";
+                
+                const promptText = document.createElement('p');
+                promptText.className = "text-xs text-fg-primary mb-2 font-mono";
+                promptText.textContent = p;
+                promptEl.appendChild(promptText);
+
+                const buttonContainer = document.createElement('div');
+                buttonContainer.className = "flex flex-wrap gap-1";
+
+                searchEngines.forEach(engine => {
+                    const link = document.createElement('a');
+                    link.href = `${engine.url}${encodeURIComponent(p)}`;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.className = 'text-[9px] bg-secondary border border-tertiary px-1.5 py-0.5 rounded text-fg-secondary hover:bg-accent hover:text-black transition-colors';
+                    link.textContent = engine.name;
+                    buttonContainer.appendChild(link);
+                });
+
+                promptEl.appendChild(buttonContainer);
+                stratContainer.appendChild(promptEl);
+            });
 
             // 2. Execute Hydra Search (Parallel)
             const startTime = performance.now();
@@ -304,13 +340,14 @@
             const activePrompts = prompts.slice(0, 5);
             
             const searchPromises = activePrompts.map(async (p) => {
-                 const [wiki, alex, ddg, hn] = await Promise.all([
+                 const [wiki, alex, ddg, hn, arxiv] = await Promise.all([
                      fetchWikipedia(p),
                      fetchOpenAlex(p),
                      fetchDuckDuckGo(p),
-                     fetchHackerNews(p)
+                     fetchHackerNews(p),
+                     fetchArxiv(p)
                  ]);
-                 return [...wiki, ...alex, ...ddg, ...hn];
+                 return [...wiki, ...alex, ...ddg, ...hn, ...arxiv];
             });
 
             const resultBatches = await Promise.all(searchPromises);
@@ -389,7 +426,7 @@
             }
 
             // Sort mechanism (External cards stay top)
-            const typeScore = { 'DuckDuckGo': 10, 'Qwant': 9, 'SearXNG': 8, 'OpenAlex': 4, 'Wikipedia': 3, 'HackerNews': 1 };
+            const typeScore = { 'DuckDuckGo': 10, 'Qwant': 9, 'SearXNG': 8, 'OpenAlex': 4, 'Wikipedia': 3, 'Arxiv': 3, 'HackerNews': 1 };
             results.sort((a, b) => (typeScore[b.source] || 0) - (typeScore[a.source] || 0));
 
             results.forEach(res => {
@@ -400,6 +437,7 @@
                 if(res.source === 'Wikipedia') badgeClass = "bg-gray-700 text-gray-200";
                 if(res.source === 'DuckDuckGo') badgeClass = "bg-orange-900/50 text-orange-200";
                 if(res.source === 'OpenAlex') badgeClass = "bg-green-900/50 text-green-200";
+                if(res.source === 'Arxiv') badgeClass = "bg-red-900/50 text-red-200";
                 if(res.source === 'HackerNews') badgeClass = "bg-orange-600/20 text-orange-400";
                 if(res.meta === 'External') badgeClass = "bg-blue-600 text-white font-bold";
 
@@ -465,6 +503,34 @@
                     source: 'HackerNews', title: h.title, snippet: `Points: ${h.points} | Comments: ${h.num_comments}`, url: h.url || `https://news.ycombinator.com/item?id=${h.objectID}`, meta: new Date(h.created_at).getFullYear()
                 }));
             } catch(e) { return []; }
+        }
+
+        async function fetchArxiv(query) {
+            try {
+                const url = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&max_results=3&sortBy=relevance&sortOrder=descending`;
+                const resp = await fetch(url);
+                const text = await resp.text();
+                const parser = new DOMParser();
+                const xml = parser.parseFromString(text, "text/xml");
+                const entries = Array.from(xml.querySelectorAll("entry"));
+                return entries.map(entry => {
+                    const title = entry.querySelector("title").textContent.trim();
+                    const snippet = entry.querySelector("summary").textContent.trim();
+                    const url = entry.querySelector("id").textContent.trim();
+                    const published = new Date(entry.querySelector("published").textContent);
+                    const year = published.getFullYear();
+                    return {
+                        source: 'Arxiv',
+                        title: title,
+                        snippet: snippet,
+                        url: url,
+                        meta: year
+                    };
+                });
+            } catch(e) {
+                console.warn("Arxiv fetch failed", e);
+                return [];
+            }
         }
 
         // --- SETTINGS & METRICS ---
