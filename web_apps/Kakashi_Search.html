@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kakashi - Deep Research Engine</title>
+    <title>Kusanagi AI / Kakashi Search</title>
     <link rel="icon" href="https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/logo/Kusanagi-AI.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="../static/style.css">
 </head>
 <body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden flex flex-col">
-    <a href="https://prathameshnium.github.io/Kusanagi-AI" class="home-button">
+    <a href="../index.html" class="home-button">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
     </a>
 
@@ -59,9 +59,13 @@
 
     <!-- HEADER -->
     <header class="flex-shrink-0 h-14 border-b border-tertiary flex items-center justify-between px-4 bg-secondary/95 backdrop-blur z-20">
-        <div class="flex items-center gap-3 cursor-pointer" onclick="resetSearch()">
-            <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-secondary font-bold text-xl shadow-lg">K</div>
-            <h1 class="text-lg font-bold text-fg-primary tracking-tight hidden md:block">Kakashi <span class="text-fg-secondary font-normal text-xs ml-1">Deep Search</span></h1>
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-secondary font-bold text-xl shadow-lg cursor-pointer" onclick="resetSearch()">K</div>
+            <h1 class="text-lg font-bold text-fg-primary tracking-tight hidden md:block">
+                <a href="../index.html" class="hover:underline">Kusanagi AI</a>
+                <span class="text-fg-secondary font-normal mx-1">/</span>
+                <span class="cursor-pointer" onclick="resetSearch()">Kakashi Search</span>
+            </h1>
         </div>
         
         <div class="flex-1 max-w-2xl mx-4 hidden" id="header-search-container">
