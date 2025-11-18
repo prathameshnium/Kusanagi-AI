@@ -3,301 +3,453 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kusanagi - Local RAG AI</title> <!-- CHANGED -->
+    <title>Kusanagi Scholar - Minimalist</title>
     <!-- Load Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Markdown Parser for pretty AI answers -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
-        /* Custom scrollbar for a professional look */
+        /* Custom scrollbar */
         ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #193549; } /* primary */
-        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #718096; }
-        .listbox-item.active {
-            background-color: #193549; /* primary */
-            border-color: #ffab40; /* accent */
+        ::-webkit-scrollbar-track { background: #0F202D; }
+        ::-webkit-scrollbar-thumb { background: #3B5368; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #5E7A91; }
+        
+        .toggle-checkbox:checked { right: 0; border-color: #ffab40; }
+        .toggle-checkbox:checked + .toggle-label { background-color: #ffab40; }
+        
+        .input-focus-ring:focus-within { box-shadow: 0 0 0 2px #ffab40; border-color: #ffab40; }
+
+        .minimal-bg-pattern {
+            background-image: radial-gradient(#25435A 1px, transparent 1px);
+            background-size: 20px 20px;
+            opacity: 0.05;
         }
+
+        /* Markdown Styles */
+        .prose p { margin-bottom: 0.8em; }
+        .prose strong { color: #ffab40; font-weight: 600; }
+        .prose ul { list-style-type: disc; padding-left: 1.5em; margin-bottom: 0.8em; }
+        .prose code { background: #193549; padding: 2px 4px; rounded: 4px; font-family: monospace; color: #E0F0FF; }
+        .prose pre { background: #193549; padding: 1em; rounded: 8px; overflow-x: auto; margin-bottom: 1em; }
     </style>
     <script>
         tailwind.config = {
             theme: {
                 extend: {
                     colors: {
-                        'primary': '#193549',   // Main content dark blue
-                        'secondary': '#002240', // Sidebar darker blue
-                        'tertiary': '#25435A',   // Input fields
-                        'accent': '#ffab40',    // Orange/Yellow accent
-                        'accent-fg': '#002240', // Text on accent
-                        'fg-primary': '#FFFFFF',
-                        'fg-secondary': '#97B1C2', // Muted text
+                        'primary': '#0F202D', 'secondary': '#193549', 'tertiary': '#25435A',
+                        'accent': '#ffab40', 'accent-fg': '#001A30', 'fg-primary': '#E0F0FF',
+                        'fg-secondary': '#8DAABF',
                     }
                 }
             }
         }
     </script>
 </head>
-<body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden">
-    <div class="flex h-full max-h-screen">
-        
-        <!-- === Sidebar === -->
-        <aside class="w-80 flex-shrink-0 bg-secondary flex flex-col p-5">
-            <!-- Header -->
-            <div class="flex items-center space-x-3 mb-5 px-1">
-                <div class="p-2 bg-accent rounded-lg">
-                    <!-- Kakashi/Book Icon -->
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-6 h-6 text-accent-fg">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
-                    </svg>                      
-                </div>
-                <div>
-                    <h1 class="text-xl font-bold text-accent">Kakashi</h1> <!-- CHANGED -->
-                    <p class="text-xs text-fg-secondary">Local RAG AI Assistant</p>
-                </div>
-            </div>
+<body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden flex flex-col items-center justify-center p-4 relative">
 
-            <!-- Context Lists -->
-            <div class="flex-grow flex flex-col overflow-y-hidden space-y-4">
-                <!-- General Chats -->
-                <div class="flex flex-col h-1/3">
-                    <h2 class="text-sm font-semibold text-fg-secondary uppercase tracking-wide mb-2 px-1">⛩️ General Chats</h2> <!-- CHANGED -->
-                    <div class="flex-grow bg-tertiary p-2 rounded-lg overflow-y-auto space-y-1">
-                        <div class="listbox-item p-3 rounded-md cursor-pointer hover:bg-primary">
-                            <h3 class="font-semibold text-fg-primary truncate">Chat 1: Brainstorming</h3>
-                            <p class="text-sm text-fg-secondary">Last message: ...</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Loaded Documents -->
-                <div class="flex flex-col flex-grow">
-                    <h2 class="text-sm font-semibold text-fg-secondary uppercase tracking-wide mb-2 px-1">📜 Loaded Documents</h2> <!-- CHANGED -->
-                    <button class="w-full bg-accent text-accent-fg font-bold py-2 px-4 rounded-lg mb-2 hover:bg-yellow-400 transition duration-200 text-sm">
-                        + Upload New Document
-                    </button>
-                    <div class="flex-grow bg-tertiary p-2 rounded-lg overflow-y-auto space-y-1">
-                        <!-- Active Document -->
-                        <div class="listbox-item active p-3 rounded-md cursor-pointer border border-accent bg-primary">
-                            <h3 class="font-semibold text-fg-primary truncate">History_of_Science_101.pdf</h3>
-                            <p class="text-sm text-fg-secondary">124 Pages | 42 chunks</p>
-                        </div>
-                        <!-- Inactive Documents -->
-                        <div class="listbox-item p-3 rounded-md cursor-pointer hover:bg-primary">
-                            <h3 class="font-semibold text-fg-primary truncate">Intro_to_Physics_Lab.pdf</h3>
-                            <p class="text-sm text-fg-secondary">38 Pages | 12 chunks</p>
-                        </div>
-                        <div class="listbox-item p-3 rounded-md cursor-pointer hover:bg-primary">
-                            <h3 class="font-semibold text-fg-primary truncate">Student_Essays_Batch_1.pdf</h3>
-                            <p class="text-sm text-fg-secondary">52 Pages | 20 chunks</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Project Info -->
-            <div class="mt-auto pt-5 border-t border-tertiary text-center text-xs text-fg-secondary space-y-2">
-                <p>
-                    A demo for local AI apps like <b class="font-semibold text-fg-primary">Orochimaru</b> and tailed apps for local chat, ensuring private and safe data.
-                </p>
-                <p class="italic text-accent/90">This is just a demo page, will get it working soon.</p>
-                
-                <div class="pt-2">
-                    <p>Developed by</p>
-                    <a href="https://github.com/prathameshnium" target="_blank" class="font-semibold text-accent hover:underline">Prathamesh Deshmukh</a>
-                </div>
-                
-                <a href="https://github.com/prathameshnium/Kusanagi-AI/tree/main" target="_blank" class="inline-block pt-2 text-accent hover:underline">
-                    View on GitHub
-                </a>
-            </div>
-        </aside>
-
-        <!-- === Main Chat Area === -->
-        <main class="flex-1 flex flex-col max-h-screen">
-            <!-- Top Bar -->
-            <header class="flex-shrink-0 bg-primary border-b border-tertiary flex justify-between items-center p-4">
-                <h2 id="chat-title" class="text-lg font-semibold">History_of_Science_101.pdf</h2>
-                <div class="text-xs text-fg-secondary flex items-center space-x-3">
-                    <span id="status-text" class="text-green-400">● Connected</span>
-                    <span>|</span>
-                    <span>RAM: 25%</span>
-                    <span>|</span>
-                    <span>qwen:1.8b-chat</span>
-                </div>
-            </header>
-
-            <!-- Chat History -->
-            <div id="chat-history" class="flex-grow p-6 overflow-y-auto space-y-6">
-                <!-- Mockup of an AI greeting -->
-                <div class="flex items-start space-x-4">
-                    <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent">AI</div>
-                    <div class="bg-tertiary p-4 rounded-lg max-w-2xl">
-                        <p class="font-bold text-accent mb-1">Kakashi</p> <!-- CHANGED -->
-                        <p>Document "History_of_Science_101.pdf" is loaded. How can I help you analyze it today?</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Jutsu Arsenal (Tool Bar) -->
-            <div class="flex-shrink-0 bg-tertiary p-3 mx-6 mb-2 rounded-lg">
-                <div class="flex items-center space-x-2">
-                    <button id="btn-sage-mode" class="bg-primary text-accent py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition font-bold">Sage Mode (ON)</button>
-                    <span class="border-l border-gray-600 h-5"></span>
-                    <button id="btn-kage-summit" class="bg-primary text-fg-secondary py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition">👑 Kage Summit</button>
-                    <button class="bg-primary text-fg-secondary py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition">Summarize Doc</button>
-                    <button class="bg-primary text-fg-secondary py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition">Explain Concept</button>
-                    <button class="bg-primary text-fg-secondary py-1 px-3 rounded-md text-sm hover:bg-gray-700 transition">Generate Questions</button>
-                </div>
-            </div>
-
-            <!-- Input Bar -->
-            <footer class="flex-shrink-0 p-6 pt-0">
-                <div class="flex bg-tertiary rounded-lg p-2">
-                    <input id="chat-input" type="text" placeholder="Ask a question or request a review..." class="w-full bg-transparent p-3 text-fg-primary placeholder-fg-secondary focus:outline-none">
-                    <button id="send-button" class="bg-accent text-accent-fg rounded-md p-3 ml-2 hover:bg-yellow-400 transition duration-200">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-6 h-6">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.875L6 12z" />
-                        </svg>
-                    </button>
-                </div>
-            </footer>
-        </main>
+    <!-- Status Bar -->
+    <div class="absolute top-4 left-1/2 -translate-x-1/2 flex items-center space-x-4 text-xs text-fg-secondary bg-secondary px-4 py-2 rounded-lg shadow-md z-50">
+        <div class="flex items-center space-x-1">
+            <span id="api-status-dot" class="w-2 h-2 bg-red-500 rounded-full"></span>
+            <span id="api-status-text">No API Key</span>
+        </div>
+        <span>|</span>
+        <button onclick="toggleSettings()" class="hover:text-accent underline decoration-dotted">Settings</button>
     </div>
 
-    <script>
-        // --- MOCK JAVASCRIPT to simulate the app's functionality ---
-        const chatHistory = document.getElementById('chat-history');
-        const chatInput = document.getElementById('chat-input');
-        const sendButton = document.getElementById('send-button');
-        const kageSummitButton = document.getElementById('btn-kage-summit');
-
-        // --- Event Listeners ---
-        sendButton.addEventListener('click', handleSend);
-        chatInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') handleSend();
-        });
-        // Special listener for the Kage Summit button
-        kageSummitButton.addEventListener('click', () => {
-            let prompt = chatInput.value.trim();
-            if (prompt === '') {
-                prompt = "Provide a general peer review of this document.";
-            }
-            handleSend(prompt, true); // Pass 'true' to trigger Kage Summit
-        });
-
-        // --- Main Send Function ---
-        const handleSend = (prompt, isKageSummit = false) => {
-            if (!prompt) {
-                prompt = chatInput.value.trim();
-            }
-            if (prompt === '') return;
-
-            addMessage('user', prompt);
-            chatInput.value = '';
+    <!-- SETTINGS MODAL -->
+    <div id="settings-modal" class="hidden absolute inset-0 bg-black/80 z-[60] flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-secondary p-6 rounded-lg shadow-2xl max-w-md w-full border border-tertiary">
+            <h2 class="text-xl font-bold text-accent mb-4">Configuration</h2>
             
-            // Disable all inputs
-            setInputsDisabled(true);
+            <!-- Tabs -->
+            <div class="flex space-x-2 mb-4 border-b border-tertiary pb-2">
+                <button onclick="switchTab('hf')" id="tab-hf" class="text-sm font-bold text-accent border-b-2 border-accent pb-1">HuggingFace</button>
+                <button onclick="switchTab('gemini')" id="tab-gemini" class="text-sm font-medium text-fg-secondary hover:text-fg-primary pb-1">Google Gemini</button>
+                <button onclick="switchTab('groq')" id="tab-groq" class="text-sm font-medium text-fg-secondary hover:text-fg-primary pb-1">Groq</button>
+            </div>
 
-            if (isKageSummit) {
-                // --- KAGE SUMMIT SIMULATION ---
-                simulateKageSummit(prompt);
-            } else {
-                // --- NORMAL CHAT SIMULATION ---
-                addMessage('ai', 'Thinking...', true); // Add thinking message
-                setTimeout(() => {
-                    removeThinkingMessage();
-                    const aiResponse = "According to the document, Marie Curie was a physicist and chemist... [Source 4, Page 27]";
-                    addMessage('ai', aiResponse);
-                    setInputsDisabled(false);
-                }, 1500);
-            }
-        };
+            <!-- HF Inputs -->
+            <div id="panel-hf" class="provider-panel">
+                <label class="block text-sm text-fg-secondary mb-2">Hugging Face Token</label>
+                <input type="password" id="hf-token-input" class="w-full bg-tertiary text-fg-primary p-3 rounded border border-tertiary focus:border-accent outline-none mb-4" placeholder="hf_...">
+                <p class="text-xs text-fg-secondary mb-2">Good for: Mistral, Phi-3. <a href="https://huggingface.co/settings/tokens" target="_blank" class="underline text-accent">Get Token</a></p>
+            </div>
+
+            <!-- Gemini Inputs -->
+            <div id="panel-gemini" class="provider-panel hidden">
+                <label class="block text-sm text-fg-secondary mb-2">Gemini API Key</label>
+                <input type="password" id="gemini-key-input" class="w-full bg-tertiary text-fg-primary p-3 rounded border border-tertiary focus:border-accent outline-none mb-4" placeholder="AIza...">
+                <p class="text-xs text-fg-secondary mb-2">Good for: 1M Context, RAG, Reliability. <a href="https://aistudio.google.com/app/apikey" target="_blank" class="underline text-accent">Get Key</a></p>
+            </div>
+
+            <!-- Groq Inputs -->
+            <div id="panel-groq" class="provider-panel hidden">
+                <label class="block text-sm text-fg-secondary mb-2">Groq API Key</label>
+                <input type="password" id="groq-key-input" class="w-full bg-tertiary text-fg-primary p-3 rounded border border-tertiary focus:border-accent outline-none mb-4" placeholder="gsk_...">
+                <p class="text-xs text-fg-secondary mb-2">Good for: Extreme Speed (Llama 3). <a href="https://console.groq.com/keys" target="_blank" class="underline text-accent">Get Key</a></p>
+            </div>
+            
+            <div class="border-t border-tertiary mt-2 pt-4">
+                <label class="block text-sm text-fg-secondary mb-2">Active Provider</label>
+                <select id="active-provider-select" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none mb-4">
+                    <option value="hf">Hugging Face</option>
+                    <option value="gemini">Google Gemini (Best Free Option)</option>
+                    <option value="groq">Groq (Fastest)</option>
+                </select>
+
+                <div class="flex justify-end gap-2">
+                    <button onclick="toggleSettings()" class="px-4 py-2 text-fg-secondary hover:text-fg-primary">Cancel</button>
+                    <button onclick="saveSettings()" class="px-4 py-2 bg-accent text-accent-fg rounded font-bold">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <main class="flex-1 flex flex-col items-center w-full max-w-3xl z-10 p-6 transition-all duration-500 ease-in-out" id="main-container">
         
-        // --- Kage Summit Simulation ---
-        async function simulateKageSummit(prompt) {
-            addMessage('ai', 'Assembling Kage Summit...', true);
-            
-            // This 'await' simulates the time for RAG/embedding
-            await sleep(1500);
-            removeThinkingMessage();
+        <div class="absolute inset-0 minimal-bg-pattern z-0 pointer-events-none"></div>
 
-            const reviews = [
-                { expert: "Physicist", review: "The theoretical models presented are sound. However, the interpretation of the diffraction data on page 12 could be clearer." },
-                { expert: "Chemist", review: "The material synthesis section is robust and reproducible. I question the purity of the precursors mentioned in [Source 8, Page 19]." },
-                { expert: "Chief Editor", review: "A strong paper. The council agrees that the methodology is sound, but the conclusion needs to more directly address the chemical purity concerns raised by the Chemist." }
-            ];
+        <!-- Header -->
+        <div class="text-center mb-8 z-20 transition-all duration-500" id="header-section">
+            <h1 class="text-5xl font-extrabold text-fg-primary mb-2 tracking-tight">Kusanagi <span class="text-accent">Scholar</span></h1>
+            <p class="text-fg-secondary text-lg">Multi-Model Research Engine</p>
+        </div>
 
-            for (const review of reviews) {
-                addMessage(review.expert, 'Thinking...', true, review.expert);
-                await sleep(1500); // Wait 1.5s for each expert
-                removeThinkingMessage(review.expert);
-                addMessage(review.expert, review.review);
-            }
-            
-            setInputsDisabled(false);
+        <!-- Search Bar -->
+        <div class="w-full bg-secondary rounded-2xl shadow-2xl input-focus-ring transition-all duration-300 border border-tertiary z-20 relative">
+            <div class="flex items-center p-2">
+                <div class="pl-4 text-fg-secondary">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+                <input type="text" 
+                       id="search-input"
+                       placeholder="Ask a research question..." 
+                       class="w-full bg-transparent text-lg text-fg-primary p-4 placeholder-fg-secondary focus:outline-none font-medium"
+                       autofocus>
+                
+                <button onclick="handleSearch()" id="search-btn" class="bg-accent hover:bg-yellow-500 text-accent-fg px-6 py-3 rounded-xl font-bold transition duration-200 flex items-center gap-2 flex-shrink-0">
+                    <span>Ask AI</span>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex items-center justify-center w-full mt-6 space-x-4 z-20" id="controls-section">
+            <div class="flex items-center space-x-2 bg-secondary px-4 py-2 rounded-lg border border-tertiary">
+                <span class="text-xs text-fg-secondary font-bold uppercase">Active Model:</span>
+                <!-- This dropdown populates dynamically based on provider -->
+                <select id="model-select" class="bg-transparent text-accent font-bold text-sm focus:outline-none cursor-pointer">
+                    <!-- Options injected by JS -->
+                </select>
+            </div>
+        </div>
+
+        <!-- RESULTS AREA (Initially Hidden) -->
+        <div id="result-area" class="hidden w-full mt-6 bg-secondary border border-tertiary rounded-xl p-6 shadow-2xl z-20 max-h-[60vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-4 border-b border-tertiary pb-2">
+                <h3 class="text-accent font-bold uppercase text-sm tracking-wider">AI Analysis Result</h3>
+                <button onclick="clearResult()" class="text-xs text-fg-secondary hover:text-red-400">Clear</button>
+            </div>
+            <div id="result-content" class="prose prose-invert text-fg-primary text-sm leading-relaxed">
+                <!-- Content goes here -->
+            </div>
+        </div>
+
+        <!-- Quick Suggestions -->
+        <div class="mt-8 flex flex-wrap justify-center gap-3 z-10" id="pills-section">
+            <button onclick="fillSearch('Compare the efficiency of solar panels vs wind turbines')" class="px-3 py-1.5 rounded-full border border-tertiary text-fg-secondary text-xs hover:border-accent hover:text-accent transition">Renewable Energy</button>
+            <button onclick="fillSearch('Explain the mechanism of action of mRNA vaccines')" class="px-3 py-1.5 rounded-full border border-tertiary text-fg-secondary text-xs hover:border-accent hover:text-accent transition">mRNA Vaccines</button>
+            <button onclick="fillSearch('Summarize the history of the Roman Senate')" class="px-3 py-1.5 rounded-full border border-tertiary text-fg-secondary text-xs hover:border-accent hover:text-accent transition">Roman History</button>
+        </div>
+
+        <div class="mt-auto pt-4 text-center text-xs text-fg-secondary opacity-50 w-full z-10">
+            <p>Powered by your own API keys. Data remains local.</p>
+        </div>
+
+    </main>
+
+    <script>
+        // --- DOM ELEMENTS ---
+        const searchInput = document.getElementById('search-input');
+        const searchBtn = document.getElementById('search-btn');
+        const resultArea = document.getElementById('result-area');
+        const resultContent = document.getElementById('result-content');
+        const modelSelect = document.getElementById('model-select');
+        const settingsModal = document.getElementById('settings-modal');
+        const activeProviderSelect = document.getElementById('active-provider-select');
+        
+        // Input fields
+        const hfTokenInput = document.getElementById('hf-token-input');
+        const geminiKeyInput = document.getElementById('gemini-key-input');
+        const groqKeyInput = document.getElementById('groq-key-input');
+
+        const statusDot = document.getElementById('api-status-dot');
+        const statusText = document.getElementById('api-status-text');
+
+        // --- STATE MANAGEMENT ---
+        let config = {
+            provider: localStorage.getItem('provider') || 'hf',
+            hfToken: localStorage.getItem('hf_token') || '',
+            geminiKey: localStorage.getItem('gemini_key') || '',
+            groqKey: localStorage.getItem('groq_key') || ''
+        };
+
+        // Model definitions
+        const models = {
+            hf: [
+                { id: "microsoft/Phi-3-mini-4k-instruct", name: "Phi-3 Mini (Free/Fast)" },
+                { id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B" }
+            ],
+            gemini: [
+                { id: "gemini-1.5-flash", name: "Gemini 1.5 Flash (Standard)" },
+                { id: "gemini-1.5-flash-latest", name: "Gemini 1.5 Flash (Latest)" },
+                { id: "gemini-pro", name: "Gemini 1.0 Pro (Legacy/Stable)" },
+                { id: "gemini-1.5-pro", name: "Gemini 1.5 Pro (Smartest)" }
+            ],
+            groq: [
+                { id: "llama3-8b-8192", name: "Llama 3 8B (Instant)" },
+                { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B" },
+                { id: "gemma-7b-it", name: "Gemma 7B" }
+            ]
+        };
+
+        // --- INITIALIZATION ---
+        function init() {
+            // Load saved values
+            hfTokenInput.value = config.hfToken;
+            geminiKeyInput.value = config.geminiKey;
+            groqKeyInput.value = config.groqKey;
+            activeProviderSelect.value = config.provider;
+
+            updateModelList();
+            checkStatus();
         }
 
-        // --- Helper Functions ---
-        const addMessage = (role, text, isThinking = false, id = null) => {
-            const messageWrapper = document.createElement('div');
-            let messageId = isThinking ? (id ? `thinking-${id}` : 'thinking') : '';
+        // --- TAB SWITCHING ---
+        function switchTab(provider) {
+            document.querySelectorAll('.provider-panel').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`panel-${provider}`).classList.remove('hidden');
+            
+            // Reset styles
+            ['hf', 'gemini', 'groq'].forEach(p => {
+                const btn = document.getElementById(`tab-${p}`);
+                if (p === provider) {
+                    btn.className = "text-sm font-bold text-accent border-b-2 border-accent pb-1";
+                } else {
+                    btn.className = "text-sm font-medium text-fg-secondary hover:text-fg-primary pb-1";
+                }
+            });
+        }
 
-            if (role === 'user') {
-                messageWrapper.className = "flex items-start space-x-4 justify-end";
-                messageWrapper.innerHTML = `
-                    <div class="bg-accent text-accent-fg p-4 rounded-lg max-w-2xl">
-                        <p class="font-bold mb-1">You</p>
-                        <p>${text}</p>
-                    </div>
-                    <div class="flex-shrink-0 w-10 h-10 bg-gray-600 rounded-full flex items-center justify-center font-bold">You</div>
-                `;
+        // --- SETTINGS LOGIC ---
+        function toggleSettings() {
+            settingsModal.classList.toggle('hidden');
+            // Default to active provider tab
+            if (!settingsModal.classList.contains('hidden')) {
+                switchTab(activeProviderSelect.value);
+            }
+        }
+
+        function saveSettings() {
+            config.provider = activeProviderSelect.value;
+            config.hfToken = hfTokenInput.value.trim();
+            config.geminiKey = geminiKeyInput.value.trim();
+            config.groqKey = groqKeyInput.value.trim();
+            
+            localStorage.setItem('provider', config.provider);
+            localStorage.setItem('hf_token', config.hfToken);
+            localStorage.setItem('gemini_key', config.geminiKey);
+            localStorage.setItem('groq_key', config.groqKey);
+            
+            updateModelList();
+            checkStatus();
+            toggleSettings();
+        }
+
+        function updateModelList() {
+            const provider = activeProviderSelect.value;
+            const providerModels = models[provider] || [];
+            
+            modelSelect.innerHTML = providerModels.map(m => 
+                `<option value="${m.id}">${m.name}</option>`
+            ).join('');
+        }
+
+        function checkStatus() {
+            let hasKey = false;
+            if (config.provider === 'hf' && config.hfToken) hasKey = true;
+            if (config.provider === 'gemini' && config.geminiKey) hasKey = true;
+            if (config.provider === 'groq' && config.groqKey) hasKey = true;
+
+            if (hasKey) {
+                statusDot.classList.remove('bg-red-500');
+                statusDot.classList.add('bg-green-500', 'animate-pulse');
+                statusText.textContent = `${config.provider.toUpperCase()} Ready`;
+                statusText.classList.add('text-green-400');
             } else {
-                messageWrapper.className = "flex items-start space-x-4";
-                if (messageId) messageWrapper.id = messageId;
-                
-                let author = "Kakashi"; // CHANGED
-                let authorColor = "text-accent";
-                let avatar = "AI";
+                statusDot.classList.add('bg-red-500');
+                statusDot.classList.remove('bg-green-500', 'animate-pulse');
+                statusText.textContent = "Missing Key";
+                statusText.classList.remove('text-green-400');
+            }
+        }
 
-                // Check for special roles
-                if (role !== 'ai') {
-                    author = role;
-                    avatar = role.substring(0, 2).toUpperCase();
+        // --- SEARCH LOGIC ---
+        function fillSearch(text) {
+            searchInput.value = text;
+            searchInput.focus();
+        }
+
+        function clearResult() {
+            resultArea.classList.add('hidden');
+            searchInput.value = '';
+            document.getElementById('header-section').classList.remove('scale-75', '-translate-y-4');
+            document.getElementById('pills-section').classList.remove('hidden');
+        }
+
+        async function handleSearch() {
+            const query = searchInput.value.trim();
+            if (!query) return;
+
+            // Check key
+            let key = "";
+            if (config.provider === 'hf') key = config.hfToken;
+            if (config.provider === 'gemini') key = config.geminiKey;
+            if (config.provider === 'groq') key = config.groqKey;
+
+            if (!key) {
+                alert(`Please enter your API Key for ${config.provider.toUpperCase()} in Settings.`);
+                toggleSettings();
+                return;
+            }
+
+            // UI Loading
+            searchBtn.disabled = true;
+            searchBtn.innerHTML = `<svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
+            
+            document.getElementById('header-section').classList.add('scale-75', '-translate-y-4');
+            document.getElementById('pills-section').classList.add('hidden');
+            resultArea.classList.remove('hidden');
+            resultContent.innerHTML = '<span class="animate-pulse">Contacting Neural Matrix...</span>';
+
+            try {
+                const modelId = modelSelect.value;
+                let markdownText = "";
+
+                if (config.provider === 'hf') {
+                    markdownText = await callHuggingFace(query, modelId, key);
+                } else if (config.provider === 'gemini') {
+                    markdownText = await callGemini(query, modelId, key);
+                } else if (config.provider === 'groq') {
+                    markdownText = await callGroq(query, modelId, key);
                 }
 
-                let messageContent = `
-                    <p class="font-bold ${authorColor} mb-1">${author}</p>
-                    <p>${text}</p>
-                `;
-                
-                if (isThinking) {
-                    messageContent = `<p class="text-fg-secondary italic">${text}</p>`;
+                resultContent.innerHTML = marked.parse(markdownText);
+
+            } catch (error) {
+                resultContent.innerHTML = `<span class="text-red-400 font-bold">Error:</span> <span class="text-fg-secondary">${error.message}</span>`;
+            } finally {
+                searchBtn.disabled = false;
+                searchBtn.innerHTML = `<span>Ask AI</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"></path></svg>`;
+            }
+        }
+
+        // --- API IMPLEMENTATIONS ---
+
+        // 1. HUGGING FACE
+        async function callHuggingFace(query, model, token) {
+            const systemPrompt = "You are a helpful research assistant. Provide concise, accurate answers.";
+            let fullPrompt = `<s>[INST] ${systemPrompt} ${query} [/INST]`; // Basic prompt format
+            
+            const response = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    inputs: fullPrompt,
+                    parameters: { max_new_tokens: 350, return_full_text: false }
+                })
+            });
+            
+            if (!response.ok) throw new Error(`HF Error: ${response.status} ${response.statusText}`);
+            const data = await response.json();
+            return Array.isArray(data) ? data[0].generated_text : data.generated_text;
+        }
+
+        // 2. GOOGLE GEMINI
+        async function callGemini(query, model, key) {
+            // Clean URL construction to ensure no spaces or bad chars
+            const cleanModel = model.trim();
+            const cleanKey = key.trim();
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${cleanModel}:generateContent?key=${cleanKey}`;
+            
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: query }] }],
+                    generationConfig: { maxOutputTokens: 350 }
+                })
+            });
+
+            if (!response.ok) {
+                // If 404, it usually means the model ID is wrong (or legacy alias deprecated)
+                if (response.status === 404) {
+                     throw new Error(`Gemini Error: 404 (Model '${cleanModel}' not found). Try a different model version in Settings.`);
                 }
-
-                messageWrapper.innerHTML = `
-                    <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold ${authorColor}">${avatar}</div>
-                    <div class="bg-tertiary p-4 rounded-lg max-w-2xl">
-                        ${messageContent}
-                    </div>
-                `;
+                throw new Error(`Gemini Error: ${response.status}`);
             }
-            chatHistory.appendChild(messageWrapper);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-        };
-
-        const removeThinkingMessage = (id = null) => {
-            const thinkingId = id ? `thinking-${id}` : 'thinking';
-            const thinkingMessage = document.getElementById(thinkingId);
-            if (thinkingMessage) {
-                thinkingMessage.remove();
+            
+            const data = await response.json();
+            if (data.error) throw new Error(data.error.message);
+            
+            // Check if candidates exist (sometimes safety filters block result)
+            if (!data.candidates || data.candidates.length === 0) {
+                return "No response generated. (It might have been blocked by safety filters).";
             }
-        };
+            
+            return data.candidates[0].content.parts[0].text;
+        }
 
-        const setInputsDisabled = (isDisabled) => {
-            chatInput.disabled = isDisabled;
-            sendButton.disabled = isDisabled;
-            if (!isDisabled) chatInput.focus();
-        };
+        // 3. GROQ
+        async function callGroq(query, model, key) {
+            const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${key}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    messages: [
+                        { role: "system", content: "You are a helpful research assistant." },
+                        { role: "user", content: query }
+                    ],
+                    model: model,
+                    max_tokens: 350
+                })
+            });
 
-        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(`Groq Error: ${err.error?.message || response.status}`);
+            }
+            const data = await response.json();
+            return data.choices[0].message.content;
+        }
+
+        // Allow Enter key
+        searchInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') handleSearch();
+        });
+
+        // Init on load
+        init();
 
     </script>
 </body>

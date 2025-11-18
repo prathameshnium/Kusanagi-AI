@@ -109,9 +109,12 @@ class ResearchApp(tk.Tk):
         super().__init__()
         print("--- App Initializing ---")
 
+        self.app_config = self._load_config()
+        self.cot_var = tk.BooleanVar(value=False)
+
         # 1. Initialize core attributes
         self.ollama_client = None
-        self.ollama_process = None
+        self.ollama_process = None # To store the subprocess
         self.stop_loading_event = threading.Event()
         self.is_muted = False
         self.embedding_model_available = False
@@ -123,25 +126,17 @@ class ResearchApp(tk.Tk):
         self.processing_thread = None
         self._temp_review_doc_id = None
         self._temp_review_full_text = None
-        self.cot_var = tk.BooleanVar(value=False)
-        self.reviewer_var = tk.StringVar()
-
-        # 2. Load configuration
-        self.config = self._load_config()
-        self.vector_cache_dir = self.config.get("vector_cache_dir", "vector_cache")
-        self.embedding_model_name = self.config.get("embedding_model_name", "mxbai-embed-large")
-
-        # 3. Setup UI
+        self.vector_cache_dir = self.app_config.get("vector_cache_dir", "vector_cache")
+        os.makedirs(self.vector_cache_dir, exist_ok=True)
         self.title("Orochimaru - Local RAG AI")
         self.geometry("1200x800")
         self.configure(bg=Style.BG_PRIMARY)
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
         self.setup_styles()
-        os.makedirs(self.vector_cache_dir, exist_ok=True)
+        self.embedding_model_name = self.app_config.get("embedding_model_name", "mxbai-embed-large")
+        self.reviewer_var = tk.StringVar()
         self.create_widgets()
-
-        # 4. Start background services
-        self._initialize_ollama()
+        self._initialize_ollama() # Moved after create_widgets
         self.start_services()
 
 
@@ -856,18 +851,18 @@ class ResearchApp(tk.Tk):
                 print(f"Error removing vector cache for {pdf_id}: {e}")
 
     def open_settings_window(self):
-        settings_dialog = SettingsWindow(self, self.config, self._save_and_update_config)
+        settings_dialog = SettingsWindow(self, self.app_config, self._save_and_update_config)
         self.wait_window(settings_dialog)
 
     def _save_and_update_config(self, new_config):
-        self.config = new_config
-        self._save_config(self.config)
+        self.app_config = new_config
+        self._save_config(self.app_config)
         messagebox.showinfo("Settings Saved", "Settings have been saved. Restart the application for some changes to take full effect.")
 
     def _initialize_ollama(self):
         print("--- Initializing Ollama Connection ---")
-        ollama_path = self.config.get("ollama_path")
-        model_folder = self.config.get("model_folder")
+        ollama_path = self.app_config.get("ollama_path")
+        model_folder = self.app_config.get("model_folder")
 
         # This client is used to check for an externally running server
         self.ollama_client = ollama.Client(host='127.0.0.1', timeout=5)
@@ -1019,11 +1014,11 @@ class ResearchApp(tk.Tk):
 
         return final_config
 
-    def _save_config(self, config):
+    def _save_config(self, app_config):
         config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
         # When saving, try to make paths relative to the project root for portability
         relative_config = {}
-        for key, value in config.items():
+        for key, value in app_config.items():
             if isinstance(value, str) and os.path.isabs(value) and key in ["ollama_path", "model_folder", "vector_cache_dir"]:
                 try:
                     # This will make the path relative if it's on the same drive
