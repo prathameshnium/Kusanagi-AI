@@ -8,66 +8,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Load Markdown Parser -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <style>
-        /* Custom scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #0F202D; }
-        ::-webkit-scrollbar-thumb { background: #3B5368; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #5E7A91; }
-        
-        .toggle-checkbox:checked { right: 0; border-color: #ffab40; }
-        .toggle-checkbox:checked + .toggle-label { background-color: #ffab40; }
-        
-        .input-focus-ring:focus-within { box-shadow: 0 0 0 2px #ffab40; border-color: #ffab40; }
 
-        .minimal-bg-pattern {
-            background-image: radial-gradient(#25435A 1px, transparent 1px);
-            background-size: 20px 20px;
-            opacity: 0.05;
-        }
 
-        /* Tooltip for copy */
-        .tooltip {
-            position: relative;
-            display: inline-block;
-        }
-        .tooltip .tooltiptext {
-            visibility: hidden;
-            width: 60px;
-            background-color: #193549;
-            color: #fff;
-            text-align: center;
-            border-radius: 6px;
-            padding: 5px 0;
-            position: absolute;
-            z-index: 1;
-            bottom: 125%;
-            left: 50%;
-            margin-left: -30px;
-            opacity: 0;
-            transition: opacity 0.3s;
-            font-size: 10px;
-        }
-        .tooltip:hover .tooltiptext {
-            visibility: visible;
-            opacity: 1;
-        }
-    </style>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'primary': '#0F202D', 'secondary': '#193549', 'tertiary': '#25435A',
-                        'accent': '#ffab40', 'accent-fg': '#001A30', 'fg-primary': '#E0F0FF',
-                        'fg-secondary': '#8DAABF',
-                    }
-                }
-            }
-        }
-    </script>
+    <link rel="stylesheet" href="../static/style.css">
 </head>
 <body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden flex flex-col items-center relative">
+    <a href="https://prathameshnium.github.io/Kusanagi-AI" class="home-button">Home</a>
 
     <!-- Status Bar -->
     <div class="absolute top-4 right-4 flex items-center space-x-4 text-xs text-fg-secondary bg-secondary px-4 py-2 rounded-lg shadow-md z-50">

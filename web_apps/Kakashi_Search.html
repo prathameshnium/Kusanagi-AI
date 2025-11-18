@@ -11,54 +11,12 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Segoe UI', 'sans-serif'] },
-                    colors: {
-                        'primary': '#193549',    // Dark Blue Background
-                        'secondary': '#002240',  // Darker Components
-                        'tertiary': '#25435A',   // Borders/Inputs
-                        'accent': '#ffab40',     // Orange/Yellow
-                        'accent-hover': '#e69a38',
-                        'fg-primary': '#FFFFFF',
-                        'fg-secondary': '#97B1C2',
-                        'success': '#3AD900',
-                        'danger': '#FF628C'
-                    },
-                    animation: {
-                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                    }
-                }
-            }
-        }
-    </script>
-    <style>
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #193549; }
-        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #718096; }
-        body { font-family: 'Segoe UI', sans-serif; }
-        
-        .prose { color: #FFFFFF; font-size: 0.9rem; }
-        .prose p { margin-bottom: 0.8em; line-height: 1.6; color: #e2e8f0; }
-        .prose h1, .prose h2, .prose h3 { color: #ffab40; font-weight: bold; margin-top: 1.2em; margin-bottom: 0.5em; }
-        .prose ul { list-style-type: disc; padding-left: 1.2em; margin-bottom: 0.8em; color: #97B1C2; }
-        .prose code { background: rgba(0,0,0,0.3); padding: 1px 3px; border-radius: 2px; font-family: monospace; color: #ffab40; font-size: 0.9em; }
-        .prose pre { background: #002240; padding: 12px; border-radius: 6px; overflow-x: auto; margin-bottom: 1em; border: 1px solid #25435A; }
-        .prose a { color: #ffab40; text-decoration: underline; }
-        
-        input[type=range] { appearance: none; -webkit-appearance: none; background: transparent; }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none; height: 14px; width: 14px; border-radius: 50%; background: #ffab40; margin-top: -5px; cursor: pointer;
-        }
-        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #25435A; border-radius: 2px; }
 
-        .result-card:hover { border-color: #ffab40; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
-    </style>
+
+    <link rel="stylesheet" href="../static/style.css">
 </head>
 <body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden flex flex-col">
+    <a href="https://prathameshnium.github.io/Kusanagi-AI" class="home-button">Home</a>
 
     <!-- SETTINGS MODAL -->
     <div id="settings-modal" class="hidden absolute inset-0 bg-black/90 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity duration-200">

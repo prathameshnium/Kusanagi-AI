@@ -12,54 +12,16 @@
     <!-- DOMPurify for XSS Protection (CDN) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     
+
+
+    <link rel="stylesheet" href="../static/style.css">
     <script>
         // Configure PDF.js worker
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-        
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Segoe UI', 'sans-serif'] },
-                    colors: {
-                        'primary': '#193549',
-                        'secondary': '#002240',
-                        'tertiary': '#25435A',
-                        'accent': '#ffab40',
-                        'accent-fg': '#002240',
-                        'fg-primary': '#FFFFFF',
-                        'fg-secondary': '#97B1C2',
-                        'success': '#3AD900',
-                        'danger': '#FF628C'
-                    }
-                }
-            }
-        }
     </script>
-    <style>
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #193549; }
-        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #718096; }
-        body { font-family: 'Segoe UI', sans-serif; }
-        .prose p { margin-bottom: 0.5em; }
-        .prose ul { list-style-type: disc; padding-left: 1.5em; }
-        .prose code { background: rgba(255,255,255,0.1); padding: 2px 4px; border-radius: 3px; font-family: monospace; }
-        
-        /* Security Badge Pulse */
-        @keyframes pulse-green {
-            0% { box-shadow: 0 0 0 0 rgba(58, 217, 0, 0.7); }
-            70% { box-shadow: 0 0 0 6px rgba(58, 217, 0, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(58, 217, 0, 0); }
-        }
-        .secure-indicator {
-            animation: pulse-green 2s infinite;
-        }
-        input[type="range"] {
-            accent-color: #ffab40;
-        }
-    </style>
 </head>
 <body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden">
+    <a href="https://prathameshnium.github.io/Kusanagi-AI" class="home-button">Home</a>
 
     <!-- SETTINGS MODAL -->
     <div id="settings-modal" class="hidden absolute inset-0 bg-black/90 z-50 flex items-center justify-center backdrop-blur-sm">
