@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kakashi - Deep Research Engine</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Marked for Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- DOMPurify for Security -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <!-- KaTeX for Math/Chemical Formulas -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Segoe UI', 'sans-serif'] },
+                    colors: {
+                        'primary': '#193549',    // Dark Blue Background
+                        'secondary': '#002240',  // Darker Components
+                        'tertiary': '#25435A',   // Borders/Inputs
+                        'accent': '#ffab40',     // Orange/Yellow
+                        'accent-hover': '#e69a38',
+                        'fg-primary': '#FFFFFF',
+                        'fg-secondary': '#97B1C2',
+                        'source-wiki': '#E2E8F0', 
+                        'source-ddg': '#DE5833',
+                        'source-paper': '#48BB78',
+                        'source-hn': '#F6AD55'
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #193549; }
+        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #718096; }
+        body { font-family: 'Segoe UI', sans-serif; }
+        
+        /* Markdown Styling */
+        .prose { color: #FFFFFF; font-size: 0.9rem; }
+        .prose p { margin-bottom: 0.8em; line-height: 1.6; color: #e2e8f0; }
+        .prose h1, .prose h2, .prose h3 { color: #ffab40; font-weight: bold; margin-top: 1.2em; margin-bottom: 0.5em; }
+        .prose ul { list-style-type: disc; padding-left: 1.2em; margin-bottom: 0.8em; color: #97B1C2; }
+        .prose code { background: rgba(0,0,0,0.3); padding: 1px 3px; rounded: 2px; font-family: monospace; color: #ffab40; font-size: 0.9em; }
+        .prose pre { background: #002240; padding: 12px; rounded: 6px; overflow-x: auto; margin-bottom: 1em; border: 1px solid #25435A; }
+        .prose a { color: #ffab40; text-decoration: underline; }
+        .prose strong { color: #ffab40; font-weight: bold; }
+        
+        /* KaTeX overrides */
+        .katex { font-size: 1.1em; color: #ffab40; }
+        
+        /* Custom Range Slider */
+        input[type=range] { -webkit-appearance: none; background: transparent; }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none; height: 14px; width: 14px; border-radius: 50%; background: #ffab40; margin-top: -5px; cursor: pointer;
+        }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: #25435A; border-radius: 2px; }
+
+        .result-card:hover { border-color: #ffab40; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+    </style>
+</head>
+<body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden flex flex-col">
+
+    <!-- SETTINGS MODAL -->
+    <div id="settings-modal" class="hidden absolute inset-0 bg-black/90 z-50 flex items-center justify-center backdrop-blur-sm transition-opacity duration-200">
+        <div class="bg-secondary p-6 rounded-xl shadow-2xl max-w-md w-full border border-tertiary transform transition-all scale-100">
+            <div class="flex justify-between items-start mb-6">
+                <h2 class="text-xl font-bold text-accent flex items-center gap-2">System Config</h2>
+                <button onclick="toggleSettings()" class="text-fg-secondary hover:text-fg-primary transition">✕</button>
+            </div>
+
+            <div class="mb-5">
+                <label class="block text-xs font-bold text-fg-secondary uppercase tracking-wide mb-2">AI Provider</label>
+                <select id="provider-select" class="w-full bg-primary text-fg-primary p-3 rounded-lg border border-tertiary focus:border-accent outline-none transition" onchange="updateKeyInput()">
+                    <option value="gemini">Google Gemini (Recommended)</option>
+                    <option value="groq">Groq (Fastest)</option>
+                    <option value="hf">Hugging Face</option>
+                </select>
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-xs font-bold text-fg-secondary uppercase tracking-wide mb-2">API Key</label>
+                <input type="password" id="api-key-input" autocomplete="off" class="w-full bg-primary text-fg-primary p-3 rounded-lg border border-tertiary focus:border-accent outline-none transition" placeholder="Enter secret key...">
+                <p class="text-[10px] text-fg-secondary mt-2">Keys are stored in <code>localStorage</code>. Direct API connection only.</p>
+            </div>
+
+            <div class="flex justify-between items-center pt-4 border-t border-tertiary">
+                <button onclick="purgeData()" class="text-danger text-xs hover:text-red-400 font-bold transition flex items-center gap-1">🔥 WIPE DATA</button>
+                <div class="flex gap-3">
+                    <button onclick="toggleSettings()" class="text-sm text-fg-secondary hover:text-fg-primary transition">Cancel</button>
+                    <button onclick="saveSettings()" class="px-5 py-2 bg-accent text-secondary rounded-lg font-bold hover:bg-accent-hover shadow-lg transition transform hover:scale-105">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HEADER -->
+    <header class="flex-shrink-0 h-14 border-b border-tertiary flex items-center justify-between px-4 bg-secondary/95 backdrop-blur z-20">
+        <div class="flex items-center gap-3 cursor-pointer" onclick="resetSearch()">
+            <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-secondary font-bold text-xl shadow-lg">K</div>
+            <h1 class="text-lg font-bold text-fg-primary tracking-tight hidden md:block">Kakashi <span class="text-fg-secondary font-normal text-xs ml-1">Deep Search</span></h1>
+        </div>
+        
+        <div class="flex-1 max-w-2xl mx-4 hidden" id="header-search-container">
+             <div class="relative group">
+                <input id="header-input" type="text" class="w-full bg-primary text-fg-primary border border-tertiary rounded-full py-1.5 pl-4 pr-12 focus:border-accent focus:outline-none shadow-inner transition-all text-sm" placeholder="New search..." onkeydown="if(event.key === 'Enter') triggerSearch('header-input')">
+                <button onclick="triggerSearch('header-input')" class="absolute right-1 top-0.5 bottom-0.5 bg-secondary hover:bg-tertiary text-accent rounded-full w-8 flex items-center justify-center transition">➤</button>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+             <button onclick="purgeData()" class="text-lg hover:scale-110 transition duration-200" title="Delete All Data">🔥</button>
+             <button onclick="toggleSettings()" class="text-sm bg-tertiary hover:bg-primary text-fg-primary px-3 py-1.5 rounded border border-accent/30 transition font-medium">⚙️</button>
+        </div>
+    </header>
+
+    <!-- MAIN LAYOUT -->
+    <main class="flex-1 flex overflow-hidden relative">
+        
+        <!-- LEFT: ORGANIC RESULTS (50%) -->
+        <section id="organic-column" class="w-full md:w-1/2 overflow-y-auto custom-scrollbar bg-primary border-r border-tertiary relative">
+            
+            <!-- HOME STATE -->
+            <div id="home-state" class="min-h-full flex flex-col items-center justify-center pb-32 px-4">
+                <h1 class="text-4xl md:text-5xl font-bold text-fg-primary mb-6 tracking-tight text-center">Deep Search</h1>
+                <div class="w-full max-w-xl relative mb-8">
+                    <div class="absolute -inset-1 bg-gradient-to-r from-accent to-blue-600 rounded-2xl opacity-20 blur"></div>
+                    <div class="relative flex items-center bg-secondary rounded-xl shadow-2xl border border-tertiary overflow-hidden">
+                        <input id="home-input" type="text" class="w-full bg-transparent text-lg text-fg-primary p-4 placeholder-fg-secondary/50 focus:outline-none" placeholder="Ask a complex question..." onkeydown="if(event.key === 'Enter') triggerSearch('home-input')" autofocus>
+                        <button onclick="triggerSearch('home-input')" class="p-4 bg-accent hover:bg-accent-hover text-secondary font-bold transition">GO</button>
+                    </div>
+                </div>
+                <div class="flex gap-4 text-xs text-fg-secondary">
+                    <span>⚡ Agentic Search</span>
+                    <span>🔒 Local Privacy</span>
+                    <span>🧠 Multi-Model</span>
+                </div>
+            </div>
+
+            <!-- RESULTS FEED -->
+            <div id="results-feed" class="hidden p-4 md:p-6 space-y-4">
+                <div class="border-b border-tertiary pb-4 mb-4">
+                    <h1 id="query-display" class="text-2xl font-bold text-fg-primary mb-2">...</h1>
+                    <div class="flex justify-between items-end">
+                        <h2 class="text-sm font-bold text-accent uppercase tracking-wider">Organic Intelligence</h2>
+                        <span id="result-stats" class="text-[10px] text-fg-secondary font-mono">Searching...</span>
+                    </div>
+                </div>
+                
+                <div id="search-strategy" class="hidden mb-4">
+                    <div class="bg-secondary/50 border border-tertiary rounded p-3">
+                        <p class="text-[10px] text-fg-secondary font-bold uppercase mb-2">Agentic Strategy</p>
+                        <div id="strategy-list" class="flex flex-wrap gap-2"></div>
+                    </div>
+                </div>
+
+                <div id="organic-container" class="space-y-3">
+                    <!-- Results injected here -->
+                </div>
+            </div>
+        </section>
+
+        <!-- RIGHT: AI SIDEBAR (50%) -->
+        <aside id="ai-sidebar" class="hidden md:flex w-1/2 bg-secondary flex-col z-10 shadow-2xl">
+            
+            <!-- AI Control Header -->
+            <div class="p-3 border-b border-tertiary bg-secondary/95 backdrop-blur flex flex-wrap items-center justify-between gap-2 sticky top-0 z-10">
+                <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 bg-accent rounded-full animate-pulse"></div>
+                    <span class="font-bold text-sm text-fg-primary">AI Analysis</span>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <!-- Model Select -->
+                    <select id="model-select" class="bg-primary text-xs text-fg-primary p-1.5 rounded border border-tertiary focus:outline-none max-w-[140px]">
+                        <!-- Models -->
+                    </select>
+                    
+                    <!-- Temp Slider -->
+                    <div class="flex items-center gap-1 bg-primary px-2 py-1 rounded border border-tertiary" title="Temperature (Creativity)">
+                        <span class="text-[10px] text-fg-secondary">Temp:</span>
+                        <input type="range" id="temp-slider" min="0" max="1" step="0.1" value="0.7" class="w-12">
+                        <span id="temp-display" class="text-[10px] text-accent font-mono w-4">0.7</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Telemetry Bar -->
+            <div class="bg-primary/30 px-3 py-1 border-b border-tertiary flex justify-between items-center text-[10px] font-mono text-fg-secondary">
+                <div class="flex gap-3">
+                     <span>RAM: <span id="perf-ram" class="text-fg-primary">--</span></span>
+                     <span class="text-tertiary">|</span>
+                     <span>Tokens: <span id="perf-tokens" class="text-fg-primary">0</span></span>
+                </div>
+                <div>
+                    <span>Speed: <span id="perf-speed" class="text-accent">--</span></span>
+                </div>
+            </div>
+
+            <div id="ai-content" class="flex-1 overflow-y-auto p-6 custom-scrollbar">
+                <div id="ai-placeholder" class="text-center mt-32 opacity-50">
+                    <div class="text-5xl mb-3">🧠</div>
+                    <p class="text-sm text-fg-secondary">Enter a query to start<br>Deep Analysis.</p>
+                </div>
+                
+                <div id="ai-loading" class="hidden space-y-4">
+                    <div class="flex items-center gap-2 text-accent text-xs font-mono mb-4 animate-pulse">
+                        <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        Synthesizing knowledge...
+                    </div>
+                    <div class="h-4 bg-tertiary rounded w-3/4 animate-pulse"></div>
+                    <div class="h-4 bg-tertiary rounded w-full animate-pulse"></div>
+                    <div class="h-4 bg-tertiary rounded w-5/6 animate-pulse"></div>
+                </div>
+                
+                <div id="ai-response" class="prose prose-invert hidden leading-relaxed"></div>
+            </div>
+        </aside>
+
+    </main>
+
+    <script>
+        // --- CONFIG ---
+        let config = {
+            provider: localStorage.getItem('kks_provider') || 'gemini',
+            apiKey: localStorage.getItem('kks_key') || ''
+        };
+        
+        let sessionTokens = 0;
+
+        const MODELS = {
+            gemini: [
+                {id: "gemini-2.5-flash", name: "Gemini 2.5 Flash"},
+                {id: "gemini-2.0-flash", name: "Gemini 2.0 Flash"},
+                {id: "gemini-1.5-pro", name: "Gemini 1.5 Pro"}
+            ],
+            groq: [
+                {id: "llama3-8b-8192", name: "Llama 3 8B"},
+                {id: "mixtral-8x7b-32768", name: "Mixtral 8x7B"},
+                {id: "gemma-7b-it", name: "Gemma 7B"}
+            ],
+            hf: [
+                {id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B"},
+                {id: "microsoft/Phi-3-mini-4k-instruct", name: "Phi-3 Mini"}
+            ]
+        };
+
+        // --- INIT ---
+        document.addEventListener('DOMContentLoaded', () => {
+            initUI();
+            setInterval(updateRAM, 2000);
+        });
+
+        function initUI() {
+            document.getElementById('provider-select').value = config.provider;
+            document.getElementById('api-key-input').value = config.apiKey;
+            populateModels();
+
+            const slider = document.getElementById('temp-slider');
+            const display = document.getElementById('temp-display');
+            slider.addEventListener('input', (e) => display.textContent = e.target.value);
+            
+            document.getElementById('home-input').focus();
+        }
+
+        // --- SEARCH LOGIC ---
+        async function triggerSearch(inputId) {
+            const input = document.getElementById(inputId);
+            const query = input.value.trim();
+            if (!query) return;
+
+            if (!config.apiKey) {
+                toggleSettings();
+                alert("Please enter an API Key to activate Kakashi.");
+                return;
+            }
+
+            // UI Transition
+            document.getElementById('home-state').classList.add('hidden');
+            document.getElementById('results-feed').classList.remove('hidden');
+            document.getElementById('header-search-container').classList.remove('hidden');
+            document.getElementById('header-input').value = query;
+            
+            // Set display text safely
+            const queryDisplay = document.getElementById('query-display');
+            if (queryDisplay) queryDisplay.textContent = query;
+            
+            const orgContainer = document.getElementById('organic-container');
+            orgContainer.innerHTML = `<div class="flex justify-center py-20"><div class="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin"></div></div>`;
+
+            // Reset AI Panel
+            document.getElementById('ai-placeholder').classList.add('hidden');
+            document.getElementById('ai-response').classList.add('hidden');
+            document.getElementById('ai-loading').classList.remove('hidden');
+            document.getElementById('strategy-list').innerHTML = '';
+            document.getElementById('search-strategy').classList.add('hidden');
+
+            // 1. Generate 5 Search Prompts (Agentic)
+            let prompts = [query]; // Default fallbacks
+            try {
+                const strategyPrompt = `User Query: "${query}". Generate exactly 5 diverse, high-value search queries to find comprehensive info (e.g. specific technical terms, news angles, debates). Return ONLY a JSON array of strings.`;
+                const strategyRes = await callAI(strategyPrompt, 0.5);
+                prompts = JSON.parse(strategyRes.replace(/```json|```/g, '').trim());
+                if (!Array.isArray(prompts)) prompts = [query];
+            } catch (e) { console.warn("Strategy generation failed, using raw query"); }
+
+            // Render Strategy
+            const stratContainer = document.getElementById('strategy-list');
+            document.getElementById('search-strategy').classList.remove('hidden');
+            stratContainer.innerHTML = prompts.map(p => `<span class="text-[10px] bg-primary border border-tertiary px-2 py-1 rounded text-fg-secondary truncate max-w-[150px]" title="${p}">🔍 ${p}</span>`).join('');
+
+            // 2. Execute Hydra Search (Parallel)
+            const startTime = performance.now();
+            const allResults = [];
+            
+            // Use all 5 prompts as requested
+            const activePrompts = prompts.slice(0, 5);
+            
+            const searchPromises = activePrompts.map(async (p) => {
+                 const [wiki, alex, ddg, hn] = await Promise.all([
+                     fetchWikipedia(p),
+                     fetchOpenAlex(p),
+                     fetchDuckDuckGo(p),
+                     fetchHackerNews(p)
+                 ]);
+                 return [...wiki, ...alex, ...ddg, ...hn];
+            });
+
+            const resultBatches = await Promise.all(searchPromises);
+            resultBatches.flat().forEach(r => allResults.push(r));
+
+            // Deduplicate by URL
+            const uniqueResults = [];
+            const urls = new Set();
+            allResults.forEach(r => {
+                if (!urls.has(r.url)) {
+                    urls.add(r.url);
+                    uniqueResults.push(r);
+                }
+            });
+
+            const duration = ((performance.now() - startTime) / 1000).toFixed(2);
+            document.getElementById('result-stats').textContent = `${uniqueResults.length} organic results (${duration}s)`;
+
+            renderOrganicResults(uniqueResults);
+
+            // 3. Generate AI Answer
+            const aiPrompt = `You are Kakashi. User Query: "${query}". 
+            Provide a deep, comprehensive analysis. 
+            IMPORTANT: Use LaTeX for any mathematical formulas or chemical equations (wrap them in single $ signs, e.g. $E=mc^2$, $H_2O$).
+            Use Markdown for other formatting.
+            
+            Structure:
+            1. Direct Answer/Summary.
+            2. Key Details/Mechanisms.
+            3. Context/History/Debate.`;
+            
+            const aiStartTime = performance.now();
+            try {
+                const aiRes = await callAI(aiPrompt, parseFloat(document.getElementById('temp-slider').value));
+                const aiDur = ((performance.now() - aiStartTime) / 1000);
+                const tokens = Math.ceil(aiRes.length / 4);
+                
+                updateMetrics(tokens, tokens/aiDur);
+                
+                document.getElementById('ai-loading').classList.add('hidden');
+                const responseContainer = document.getElementById('ai-response');
+                // Render Markdown -> Sanitize -> Inject -> Render Math
+                responseContainer.innerHTML = DOMPurify.sanitize(marked.parse(aiRes));
+                responseContainer.classList.remove('hidden');
+                
+                // Render Math
+                if (window.renderMathInElement) {
+                    renderMathInElement(responseContainer, {
+                        delimiters: [
+                            {left: "$$", right: "$$", display: true},
+                            {left: "$", right: "$", display: false}
+                        ],
+                        throwOnError: false
+                    });
+                }
+                
+            } catch (e) {
+                document.getElementById('ai-loading').classList.add('hidden');
+                document.getElementById('ai-response').innerHTML = `<span class="text-danger">AI Error: ${e.message}</span>`;
+                document.getElementById('ai-response').classList.remove('hidden');
+            }
+        }
+
+        function renderOrganicResults(results) {
+            const container = document.getElementById('organic-container');
+            container.innerHTML = "";
+
+            if(results.length === 0) {
+                container.innerHTML = `<div class="text-center text-fg-secondary py-10">No results found.</div>`;
+                return;
+            }
+
+            // Sort mechanism
+            const typeScore = { 'OpenAlex': 4, 'Wikipedia': 3, 'DuckDuckGo': 2, 'HackerNews': 1 };
+            results.sort((a, b) => typeScore[b.source] - typeScore[a.source]);
+
+            results.forEach(res => {
+                const card = document.createElement('div');
+                card.className = "result-card bg-secondary border border-tertiary rounded-lg p-4 hover:bg-primary transition group";
+                
+                let badgeClass = "bg-tertiary text-fg-secondary";
+                if(res.source === 'Wikipedia') badgeClass = "bg-gray-700 text-gray-200";
+                if(res.source === 'DuckDuckGo') badgeClass = "bg-orange-900/50 text-orange-200";
+                if(res.source === 'OpenAlex') badgeClass = "bg-green-900/50 text-green-200";
+                if(res.source === 'HackerNews') badgeClass = "bg-orange-600/20 text-orange-400";
+
+                card.innerHTML = `
+                    <div class="flex items-start justify-between mb-1.5">
+                        <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded ${badgeClass}">${res.source}</span>
+                        <span class="text-[10px] text-fg-secondary">${res.meta || ''}</span>
+                    </div>
+                    <a href="${res.url}" target="_blank" class="block group-hover:underline">
+                        <h3 class="text-base font-bold text-accent mb-1 leading-snug">${res.title}</h3>
+                    </a>
+                    <p class="text-sm text-fg-secondary line-clamp-3 leading-relaxed">${res.snippet}</p>
+                    <div class="mt-3 pt-2 border-t border-tertiary/50 flex gap-2">
+                        <a href="${res.url}" target="_blank" class="text-[10px] text-tertiary hover:text-fg-primary truncate max-w-[200px]">${res.url}</a>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // --- DATA SOURCES ---
+        async function fetchWikipedia(query) {
+            try {
+                const url = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&limit=3&namespace=0&format=json&origin=*`;
+                const resp = await fetch(url);
+                const data = await resp.json();
+                if(!data[1]) return [];
+                return data[1].map((title, i) => ({
+                    source: 'Wikipedia', title: title, snippet: data[2][i] || "No description.", url: data[3][i], meta: 'Wiki'
+                }));
+            } catch(e) { return []; }
+        }
+
+        async function fetchDuckDuckGo(query) {
+            try {
+                const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+                const resp = await fetch(url);
+                const data = await resp.json();
+                const results = [];
+                if(data.Abstract && data.AbstractURL) results.push({ source: 'DuckDuckGo', title: data.Heading, snippet: data.Abstract, url: data.AbstractURL, meta: 'Instant' });
+                if(data.RelatedTopics) data.RelatedTopics.slice(0, 2).forEach(t => { if(t.Text && t.FirstURL) results.push({ source: 'DuckDuckGo', title: t.Text.split('-')[0], snippet: t.Text, url: t.FirstURL, meta: 'Related' }); });
+                return results;
+            } catch(e) { return []; }
+        }
+
+        async function fetchOpenAlex(query) {
+            try {
+                const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per_page=3&sort=cited_by_count:desc&mailto=kakashi@example.com`;
+                const resp = await fetch(url);
+                const data = await resp.json();
+                return data.results.map(w => ({
+                    source: 'OpenAlex', title: w.title, snippet: (w.abstract_inverted_index ? "Abstract available. " : "") + `Cited by ${w.cited_by_count}.`, url: w.doi || w.id, meta: w.publication_year
+                }));
+            } catch(e) { return []; }
+        }
+
+        async function fetchHackerNews(query) {
+            try {
+                const url = `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(query)}&tags=story&hitsPerPage=2`;
+                const resp = await fetch(url);
+                const data = await resp.json();
+                return data.hits.map(h => ({
+                    source: 'HackerNews', title: h.title, snippet: `Points: ${h.points} | Comments: ${h.num_comments}`, url: h.url || `https://news.ycombinator.com/item?id=${h.objectID}`, meta: new Date(h.created_at).getFullYear()
+                }));
+            } catch(e) { return []; }
+        }
+
+        // --- SETTINGS & METRICS ---
+        function updateMetrics(tokens, speed) {
+            sessionTokens += tokens;
+            document.getElementById('perf-tokens').textContent = sessionTokens.toLocaleString();
+            if(speed) document.getElementById('perf-speed').textContent = speed.toFixed(1) + " t/s";
+        }
+        
+        function updateRAM() {
+            const ramEl = document.getElementById('perf-ram');
+            if (performance.memory) {
+                ramEl.textContent = `${Math.round(performance.memory.usedJSHeapSize / 1024 / 1024)} MB`;
+            }
+        }
+
+        function populateModels() {
+            const provider = document.getElementById('provider-select').value;
+            const select = document.getElementById('model-select');
+            select.innerHTML = "";
+            (MODELS[provider] || []).forEach(m => {
+                let opt = document.createElement('option');
+                opt.value = m.id; opt.textContent = m.name;
+                select.appendChild(opt);
+            });
+        }
+
+        function toggleSettings() { document.getElementById('settings-modal').classList.toggle('hidden'); }
+        function updateKeyInput() { populateModels(); }
+        
+        function saveSettings() {
+            config.provider = document.getElementById('provider-select').value;
+            config.apiKey = document.getElementById('api-key-input').value.trim();
+            localStorage.setItem('kks_provider', config.provider);
+            localStorage.setItem('kks_key', config.apiKey);
+            toggleSettings();
+        }
+
+        function resetSearch() {
+            document.getElementById('results-feed').classList.add('hidden');
+            document.getElementById('header-search-container').classList.add('hidden');
+            document.getElementById('home-state').classList.remove('hidden');
+            document.getElementById('home-input').value = "";
+            document.getElementById('home-input').focus();
+        }
+
+        function purgeData() { if(confirm("Wipe all data?")) { localStorage.clear(); location.reload(); } }
+
+        // --- API CALLER ---
+        async function callAI(prompt, temp) {
+            const model = document.getElementById('model-select').value;
+            const headers = { 'Content-Type': 'application/json' };
+            let url, body;
+            
+            if (config.provider === 'gemini') {
+                url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
+                body = JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: temp } });
+            } else if (config.provider === 'groq') {
+                url = 'https://api.groq.com/openai/v1/chat/completions';
+                headers['Authorization'] = `Bearer ${config.apiKey}`;
+                body = JSON.stringify({ model: model, messages: [{role: 'user', content: prompt}], temperature: temp });
+            } else {
+                url = `https://api-inference.huggingface.co/models/${model}`;
+                headers['Authorization'] = `Bearer ${config.apiKey}`;
+                body = JSON.stringify({ inputs: prompt, parameters: { temperature: temp, return_full_text: false } });
+            }
+
+            const resp = await fetch(url, { method: 'POST', headers, body });
+            if(!resp.ok) throw new Error(resp.statusText);
+            const data = await resp.json();
+            
+            if(config.provider === 'gemini') return data.candidates[0].content.parts[0].text;
+            if(config.provider === 'groq') return data.choices[0].message.content;
+            if(config.provider === 'hf') return Array.isArray(data) ? data[0].generated_text : data.generated_text;
+        }
+    </script>
+</body>
+</html>
