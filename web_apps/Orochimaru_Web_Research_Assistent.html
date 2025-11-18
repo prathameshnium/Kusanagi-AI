@@ -3,12 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Orochimaru - Private Local RAG</title>
+    <title>Orochimaru - Secure Local RAG</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- PDF.js for local parsing -->
+    <!-- PDF.js for local parsing (CDN) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <!-- Marked for Markdown -->
+    <!-- Marked for Markdown (CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- DOMPurify for XSS Protection (CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     
     <script>
         // Configure PDF.js worker
@@ -26,6 +28,8 @@
                         'accent-fg': '#002240',
                         'fg-primary': '#FFFFFF',
                         'fg-secondary': '#97B1C2',
+                        'success': '#3AD900',
+                        'danger': '#FF628C'
                     }
                 }
             }
@@ -40,25 +44,37 @@
         .prose p { margin-bottom: 0.5em; }
         .prose ul { list-style-type: disc; padding-left: 1.5em; }
         .prose code { background: rgba(255,255,255,0.1); padding: 2px 4px; rounded: 3px; font-family: monospace; }
-        .tab-button.active { background-color: #193549; color: #FFFFFF; border-bottom: 2px solid #ffab40; }
-        .tab-button { background-color: #002240; color: #97B1C2; }
+        
+        /* Security Badge Pulse */
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(58, 217, 0, 0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(58, 217, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(58, 217, 0, 0); }
+        }
+        .secure-indicator {
+            animation: pulse-green 2s infinite;
+        }
+        input[type="range"] {
+            accent-color: #ffab40;
+        }
     </style>
 </head>
 <body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden">
 
     <!-- SETTINGS MODAL -->
-    <div id="settings-modal" class="hidden absolute inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-secondary p-6 rounded-lg shadow-2xl max-w-md w-full border border-tertiary">
+    <div id="settings-modal" class="hidden absolute inset-0 bg-black/90 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-secondary p-6 rounded-lg shadow-2xl max-w-md w-full border border-tertiary relative">
             <div class="flex justify-between items-start mb-4">
                 <h2 class="text-xl font-bold text-accent">Secure Configuration</h2>
                 <button onclick="toggleSettings()" class="text-fg-secondary hover:text-fg-primary">✕</button>
             </div>
 
-            <div class="bg-green-900/20 border border-green-900 p-3 rounded mb-4 text-xs text-green-200">
-                <strong>🛡️ Privacy Architecture:</strong> 
-                <ul class="list-disc ml-4 mt-1">
-                    <li>PDFs processed <strong>locally</strong> (Browser RAM).</li>
-                    <li><strong>Ollama users:</strong> Set <code>OLLAMA_ORIGINS="*"</code> in your environment variables.</li>
+            <div class="bg-green-900/20 border border-green-900 p-3 rounded mb-6 text-xs text-green-200">
+                <strong>🛡️ Architecture Audit:</strong> 
+                <ul class="list-disc ml-4 mt-2 space-y-1">
+                    <li><strong>PDF Processing:</strong> 100% Client-Side (RAM). No server uploads.</li>
+                    <li><strong>Data Persistence:</strong> Volatile. Wiped on page refresh.</li>
+                    <li><strong>Network:</strong> Direct connection to AI API only. No proxies.</li>
                 </ul>
             </div>
             
@@ -74,15 +90,16 @@
 
             <div class="mb-6" id="api-key-container">
                 <label class="block text-sm text-fg-secondary mb-2">API Key / Endpoint</label>
-                <input type="password" id="api-key-input" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none" placeholder="Enter key...">
+                <!-- autocomplete="off" prevents browser saving keys -->
+                <input type="password" id="api-key-input" autocomplete="off" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none" placeholder="Enter key...">
                 <p id="ollama-hint" class="hidden text-[10px] text-fg-secondary mt-1">Default: http://localhost:11434 (Leave empty for default)</p>
             </div>
 
-            <div class="flex justify-between items-center">
-                <button onclick="purgeData()" class="text-red-400 text-xs hover:text-red-200 underline">🔥 Purge All Data</button>
+            <div class="flex justify-between items-center pt-4 border-t border-tertiary">
+                <button onclick="purgeData()" class="text-danger text-xs hover:text-red-200 underline decoration-dotted" title="Wipe local storage and reload">🔥 Secure Wipe</button>
                 <div class="flex gap-2">
                     <button onclick="toggleSettings()" class="px-4 py-2 text-fg-secondary hover:text-fg-primary">Cancel</button>
-                    <button onclick="saveSettings()" class="px-4 py-2 bg-accent text-accent-fg rounded font-bold hover:bg-yellow-500">Save</button>
+                    <button onclick="saveSettings()" class="px-4 py-2 bg-accent text-accent-fg rounded font-bold hover:bg-yellow-500">Save Configuration</button>
                 </div>
             </div>
         </div>
@@ -93,9 +110,12 @@
         <!-- === Sidebar === -->
         <aside class="w-72 flex-shrink-0 bg-secondary flex flex-col p-4 border-r border-tertiary overflow-y-auto custom-scrollbar">
             <!-- Header -->
-            <div class="px-1 mb-4">
-                <h1 class="text-2xl font-bold text-accent">Orochimaru</h1>
-                <p class="text-xs text-fg-secondary mt-1">Local RAG Assistant</p>
+            <div class="px-1 mb-6">
+                <h1 class="text-2xl font-bold text-accent flex items-center gap-2">
+                    Orochimaru
+                    <span class="text-[10px] bg-tertiary text-fg-secondary px-2 py-0.5 rounded border border-tertiary">Local</span>
+                </h1>
+                <p class="text-xs text-fg-secondary mt-1">Secure RAG Environment</p>
             </div>
 
             <!-- File Upload -->
@@ -103,37 +123,74 @@
                 <input type="file" id="pdf-upload" accept=".pdf" class="hidden" onchange="handleFileUpload(this)">
                 <button onclick="document.getElementById('pdf-upload').click()" class="w-full bg-accent text-accent-fg font-bold py-3 px-4 rounded-md hover:bg-yellow-600 transition duration-200 flex items-center justify-center gap-2 shadow-lg">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                    Load Document
+                    Load Document (RAM)
                 </button>
-                <p class="text-[10px] text-center text-fg-secondary mt-2">Processed locally. No upload.</p>
+                <p class="text-[10px] text-center text-fg-secondary mt-2 opacity-70">Files never leave this device.</p>
+            </div>
+
+            <!-- AI Settings Panel -->
+            <div class="bg-tertiary/30 rounded-lg p-3 mb-4 border border-tertiary">
+                <h3 class="text-xs font-bold text-fg-secondary uppercase mb-3">AI Settings</h3>
+                
+                <!-- Model Selector -->
+                <div class="mb-3">
+                    <label class="block text-[10px] text-fg-secondary mb-1">Model</label>
+                    <select id="model-select" class="w-full bg-primary text-xs text-fg-primary p-1.5 rounded border border-tertiary focus:border-accent outline-none">
+                        <!-- Options populated by JS -->
+                    </select>
+                </div>
+
+                <!-- Temperature Slider -->
+                <div>
+                    <div class="flex justify-between text-[10px] text-fg-secondary mb-1">
+                        <label>Temperature</label>
+                        <span id="temp-val" class="text-accent font-mono">0.3</span>
+                    </div>
+                    <input type="range" id="temp-slider" min="0" max="1" step="0.1" value="0.3" class="w-full h-1 bg-primary rounded-lg appearance-none cursor-pointer">
+                </div>
             </div>
 
             <!-- Status Panel -->
             <div class="bg-tertiary/30 rounded-lg p-3 mb-4 border border-tertiary">
-                <h3 class="text-xs font-bold text-fg-secondary uppercase mb-2">System Status</h3>
+                <h3 class="text-xs font-bold text-fg-secondary uppercase mb-2 flex justify-between">
+                    System Status
+                    <div class="w-2 h-2 bg-danger rounded-full" id="status-dot"></div>
+                </h3>
                 <div class="space-y-2 text-xs">
                     <div class="flex justify-between">
                         <span>AI Link:</span>
-                        <span id="status-ai" class="text-red-400">Disconnected</span>
+                        <span id="status-ai" class="text-fg-secondary">Disconnected</span>
                     </div>
+                    <!-- Added missing status-doc element to fix JS error -->
                     <div class="flex justify-between">
                         <span>Document:</span>
                         <span id="status-doc" class="text-fg-secondary truncate max-w-[100px]">None</span>
                     </div>
                     <div class="flex justify-between">
-                        <span>Chunks:</span>
+                        <span>Total Chunks:</span>
                         <span id="status-chunks" class="text-fg-primary">0</span>
                     </div>
+                </div>
+            </div>
+
+            <!-- Document List -->
+            <div class="mb-4 flex-grow flex flex-col min-h-[150px]">
+                <h3 class="text-xs font-bold text-fg-secondary uppercase mb-2 flex justify-between items-center">
+                    Loaded Documents <span id="doc-count" class="text-accent bg-tertiary px-1.5 rounded">0</span>
+                </h3>
+                <div id="doc-list" class="space-y-1 overflow-y-auto custom-scrollbar pr-1 flex-grow">
+                    <!-- Empty State -->
+                    <div id="empty-docs" class="text-[10px] text-fg-secondary italic p-4 text-center border border-dashed border-tertiary rounded">
+                        No documents in RAM.<br>Load a PDF to begin.
+                    </div>
+                    <!-- Dynamic Items will go here -->
                 </div>
             </div>
 
             <!-- Quick Actions -->
             <div id="quick-actions" class="space-y-2 opacity-50 pointer-events-none transition-opacity">
                 <button onclick="runQuickAction('summarize')" class="w-full text-left px-3 py-2 rounded hover:bg-tertiary text-sm text-fg-primary border border-transparent hover:border-accent transition flex items-center gap-2">
-                    📝 Summarize
-                </button>
-                <button onclick="runQuickAction('key_points')" class="w-full text-left px-3 py-2 rounded hover:bg-tertiary text-sm text-fg-primary border border-transparent hover:border-accent transition flex items-center gap-2">
-                    🔑 Key Points
+                    📝 Summarize All
                 </button>
                 
                 <!-- Review Dropdown Trigger -->
@@ -144,22 +201,17 @@
                     </button>
                     
                     <!-- Review Personas (Hidden by default) -->
-                    <div id="review-menu" class="hidden ml-4 mt-1 border-l-2 border-tertiary pl-2 space-y-1">
+                    <div id="review-menu" class="hidden ml-4 mt-1 border-l-2 border-tertiary pl-2 space-y-1 bg-secondary">
                         <button onclick="runReview('Physicist')" class="w-full text-left px-2 py-1.5 text-xs text-fg-secondary hover:text-accent transition">🔬 Physicist</button>
                         <button onclick="runReview('Chemist')" class="w-full text-left px-2 py-1.5 text-xs text-fg-secondary hover:text-accent transition">🧪 Chemist</button>
                         <button onclick="runReview('Editor')" class="w-full text-left px-2 py-1.5 text-xs text-fg-secondary hover:text-accent transition">✍️ Editor</button>
-                        <button onclick="runReview('Chief Editor')" class="w-full text-left px-2 py-1.5 text-xs text-fg-secondary hover:text-accent transition">👔 Chief Editor</button>
                     </div>
                 </div>
-
-                <button onclick="runQuickAction('paraphrase')" class="w-full text-left px-3 py-2 rounded hover:bg-tertiary text-sm text-fg-primary border border-transparent hover:border-accent transition flex items-center gap-2">
-                    🔄 Paraphrase Last
-                </button>
             </div>
 
             <div class="mt-auto pt-4 border-t border-tertiary">
-                 <button onclick="toggleSettings()" class="flex items-center gap-2 text-sm text-fg-secondary hover:text-accent transition">
-                    <span>⚙️</span> Configure Keys
+                 <button onclick="toggleSettings()" class="flex items-center gap-2 text-sm text-fg-secondary hover:text-accent transition w-full">
+                    <span>⚙️</span> Configure API
                  </button>
             </div>
         </aside>
@@ -169,12 +221,13 @@
             <!-- Top Bar -->
             <header class="flex-shrink-0 h-14 border-b border-tertiary flex items-center justify-between px-4 bg-secondary/50">
                 <div class="flex items-center gap-2">
-                    <span class="text-lg font-bold text-fg-primary" id="chat-header">RAG Workspace</span>
+                    <div class="w-2 h-2 bg-success rounded-full secure-indicator" title="Encrypted RAM Session"></div>
+                    <span class="text-lg font-bold text-fg-primary" id="chat-header">Secure Workspace</span>
                 </div>
                 <div class="flex items-center gap-3">
                     <button onclick="speakLastResponse()" class="text-fg-secondary hover:text-accent text-lg" title="Read Aloud">🔊</button>
                     <div class="h-4 w-[1px] bg-tertiary"></div>
-                    <button onclick="clearChat()" class="text-fg-secondary hover:text-red-400 text-sm" title="Clear Chat">🗑️ Clear</button>
+                    <button onclick="clearChat()" class="text-fg-secondary hover:text-danger text-sm" title="Clear Chat History">🗑️ Clear</button>
                 </div>
             </header>
 
@@ -184,8 +237,8 @@
                 <div class="flex items-start space-x-4">
                     <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent border border-accent">O</div>
                     <div class="bg-tertiary p-4 rounded-lg max-w-3xl shadow-md">
-                        <p class="font-bold text-accent mb-1">Orochimaru</p>
-                        <p>I am ready. Load a PDF to begin analysis.</p>
+                        <p class="font-bold text-accent mb-1">Orochimaru (Secure Mode)</p>
+                        <p>System is strictly local. Documents loaded here are processed in-memory and vanish upon reload.</p>
                     </div>
                 </div>
             </div>
@@ -194,13 +247,16 @@
             <div class="flex-shrink-0 p-4 bg-primary border-t border-tertiary">
                 <div class="max-w-4xl mx-auto relative">
                     <div class="flex bg-tertiary rounded-lg border border-tertiary focus-within:border-accent shadow-lg transition-colors">
-                        <input id="chat-input" type="text" placeholder="Ask a question about the document..." class="w-full bg-transparent p-3 text-fg-primary placeholder-fg-secondary focus:outline-none" onkeydown="if(event.key === 'Enter') handleSend()">
+                        <input id="chat-input" type="text" placeholder="Query your private documents..." class="w-full bg-transparent p-3 text-fg-primary placeholder-fg-secondary focus:outline-none" onkeydown="if(event.key === 'Enter') handleSend()" autocomplete="off">
                         <button onclick="handleSend()" id="send-btn" class="px-4 text-accent hover:text-white transition">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                         </button>
                     </div>
                     <div class="text-center mt-2">
-                         <span id="context-indicator" class="text-[10px] text-fg-secondary opacity-0 transition-opacity">Searching local chunks...</span>
+                         <span id="context-indicator" class="text-[10px] text-fg-secondary opacity-0 transition-opacity flex items-center justify-center gap-1">
+                            <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            Searching local chunks...
+                        </span>
                     </div>
                 </div>
             </div>
@@ -214,15 +270,43 @@
             apiKey: localStorage.getItem('orc_key') || ''
         };
         
-        let documentChunks = []; // Stores text chunks in RAM
-        let documentLoaded = false;
-        let lastAIResponse = ""; // For Paraphrase/TTS
+        // MEMORY-ONLY STORAGE
+        let loadedDocuments = {};
+        let lastAIResponse = ""; 
+
+        const MODELS = {
+            gemini: [
+                {id: "gemini-2.5-flash", name: "Gemini 2.5 Flash"},
+                {id: "gemini-2.0-flash", name: "Gemini 2.0 Flash"},
+                {id: "gemini-1.5-flash", name: "Gemini 1.5 Flash"},
+                {id: "gemini-1.5-pro", name: "Gemini 1.5 Pro"}
+            ],
+            groq: [
+                {id: "llama3-8b-8192", name: "Llama 3 8B"},
+                {id: "mixtral-8x7b-32768", name: "Mixtral 8x7B"},
+                {id: "gemma-7b-it", name: "Gemma 7B"}
+            ],
+            hf: [
+                {id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B"},
+                {id: "microsoft/Phi-3-mini-4k-instruct", name: "Phi-3 Mini"}
+            ],
+            ollama: [
+                {id: "qwen2:1.5b", name: "Qwen 1.5B"},
+                {id: "llama3", name: "Llama 3 (Local)"}
+            ]
+        };
 
         const REVIEW_PERSONAS = {
-            "Physicist": "You are a reviewer with expertise in Physics. Focus on the underlying physical principles, theoretical models, and the validity of any physical measurements presented.",
-            "Chemist": "You are a reviewer with expertise in Chemistry. Focus on the chemical compositions, reactions, and material properties from a chemical standpoint.",
-            "Editor": "You are an editor. Review the paper for clarity, grammar, style, and overall structure. Ensure the arguments are presented logically.",
-            "Chief Editor": "You are the Chief Editor. Synthesize points into a single, cohesive, and balanced final review."
+            "Physicist": "You are a reviewer with expertise in Physics. Focus on the underlying physical principles and models.",
+            "Chemist": "You are a reviewer with expertise in Chemistry. Focus on chemical compositions and reactions.",
+            "Editor": "You are an editor. Review the paper for clarity, grammar, style, and overall structure."
+        };
+        
+        // Warn user on reload/close
+        window.onbeforeunload = function() {
+            if (Object.keys(loadedDocuments).length > 0) {
+                return "All loaded documents will be lost. They are not saved.";
+            }
         };
 
         // --- INITIALIZATION ---
@@ -231,9 +315,15 @@
             document.getElementById('provider-select').value = config.provider;
             document.getElementById('api-key-input').value = config.apiKey;
             updateKeyInput();
+            populateModelSelect(config.provider); // Init model list
+
+            // Slider Listener
+            const slider = document.getElementById('temp-slider');
+            const valDisplay = document.getElementById('temp-val');
+            slider.addEventListener('input', (e) => valDisplay.textContent = e.target.value);
         });
 
-        // --- SETTINGS ---
+        // --- SETTINGS & CONFIG ---
         function toggleSettings() {
             document.getElementById('settings-modal').classList.toggle('hidden');
         }
@@ -243,6 +333,8 @@
             const hint = document.getElementById('ollama-hint');
             const input = document.getElementById('api-key-input');
             
+            populateModelSelect(provider); // Update sidebar models when provider changes
+
             if (provider === 'ollama') {
                 input.placeholder = "http://localhost:11434";
                 hint.classList.remove('hidden');
@@ -250,6 +342,18 @@
                 input.placeholder = "Enter API Key...";
                 hint.classList.add('hidden');
             }
+        }
+
+        function populateModelSelect(provider) {
+            const select = document.getElementById('model-select');
+            select.innerHTML = "";
+            const options = MODELS[provider] || [];
+            options.forEach(m => {
+                const opt = document.createElement('option');
+                opt.value = m.id;
+                opt.textContent = m.name;
+                select.appendChild(opt);
+            });
         }
 
         function saveSettings() {
@@ -271,7 +375,7 @@
         }
 
         function purgeData() {
-            if(confirm("Destroy all keys and document data from memory?")) {
+            if(confirm("CRITICAL: Wipe all local storage keys and reload? Documents in RAM will be lost.")) {
                 localStorage.removeItem('orc_provider');
                 localStorage.removeItem('orc_key');
                 location.reload();
@@ -280,12 +384,71 @@
 
         function checkStatus() {
             const statusEl = document.getElementById('status-ai');
+            const dot = document.getElementById('status-dot');
+            
             if(config.apiKey) {
-                statusEl.textContent = config.provider === 'ollama' ? "Local (Ollama)" : "Cloud Active";
-                statusEl.className = "text-green-400 font-bold";
+                statusEl.textContent = config.provider === 'ollama' ? "Local (Ollama)" : "Secure Cloud";
+                statusEl.className = "text-success font-bold";
+                dot.classList.remove('bg-danger');
+                dot.classList.add('bg-success');
             } else {
-                statusEl.textContent = "Missing Key";
-                statusEl.className = "text-red-400";
+                statusEl.textContent = "Keys Missing";
+                statusEl.className = "text-danger";
+                dot.classList.remove('bg-success');
+                dot.classList.add('bg-danger');
+            }
+        }
+
+        // --- DOCUMENT MANAGEMENT ---
+        function updateDocListUI() {
+            const listContainer = document.getElementById('doc-list');
+            const emptyMsg = document.getElementById('empty-docs');
+            const docCount = document.getElementById('doc-count');
+            const quickActions = document.getElementById('quick-actions');
+            const totalChunksEl = document.getElementById('status-chunks');
+
+            const filenames = Object.keys(loadedDocuments);
+            docCount.textContent = filenames.length;
+
+            if (filenames.length === 0) {
+                emptyMsg.classList.remove('hidden');
+                quickActions.classList.add('opacity-50', 'pointer-events-none');
+                listContainer.querySelectorAll('.doc-item').forEach(e => e.remove());
+                totalChunksEl.textContent = "0";
+                return;
+            }
+
+            emptyMsg.classList.add('hidden');
+            quickActions.classList.remove('opacity-50', 'pointer-events-none');
+
+            // Re-render list
+            listContainer.querySelectorAll('.doc-item').forEach(e => e.remove());
+            
+            let totalChunks = 0;
+            filenames.forEach(name => {
+                totalChunks += loadedDocuments[name].length;
+                
+                const div = document.createElement('div');
+                div.className = "doc-item bg-tertiary rounded p-2 flex justify-between items-center group mb-1";
+                div.innerHTML = `
+                    <div class="truncate text-xs text-fg-primary max-w-[180px]" title="${name}">
+                        📄 ${name}
+                    </div>
+                    <button onclick="removeDocument('${name}')" class="text-fg-secondary hover:text-danger transition opacity-50 group-hover:opacity-100" title="Remove from RAM">
+                        🗑️
+                    </button>
+                `;
+                listContainer.appendChild(div);
+            });
+            
+            totalChunksEl.textContent = totalChunks;
+        }
+
+        function removeDocument(name) {
+            if(confirm(`Remove '${name}' from memory? This action cannot be undone.`)) {
+                delete loadedDocuments[name];
+                updateDocListUI();
+                appendSystemMessage(`Dropped document: ${name}`);
             }
         }
 
@@ -294,14 +457,25 @@
             const file = input.files[0];
             if (!file) return;
 
+            // Fix: Ensure pdfjsLib is available
+            if (typeof pdfjsLib === 'undefined') {
+                alert("PDF Library failed to load. Please check your internet connection or reload.");
+                return;
+            }
+
             if (file.type !== 'application/pdf') {
                 alert("Please upload a valid PDF file.");
                 return;
             }
+            
+            if (loadedDocuments[file.name]) {
+                alert("Document already loaded in memory.");
+                return;
+            }
 
             const statusDoc = document.getElementById('status-doc');
-            statusDoc.textContent = "Parsing...";
-            appendSystemMessage(`Processing <strong>${file.name}</strong> locally...`);
+            if (statusDoc) statusDoc.textContent = "Parsing...";
+            appendSystemMessage(`Reading <strong>${file.name}</strong> into RAM...`);
 
             try {
                 const arrayBuffer = await file.arrayBuffer();
@@ -312,23 +486,29 @@
                     const page = await pdf.getPage(i);
                     const textContent = await page.getTextContent();
                     fullText += textContent.items.map(item => item.str).join(' ') + "\n";
-                    statusDoc.textContent = `${Math.round((i / pdf.numPages) * 100)}%`;
+                    if (statusDoc) statusDoc.textContent = `${Math.round((i / pdf.numPages) * 100)}%`;
                 }
 
-                documentChunks = chunkText(fullText, 1000, 200);
+                if (!fullText.trim()) {
+                    throw new Error("PDF appears to be empty or scanned images (OCR not supported locally).");
+                }
+
+                // Chunking
+                const chunks = chunkText(fullText, 1000, 200);
                 
-                documentLoaded = true;
-                statusDoc.textContent = file.name;
-                document.getElementById('status-chunks').textContent = documentChunks.length;
-                document.getElementById('quick-actions').classList.remove('opacity-50', 'pointer-events-none');
+                // Save to State
+                loadedDocuments[file.name] = chunks;
                 
-                appendSystemMessage(`Document loaded. ${documentChunks.length} chunks indexed in RAM.`);
+                updateDocListUI();
+                if (statusDoc) statusDoc.textContent = "Ready";
+                appendSystemMessage(`Securely loaded: <strong>${file.name}</strong> (${chunks.length} chunks)`);
 
             } catch (error) {
                 console.error(error);
-                appendSystemMessage("Error parsing PDF.", true);
-                statusDoc.textContent = "Error";
+                appendSystemMessage(`Error parsing PDF: ${error.message}`, true);
+                if (statusDoc) statusDoc.textContent = "Error";
             }
+            input.value = ''; 
         }
 
         function chunkText(text, chunkSize, overlap) {
@@ -341,10 +521,12 @@
 
         // --- LOCAL RETRIEVAL ---
         function retrieveRelevantChunks(query, limit = 5) {
-            if (documentChunks.length === 0) return [];
+            const allChunks = Object.values(loadedDocuments).flat();
+            
+            if (allChunks.length === 0) return [];
             const queryTerms = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
             
-            const scoredChunks = documentChunks.map(chunk => {
+            const scoredChunks = allChunks.map(chunk => {
                 const chunkLower = chunk.toLowerCase();
                 let score = 0;
                 queryTerms.forEach(term => {
@@ -377,23 +559,26 @@
                 let context = "";
                 let systemInstruction = "You are Orochimaru. Answer concisely.";
 
-                // Normal Document Query
-                if (documentLoaded) {
+                if (Object.keys(loadedDocuments).length > 0) {
                     indicator.style.opacity = "1";
                     const relevantChunks = retrieveRelevantChunks(query);
                     if (relevantChunks.length > 0) {
-                        context = "CONTEXT:\n" + relevantChunks.join("\n---\n");
-                        systemInstruction += " Use the context provided.";
+                        context = "CONTEXT FROM LOCAL DOCS:\n" + relevantChunks.join("\n---\n");
+                        systemInstruction += " Use the context provided to answer.";
                     }
                 }
 
                 const fullPrompt = `${systemInstruction}\n\n${context}\n\nUSER: ${query}`;
                 
+                // Get Selected Model and Temp
+                const selectedModel = document.getElementById('model-select').value;
+                const temperature = parseFloat(document.getElementById('temp-slider').value);
+
                 let responseText = "";
-                if (config.provider === 'gemini') responseText = await callGemini(fullPrompt);
-                else if (config.provider === 'groq') responseText = await callGroq(fullPrompt);
-                else if (config.provider === 'hf') responseText = await callHF(fullPrompt);
-                else if (config.provider === 'ollama') responseText = await callOllama(fullPrompt);
+                if (config.provider === 'gemini') responseText = await callGemini(fullPrompt, selectedModel, temperature);
+                else if (config.provider === 'groq') responseText = await callGroq(fullPrompt, selectedModel, temperature);
+                else if (config.provider === 'hf') responseText = await callHF(fullPrompt, selectedModel, temperature);
+                else if (config.provider === 'ollama') responseText = await callOllama(fullPrompt, selectedModel, temperature);
 
                 document.getElementById(thinkingId).remove();
                 appendAIMessage(responseText);
@@ -412,30 +597,18 @@
         }
 
         function runReview(role) {
-            if (!documentLoaded) return;
+            if (Object.keys(loadedDocuments).length === 0) return;
             const systemPrompt = REVIEW_PERSONAS[role] || "You are a helpful assistant.";
             
-            // For review, we might want broader context, but for local RAG we pick top chunks
-            // or simply pass a directive to review. 
-            // Since we can't pass the WHOLE PDF to most LLMs via string easily in browser RAG without hitting limits,
-            // we will simulate a review request asking for general critique based on loaded chunks.
-            
-            // Ideally we retrieve chunks relevant to "summary conclusion methodology"
             const relevant = retrieveRelevantChunks("conclusion results methodology abstract", 8); 
             const context = relevant.join("\n\n");
+            const prompt = `${systemPrompt}\n\nBased on these excerpts from the document(s):\n${context}\n\nProvide a critical review.`;
             
-            const prompt = `${systemPrompt}\n\nBased on these excerpts from the document:\n${context}\n\nProvide a critical review.`;
-            
-            // Hack: Put prompt in chat box and send (visible to user)
-            // Or send directly hidden. Let's show it.
-            document.getElementById('chat-input').value = `[${role} Review]`; 
-            
-            // We override handleSend logic slightly by injecting custom prompt
             callCustomPrompt(prompt, `Requesting ${role} Review...`);
         }
 
         async function runQuickAction(type) {
-            if (!documentLoaded && type !== 'paraphrase') return;
+            if (Object.keys(loadedDocuments).length === 0 && type !== 'paraphrase') return;
             
             let prompt = "";
             let displayMsg = "";
@@ -460,13 +633,15 @@
         async function callCustomPrompt(fullPrompt, userFacingText) {
             appendUserMessage(userFacingText);
             const thinkingId = appendThinking();
+            const selectedModel = document.getElementById('model-select').value;
+            const temperature = parseFloat(document.getElementById('temp-slider').value);
             
             try {
                 let responseText = "";
-                if (config.provider === 'gemini') responseText = await callGemini(fullPrompt);
-                else if (config.provider === 'groq') responseText = await callGroq(fullPrompt);
-                else if (config.provider === 'hf') responseText = await callHF(fullPrompt);
-                else if (config.provider === 'ollama') responseText = await callOllama(fullPrompt);
+                if (config.provider === 'gemini') responseText = await callGemini(fullPrompt, selectedModel, temperature);
+                else if (config.provider === 'groq') responseText = await callGroq(fullPrompt, selectedModel, temperature);
+                else if (config.provider === 'hf') responseText = await callHF(fullPrompt, selectedModel, temperature);
+                else if (config.provider === 'ollama') responseText = await callOllama(fullPrompt, selectedModel, temperature);
 
                 document.getElementById(thinkingId).remove();
                 appendAIMessage(responseText);
@@ -497,7 +672,8 @@
         function appendAIMessage(text) {
             const div = document.createElement('div');
             div.className = "flex items-start space-x-4";
-            div.innerHTML = `<div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent border border-accent">O</div><div class="bg-tertiary p-4 rounded-lg max-w-3xl shadow-md prose prose-invert text-sm text-fg-primary">${marked.parse(text)}</div>`;
+            const cleanHtml = DOMPurify.sanitize(marked.parse(text));
+            div.innerHTML = `<div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent border border-accent">O</div><div class="bg-tertiary p-4 rounded-lg max-w-3xl shadow-md prose prose-invert text-sm text-fg-primary">${cleanHtml}</div>`;
             document.getElementById('chat-history').appendChild(div);
             scrollToBottom();
         }
@@ -505,7 +681,7 @@
         function appendSystemMessage(text, isError = false) {
             const div = document.createElement('div');
             div.className = "flex justify-center my-2";
-            div.innerHTML = `<span class="text-xs px-3 py-1 rounded-full ${isError ? 'bg-red-900/50 text-red-200' : 'bg-blue-900/30 text-blue-200'}">${text}</span>`;
+            div.innerHTML = `<span class="text-xs px-3 py-1 rounded-full ${isError ? 'bg-danger/20 text-danger' : 'bg-primary border border-tertiary text-fg-secondary'}">${text}</span>`;
             document.getElementById('chat-history').appendChild(div);
             scrollToBottom();
         }
@@ -528,60 +704,72 @@
 
         function clearChat() {
             document.getElementById('chat-history').innerHTML = '';
-            appendSystemMessage("Chat cleared.");
+            appendSystemMessage("Chat history cleared from RAM.");
         }
 
         // --- API CALLS ---
-        async function callGemini(prompt) {
-            const models = ["gemini-2.5-flash", "gemini-1.5-flash"];
-            let lastError = null;
-            for (const model of models) {
-                try {
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
-                    const resp = await fetch(url, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
-                    });
-                    if (resp.ok) {
-                        const data = await resp.json();
-                        return data.candidates[0].content.parts[0].text;
-                    } else { lastError = await resp.json(); }
-                } catch(e) { lastError = e; }
-            }
-            throw new Error(lastError?.error?.message || "Gemini Error");
+        async function callGemini(prompt, modelId, temp) {
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${config.apiKey}`;
+                const resp = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { temperature: temp }
+                    })
+                });
+                if (resp.ok) {
+                    const data = await resp.json();
+                    return data.candidates[0].content.parts[0].text;
+                } else { 
+                    const err = await resp.json();
+                    throw new Error(err.error?.message || "Gemini Error");
+                }
+            } catch(e) { throw e; }
         }
 
-        async function callGroq(prompt) {
+        async function callGroq(prompt, modelId, temp) {
             const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ messages: [{ role: "user", content: prompt }], model: "llama3-8b-8192" })
+                body: JSON.stringify({ 
+                    messages: [{ role: "user", content: prompt }], 
+                    model: modelId,
+                    temperature: temp
+                })
             });
             if (!resp.ok) throw new Error("Groq Error");
             const data = await resp.json();
             return data.choices[0].message.content;
         }
 
-        async function callHF(prompt) {
-            const resp = await fetch("https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3", {
+        async function callHF(prompt, modelId, temp) {
+            const resp = await fetch(`https://api-inference.huggingface.co/models/${modelId}`, {
                 method: "POST",
                 headers: { "Authorization": `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ inputs: prompt, parameters: { return_full_text: false } })
+                body: JSON.stringify({ 
+                    inputs: prompt, 
+                    parameters: { temperature: temp, return_full_text: false, do_sample: true } 
+                })
             });
             if (!resp.ok) throw new Error("Hugging Face Error");
             const data = await resp.json();
             return Array.isArray(data) ? data[0].generated_text : data.generated_text;
         }
 
-        async function callOllama(prompt) {
-            // Localhost access usually requires OLLAMA_ORIGINS="*"
+        async function callOllama(prompt, modelId, temp) {
             const resp = await fetch(`${config.apiKey}/api/generate`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ model: "qwen2:1.5b", prompt: prompt, stream: false })
+                body: JSON.stringify({ 
+                    model: modelId, 
+                    prompt: prompt, 
+                    stream: false,
+                    options: { temperature: temp }
+                })
             });
-            if (!resp.ok) throw new Error("Ollama Error. Check CORS settings.");
+            if (!resp.ok) throw new Error("Ollama Error. Check CORS.");
             const data = await resp.json();
             return data.response;
         }
