@@ -231,12 +231,12 @@
 
     <!-- Steps Container -->
     <div class="container mx-auto px-4 md:px-10 pb-32 relative">
-        <div class="step-line hidden md:block"></div>
+        <div id="step-line" class="step-line hidden md:block"></div>
 
 
 
         <!-- STEP 2: CONFIGURE KEYS (Web Only) -->
-        <div id="step-2" class="relative mb-32 scroll-mt-24">
+        <div id="step-2" class="relative mb-32 scroll-mt-24 transition-opacity duration-500">
             <div class="flex flex-col items-center mb-12">
                 <div class="bg-secondary border border-tertiary px-6 py-2 rounded-full text-sm font-bold text-accent z-10 shadow-xl mb-2">
                     STEP 02: CONFIGURE KEYS (Web Suite Only)
@@ -292,7 +292,7 @@
         </div>
 
         <!-- STEP 3: SELECT A MODULE -->
-        <div id="step-3" class="relative scroll-mt-24">
+        <div id="step-3" class="relative scroll-mt-24 transition-opacity duration-500">
             <div class="flex justify-center mb-12">
                 <div class="bg-secondary border border-tertiary px-6 py-2 rounded-full text-sm font-bold text-accent z-10 shadow-xl">
                     STEP 03: SELECT A MODULE
@@ -597,16 +597,26 @@
             const webContent = document.getElementById('content-web');
             const localContent = document.getElementById('content-local');
 
+            const step2 = document.getElementById('step-2');
+            const step3 = document.getElementById('step-3');
+            const stepLine = document.getElementById('step-line');
+
             if(tab === 'web') {
-                webBtn.className = "px-8 py-2.5 rounded-lg text-sm font-bold transition-all bg-accent text-secondary shadow-lg";
-                localBtn.className = "px-8 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-all flex items-center gap-2";
+                if (webBtn) webBtn.className = "px-8 py-2.5 rounded-lg text-sm font-bold transition-all bg-accent text-secondary shadow-lg";
+                if (localBtn) localBtn.className = "px-8 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-all flex items-center gap-2";
                 webContent.classList.remove('hidden');
                 localContent.classList.add('hidden');
+                step2.style.opacity = '1';
+                step3.style.opacity = '1';
+                stepLine.style.display = 'block';
             } else {
-                localBtn.className = "px-8 py-2.5 rounded-lg text-sm font-bold transition-all bg-accent text-secondary shadow-lg flex items-center gap-2";
-                webBtn.className = "px-8 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-all";
+                if (localBtn) localBtn.className = "px-8 py-2.5 rounded-lg text-sm font-bold transition-all bg-accent text-secondary shadow-lg flex items-center gap-2";
+                if (webBtn) webBtn.className = "px-8 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-all";
                 localContent.classList.remove('hidden');
                 webContent.classList.add('hidden');
+                step2.style.opacity = '0';
+                step3.style.opacity = '1';
+                stepLine.style.display = 'none';
             }
         }
 
