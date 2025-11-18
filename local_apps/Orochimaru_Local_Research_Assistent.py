@@ -12,6 +12,10 @@ import datetime
 import json
 import signal
 
+# --- PROJECT ROOT ---
+# Assumes the script is in a subdirectory of the project root (e.g., 'local_apps')
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
 # --- RAG & File Processing Imports ---
 try:
     import fitz  # PyMuPDF
@@ -104,22 +108,10 @@ class ResearchApp(tk.Tk):
     def __init__(self):
         super().__init__()
         print("--- App Initializing ---")
-        self.cot_var = tk.BooleanVar(value=False)
-        self.config = self._load_config()
-        self.ollama_client = None # Initialize to None
-        self.ollama_process = None # To store the subprocess
-        self.vector_cache_dir = self.config.get("vector_cache_dir", "vector_cache")
-        os.makedirs(self.vector_cache_dir, exist_ok=True)
-        self.title("Orochimaru - Local RAG AI")
-        self.geometry("1200x800")
-        self.configure(bg=Style.BG_PRIMARY)
-        self.protocol("WM_DELETE_WINDOW", self.on_closing)
-        self.setup_styles()
-        self.embedding_model_name = self.config.get("embedding_model_name", "mxbai-embed-large")
-        self.reviewer_var = tk.StringVar()
-        self.create_widgets()
-        self._initialize_ollama() # Moved after create_widgets
-        self.start_services()
+
+        # 1. Initialize core attributes
+        self.ollama_client = None
+        self.ollama_process = None
         self.stop_loading_event = threading.Event()
         self.is_muted = False
         self.embedding_model_available = False
@@ -131,6 +123,26 @@ class ResearchApp(tk.Tk):
         self.processing_thread = None
         self._temp_review_doc_id = None
         self._temp_review_full_text = None
+        self.cot_var = tk.BooleanVar(value=False)
+        self.reviewer_var = tk.StringVar()
+
+        # 2. Load configuration
+        self.config = self._load_config()
+        self.vector_cache_dir = self.config.get("vector_cache_dir", "vector_cache")
+        self.embedding_model_name = self.config.get("embedding_model_name", "mxbai-embed-large")
+
+        # 3. Setup UI
+        self.title("Orochimaru - Local RAG AI")
+        self.geometry("1200x800")
+        self.configure(bg=Style.BG_PRIMARY)
+        self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        self.setup_styles()
+        os.makedirs(self.vector_cache_dir, exist_ok=True)
+        self.create_widgets()
+
+        # 4. Start background services
+        self._initialize_ollama()
+        self.start_services()
 
 
     def setup_styles(self):
@@ -332,7 +344,7 @@ class ResearchApp(tk.Tk):
         if pyttsx3: 
             print("Starting TTS worker thread...")
             threading.Thread(target=tts_worker, daemon=True).start()
-        self.after(1000, self.update_system_stats)
+        self.after(1000, lambda: self.update_system_stats())
         self.add_placeholder()
         
     def on_closing(self):
@@ -654,11 +666,11 @@ class ResearchApp(tk.Tk):
             self.model_selector['values'] = ["Connection Failed"]; self.model_var.set("Connection Failed")
             self.load_pdf_button.config(state=tk.DISABLED) # Also disable on connection failure
             if self.ollama_client:
-                self.after(5000, self.populate_models)
+                self.after(5000, lambda: self.populate_models())
 
     def update_system_stats(self):
         self.stats_label.config(text=f"RAM: {psutil.virtual_memory().percent}%  |  {self.last_tok_per_sec}")
-        self.after(1000, self.update_system_stats)
+        self.after(1000, lambda: self.update_system_stats())
 
     def load_new_pdf(self):
         if self.processing_thread and self.processing_thread.is_alive(): return messagebox.showwarning("Busy", "Please wait...")
@@ -812,7 +824,7 @@ class ResearchApp(tk.Tk):
 
     def start_new_chat(self):
         if not hasattr(self, 'chat_list_box'):
-            self.after(100, self.start_new_chat)
+            self.after(100, lambda: self.start_new_chat())
             return
         self.chat_counter += 1
         new_chat_name = f"Chat {self.chat_counter}"
@@ -866,9 +878,19 @@ class ResearchApp(tk.Tk):
             print("Connected to an existing Ollama server.")
             # Set a longer timeout for the rest of the session
             self.ollama_client = ollama.Client(host='127.0.0.1', timeout=120)
+            self.populate_models()
             return # Skip starting our own server
         except Exception:
             print("No existing Ollama server found. Attempting to start a local one.")
+
+            if not ollama_path or not os.path.exists(ollama_path):
+                self.ollama_client = None # Ensure client is None if path is invalid
+                print("Ollama executable path is not configured or invalid. Cannot start local server.")
+                messagebox.showwarning("Ollama Not Found", "Could not find a running Ollama instance or start a local one. Please configure the path to ollama.exe in settings or start Ollama manually.")
+                self.status_light.config(foreground=Style.ERROR); self.status_label.config(text="Ollama Not Found")
+                self.model_selector['values'] = ["Connection Failed"]; self.model_var.set("Connection Failed")
+                self.load_pdf_button.config(state=tk.DISABLED)
+                return
 
             print(f"Ollama executable path from config: {ollama_path}")
             print(f"Does ollama_path exist? {os.path.exists(ollama_path)}")
@@ -876,14 +898,10 @@ class ResearchApp(tk.Tk):
                 self.ollama_process = self._start_ollama_server(ollama_path, model_folder)
                 self.ollama_client = ollama.Client(host='127.0.0.1', timeout=120)
                 print("Waiting for local Ollama server to become responsive...")
-                self._check_server_readiness(time.time(), 60) # Start non-blocking check
+                self.after(100, lambda: self._check_server_readiness(time.time(), 60)) # Schedule the check
             except Exception as e:
                 messagebox.showerror("Ollama Start Error", f"Failed to start local Ollama server: {e}")
                 self.ollama_client = None # Ensure client is None if startup fails
-        else:
-            self.ollama_client = None # Ensure client is None if path is invalid
-            print("Ollama executable path is not configured or invalid. Cannot start local server.")
-            messagebox.showwarning("Ollama Not Found", "Could not find a running Ollama instance or start a local one. Please configure the path to ollama.exe in settings or start Ollama manually.")
 
     def _check_server_readiness(self, start_time, max_wait):
         """Non-blocking check for Ollama server readiness."""
@@ -902,7 +920,7 @@ class ResearchApp(tk.Tk):
         except Exception:
             # Server not ready, update status and schedule the next check
             self.status_label.config(text=f"Waiting... ({int(elapsed_time)}s)")
-            self.after(1000, self._check_server_readiness, start_time, max_wait)
+            self.after(1000, lambda: self._check_server_readiness(start_time, max_wait))
 
     def _start_ollama_server(self, ollama_path, model_folder):
         print(f"Attempting to start Ollama server from: {ollama_path}")
@@ -944,8 +962,7 @@ class ResearchApp(tk.Tk):
 
 
     def _load_config(self):
-        config_path = "System_Config.json"
-        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
 
         # Define default relative paths. These are used if the config file is missing
         # or if a specific key is not in the config file.
@@ -972,13 +989,13 @@ class ResearchApp(tk.Tk):
         final_config.update(config_from_file)
 
         print("--- Resolving Application Paths ---")
-        # All paths are treated as relative to the script's location for portability.
+        # All paths are treated as relative to the project root for portability.
         for key in ["ollama_path", "model_folder", "vector_cache_dir"]:
             path_value = final_config[key]
             
-            # If path is not absolute, resolve it relative to the script directory
+            # If path is not absolute, resolve it relative to the project root
             if not os.path.isabs(path_value):
-                absolute_path = os.path.normpath(os.path.join(script_dir, path_value))
+                absolute_path = os.path.normpath(os.path.join(PROJECT_ROOT, path_value))
             else:
                 absolute_path = os.path.normpath(path_value)
 
@@ -986,7 +1003,7 @@ class ResearchApp(tk.Tk):
             if not os.path.exists(absolute_path) and key != "vector_cache_dir":
                 print(f"  - WARNING: Configured path for '{key}' not found: '{absolute_path}'")
                 default_relative_path = default_config[key]
-                absolute_path = os.path.normpath(os.path.join(script_dir, default_relative_path))
+                absolute_path = os.path.normpath(os.path.join(PROJECT_ROOT, default_relative_path))
                 print(f"  - Falling back to default path: '{absolute_path}'")
             
             final_config[key] = absolute_path # Update config with the validated, absolute path
@@ -1003,15 +1020,14 @@ class ResearchApp(tk.Tk):
         return final_config
 
     def _save_config(self, config):
-        config_path = "System_Config.json"
-        # When saving, try to make paths relative to the script dir for portability
-        script_dir = os.path.dirname(os.path.abspath(__file__))
+        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
+        # When saving, try to make paths relative to the project root for portability
         relative_config = {}
         for key, value in config.items():
             if isinstance(value, str) and os.path.isabs(value) and key in ["ollama_path", "model_folder", "vector_cache_dir"]:
                 try:
                     # This will make the path relative if it's on the same drive
-                    relative_config[key] = os.path.relpath(value, script_dir)
+                    relative_config[key] = os.path.relpath(value, PROJECT_ROOT)
                 except ValueError:
                     # Paths are on different drives, so keep the absolute path
                     relative_config[key] = value
@@ -1213,20 +1229,10 @@ class SettingsWindow(tk.Toplevel):
 
 
     def open_config_file(self):
-
-
-        config_path = "System_Config.json"
-
-
+        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
         if os.path.exists(config_path):
-
-
             os.startfile(config_path)
-
-
         else:
-
-
             messagebox.showerror("Error", "System_Config.json not found.")
 
 
