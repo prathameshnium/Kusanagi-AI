@@ -29,7 +29,7 @@ body {
 .home-button {
     position: fixed;
     top: 1rem;
-    right: 1rem;
+    left: 1rem;
     background-color: var(--secondary);
     color: var(--accent);
     width: 40px;
@@ -43,11 +43,14 @@ body {
     transition: all 0.3s ease;
     z-index: 1001; /* Ensure it's above other headers */
     border: 1px solid var(--border);
+    opacity: 0;
+    transform: translateX(-20px);
 }
 
 .home-button:hover {
     background-color: var(--tertiary);
-    transform: scale(1.1);
+    transform: translateX(0) scale(1.1);
+    opacity: 1;
 }
 
 /* Form elements */
