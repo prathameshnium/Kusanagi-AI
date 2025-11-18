@@ -8,6 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Added Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 
 
     <link rel="stylesheet" href="../static/style.css">
@@ -63,7 +64,7 @@
                 </select>
 
                 <div class="flex justify-between items-center">
-                    <span class="text-xs text-fg-secondary">Data is local.</span>
+                    <button onclick="purgeData()" class="btn btn-danger text-xs">Purge All Data</button>
                     <div class="flex gap-2">
                         <button onclick="toggleSettings()" class="btn btn-secondary">Cancel</button>
                         <button onclick="saveSettings()" class="btn btn-accent">Save</button>
@@ -459,7 +460,7 @@
                     </div>
                 `;
             } else if (role === 'ai') {
-                const parsedText = marked.parse(text);
+                const parsedText = DOMPurify.sanitize(marked.parse(text));
                 content = `
                     <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent">AI</div>
                     <div class="bg-tertiary p-4 rounded-lg max-w-3xl shadow-md prose prose-invert text-sm text-fg-primary">
