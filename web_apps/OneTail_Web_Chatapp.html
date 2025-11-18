@@ -5,12 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OneTail - Web Chat</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Added Marked.js for Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: #193549; }
         ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #718096; }
         body { font-family: 'Segoe UI', sans-serif; }
+        
+        /* Markdown Styles within chat bubbles */
+        .prose p { margin-bottom: 0.5em; }
+        .prose pre { background: #002240; padding: 10px; border-radius: 6px; overflow-x: auto; }
+        .prose code { font-family: monospace; background: rgba(255,255,255,0.1); padding: 2px 4px; rounded: 3px; }
+        .prose ul { list-style-type: disc; padding-left: 1.5em; }
+        .prose ol { list-style-type: decimal; padding-left: 1.5em; }
     </style>
     <script>
         tailwind.config = {
@@ -32,21 +41,78 @@
     </script>
 </head>
 <body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden">
+
+    <!-- SETTINGS MODAL (Hidden by default) -->
+    <div id="settings-modal" class="hidden absolute inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-secondary p-6 rounded-lg shadow-2xl max-w-md w-full border border-tertiary">
+            <div class="flex justify-between items-start mb-4">
+                <h2 class="text-xl font-bold text-accent">Configuration</h2>
+                <button onclick="toggleSettings()" class="text-fg-secondary hover:text-fg-primary">✕</button>
+            </div>
+
+            <div class="bg-blue-900/20 border border-blue-900 p-3 rounded mb-4 text-xs text-blue-200">
+                <strong>🔒 Security Assurance:</strong> API Keys are stored locally in your browser. Chats are stored in RAM only and vanish on refresh.
+            </div>
+            
+            <!-- Tabs -->
+            <div class="flex space-x-2 mb-4 border-b border-tertiary pb-2">
+                <button onclick="switchTab('hf')" id="tab-hf" class="text-sm font-medium text-fg-secondary hover:text-fg-primary pb-1">HuggingFace</button>
+                <button onclick="switchTab('gemini')" id="tab-gemini" class="text-sm font-bold text-accent border-b-2 border-accent pb-1">Google Gemini</button>
+                <button onclick="switchTab('groq')" id="tab-groq" class="text-sm font-medium text-fg-secondary hover:text-fg-primary pb-1">Groq</button>
+            </div>
+
+            <!-- HF Inputs -->
+            <div id="panel-hf" class="provider-panel hidden">
+                <label class="block text-sm text-fg-secondary mb-2">Hugging Face Token</label>
+                <input type="password" id="hf-token-input" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none mb-4" placeholder="hf_...">
+            </div>
+
+            <!-- Gemini Inputs -->
+            <div id="panel-gemini" class="provider-panel">
+                <label class="block text-sm text-fg-secondary mb-2">Gemini API Key</label>
+                <input type="password" id="gemini-key-input" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none mb-4" placeholder="AIza...">
+            </div>
+
+            <!-- Groq Inputs -->
+            <div id="panel-groq" class="provider-panel hidden">
+                <label class="block text-sm text-fg-secondary mb-2">Groq API Key</label>
+                <input type="password" id="groq-key-input" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none mb-4" placeholder="gsk_...">
+            </div>
+            
+            <div class="border-t border-tertiary mt-2 pt-4">
+                <label class="block text-sm text-fg-secondary mb-2">Active Provider</label>
+                <select id="active-provider-select" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none mb-4">
+                    <option value="hf">Hugging Face</option>
+                    <option value="gemini">Google Gemini</option>
+                    <option value="groq">Groq</option>
+                </select>
+
+                <div class="flex justify-between items-center">
+                    <button onclick="purgeData()" class="text-red-400 text-xs hover:text-red-200 underline decoration-dotted" title="Wipes all keys and reloads">⚠️ Purge All Data</button>
+                    <div class="flex gap-2">
+                        <button onclick="toggleSettings()" class="px-4 py-2 text-fg-secondary hover:text-fg-primary">Cancel</button>
+                        <button onclick="saveSettings()" class="px-4 py-2 bg-accent text-accent-fg rounded font-bold hover:bg-yellow-500 transition">Save</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="flex h-full max-h-screen">
         
         <!-- === Sidebar === -->
-        <aside class="w-64 flex-shrink-0 bg-secondary flex flex-col p-4">
+        <aside class="w-64 flex-shrink-0 bg-secondary flex flex-col p-4 border-r border-tertiary">
             <!-- Header -->
             <div class="px-1">
                 <h1 class="text-2xl font-bold text-accent">OneTail Chat</h1>
-                <p class="text-sm font-bold text-accent">Developed by Prathamesh Deshmukh</p>
-                <p class="text-sm text-fg-secondary mt-1">Simple Local Chat</p>
+                <p class="text-sm font-bold text-accent">Private & Secure</p>
+                <p class="text-xs text-fg-secondary mt-1">Local Session Storage Only</p>
             </div>
 
             <!-- Status -->
             <div class="flex items-center space-x-2 px-2 mt-4">
-                <span id="status-light" class="text-green-400 text-lg">●</span>
-                <span id="status-label" class="text-sm text-fg-primary">Connected</span>
+                <span id="status-light" class="text-red-500 text-lg">●</span>
+                <span id="status-label" class="text-sm text-fg-primary">No Key</span>
             </div>
 
             <hr class="border-tertiary my-4">
@@ -55,71 +121,89 @@
             <div class="px-1 space-y-3">
                 <div>
                     <label for="model-selector" class="text-sm font-semibold text-fg-primary">Chat Model:</label>
-                    <select id="model-selector" class="w-full bg-tertiary text-fg-primary p-2 rounded-md mt-1 focus:outline-none focus:ring-2 focus:ring-accent">
-                        <option>qwen:1.8b-chat</option>
-                        <option>llama3:8b</option>
+                    <select id="model-selector" class="w-full bg-tertiary text-fg-primary p-2 rounded-md mt-1 focus:outline-none focus:ring-2 focus:ring-accent text-sm">
+                        <!-- Populated by JS -->
                     </select>
                 </div>
                 <div>
                     <label class="text-sm font-semibold text-fg-primary flex justify-between">
                         <span>Temperature:</span>
-                        <span id="temp-value">0.00</span>
+                        <span id="temp-value">0.7</span>
                     </label>
-                    <input id="temperature-slider" type="range" min="0" max="1" step="0.01" value="0" class="w-full h-2 bg-tertiary rounded-lg appearance-none cursor-pointer mt-1">
+                    <input id="temperature-slider" type="range" min="0" max="1" step="0.1" value="0.7" class="w-full h-2 bg-tertiary rounded-lg appearance-none cursor-pointer mt-1">
                 </div>
             </div>
 
             <hr class="border-tertiary my-4">
 
-            <!-- Chat History -->
+            <!-- Chat History List -->
             <div class="flex-grow flex flex-col mt-4 overflow-hidden">
                 <div class="flex-shrink-0 flex justify-between items-center mb-2">
-                    <h2 class="text-lg font-semibold">Chats</h2>
+                    <h2 class="text-lg font-semibold">Session</h2>
                     <div class="flex space-x-1">
-                        <button class="bg-tertiary hover:bg-primary p-2 rounded-md text-fg-primary">➕</button>
-                        <button class="bg-tertiary hover:bg-primary p-2 rounded-md text-fg-primary">➖</button>
+                        <button id="new-chat-btn" class="bg-accent hover:bg-yellow-500 p-1.5 rounded-md text-accent-fg text-xs font-bold transition flex items-center gap-1">
+                            <span>+</span> New Chat
+                        </button>
                     </div>
                 </div>
-                <div class="flex-grow bg-tertiary rounded-b-md p-1 space-y-1 overflow-y-auto">
-                    <div class="p-2 rounded-md cursor-pointer bg-primary border border-accent">
-                        <h3 class="font-semibold text-fg-primary truncate">Chat 1</h3>
+                <div class="flex-grow bg-tertiary rounded-md p-1 space-y-1 overflow-y-auto">
+                    <div class="p-2 rounded-md bg-primary border border-accent opacity-80 cursor-default">
+                        <h3 class="font-semibold text-fg-primary truncate text-sm" id="session-title">Current Chat</h3>
+                        <p class="text-[10px] text-fg-secondary">In-Memory Only</p>
                     </div>
                 </div>
             </div>
         </aside>
 
         <!-- === Main Chat Area === -->
-        <main class="flex-1 flex flex-col max-h-screen p-2">
+        <main class="flex-1 flex flex-col max-h-screen p-2 relative">
             <!-- Top Bar -->
-            <header class="flex-shrink-0 flex justify-between items-center p-2">
-                <h2 id="chat-title" class="text-lg font-bold">New Chat</h2>
-                <div class="flex items-center space-x-2">
-                    <span class="text-sm text-fg-secondary">RAM: --% | Tok/s: --</span>
-                    <button class="text-lg text-fg-secondary hover:text-fg-primary">🔊</button>
-                    <button class="text-lg text-fg-secondary hover:text-fg-primary">💾</button>
-                    <button class="text-lg text-fg-secondary hover:text-fg-primary">🗑️</button>
-                    <button class="text-lg text-fg-secondary hover:text-fg-primary">⚙️</button>
+            <header class="flex-shrink-0 flex justify-between items-center p-2 bg-secondary/50 rounded-t-lg mx-2 mt-2 border-b border-tertiary">
+                <div class="flex items-center gap-2">
+                    <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse" title="Secure Connection"></div>
+                    <h2 id="chat-header-title" class="text-lg font-bold">Secure Conversation</h2>
+                </div>
+                
+                <!-- Stats Display -->
+                <div class="flex items-center gap-4 text-xs font-mono text-fg-secondary bg-tertiary/30 px-3 py-1 rounded-full border border-tertiary">
+                    <div title="Total tokens used in this RAM session">
+                        <span class="text-accent">Tokens:</span> <span id="token-display" class="text-fg-primary">0</span>
+                    </div>
+                    <div class="w-[1px] h-3 bg-fg-secondary/30"></div>
+                    <div title="Generation speed (Tokens per Second)">
+                        <span class="text-accent">Speed:</span> <span id="speed-display" class="text-fg-primary">0 t/s</span>
+                    </div>
+                </div>
+
+                <div class="flex items-center space-x-3">
+                    <button onclick="toggleSettings()" class="text-sm bg-tertiary hover:bg-secondary text-fg-primary px-3 py-1 rounded border border-accent/30 transition" title="Configure API Keys">⚙️ Settings</button>
                 </div>
             </header>
 
             <!-- Chat History -->
-            <div id="chat-history" class="flex-grow p-4 overflow-y-auto space-y-6 bg-primary rounded-md">
+            <div id="chat-history" class="flex-grow p-4 overflow-y-auto space-y-6 bg-primary mx-2 mb-2 custom-scrollbar">
                 <!-- Greeting -->
                 <div class="flex items-start space-x-4">
                     <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent">AI</div>
-                    <div class="bg-tertiary p-4 rounded-lg max-w-2xl">
-                        <p class="font-bold text-accent mb-1">OneTail</p>
-                        <p>Ask me anything.</p>
+                    <div class="bg-tertiary p-4 rounded-lg max-w-3xl">
+                        <p class="font-bold text-accent mb-1">OneTail Secure</p>
+                        <p>This environment is designed for privacy. 
+                        <ul class="list-disc ml-5 mt-2 text-sm opacity-90">
+                            <li>Chats are <strong>not saved</strong>. Reloading deletes them.</li>
+                            <li>API Keys are stored <strong>locally</strong> in your browser.</li>
+                            <li>Traffic goes <strong>directly</strong> to the AI provider.</li>
+                        </ul>
+                        </p>
                     </div>
                 </div>
             </div>
 
             <!-- Input Bar -->
-            <div class="flex-shrink-0 p-2 mt-2">
-                <div class="flex bg-tertiary rounded-md p-1.5">
-                    <input id="chat-input" type="text" placeholder="Ask a question..." class="w-full bg-transparent p-2 text-lg text-fg-primary placeholder-fg-secondary focus:outline-none">
-                    <button id="send-button" class="bg-accent text-accent-fg rounded-md p-3 ml-2 hover:bg-yellow-600 transition duration-200">
-                        <span class="font-bold text-2xl leading-none">➤</span>
+            <div class="flex-shrink-0 p-2">
+                <div class="flex bg-tertiary rounded-md p-1.5 border border-tertiary focus-within:border-accent transition-colors shadow-lg">
+                    <input id="chat-input" type="text" placeholder="Type your message securely..." class="w-full bg-transparent p-2 text-lg text-fg-primary placeholder-fg-secondary focus:outline-none">
+                    <button id="send-button" class="bg-accent text-accent-fg rounded-md p-3 ml-2 hover:bg-yellow-500 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <span class="font-bold text-xl leading-none">➤</span>
                     </button>
                 </div>
             </div>
@@ -127,38 +211,364 @@
     </div>
 
     <script>
-        // Basic interactivity for the demo
+        // --- DOM ELEMENTS ---
+        const chatInput = document.getElementById('chat-input');
+        const sendButton = document.getElementById('send-button');
+        const chatHistory = document.getElementById('chat-history');
+        const modelSelector = document.getElementById('model-selector');
+        const tempSlider = document.getElementById('temperature-slider');
+        const tempValue = document.getElementById('temp-value');
+        const statusLight = document.getElementById('status-light');
+        const statusLabel = document.getElementById('status-label');
+        const settingsModal = document.getElementById('settings-modal');
+        const activeProviderSelect = document.getElementById('active-provider-select');
+        const newChatBtn = document.getElementById('new-chat-btn');
+        const tokenDisplay = document.getElementById('token-display');
+        const speedDisplay = document.getElementById('speed-display');
+        
+        // Inputs
+        const hfTokenInput = document.getElementById('hf-token-input');
+        const geminiKeyInput = document.getElementById('gemini-key-input');
+        const groqKeyInput = document.getElementById('groq-key-input');
+
+        // --- STATE ---
+        let config = {
+            provider: localStorage.getItem('provider') || 'gemini',
+            hfToken: localStorage.getItem('hf_token') || '',
+            geminiKey: localStorage.getItem('gemini_key') || '',
+            groqKey: localStorage.getItem('groq_key') || ''
+        };
+        
+        // RAM-only stats
+        let sessionTokens = 0;
+
+        const models = {
+            hf: [
+                { id: "microsoft/Phi-3-mini-4k-instruct", name: "Phi-3 Mini" },
+                { id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B" }
+            ],
+            gemini: [
+                { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (New)" },
+                { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
+                { id: "gemini-1.5-flash-002", name: "Gemini 1.5 Flash-002" },
+                { id: "gemini-1.5-flash-latest", name: "Gemini 1.5 Flash Latest" }
+            ],
+            groq: [
+                { id: "llama3-8b-8192", name: "Llama 3 8B" },
+                { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B" },
+                { id: "gemma-7b-it", name: "Gemma 7B" }
+            ]
+        };
+
+        // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {
-            const tempSlider = document.getElementById('temperature-slider');
-            const tempValue = document.getElementById('temp-value');
+            // Load saved values
+            hfTokenInput.value = config.hfToken;
+            geminiKeyInput.value = config.geminiKey;
+            groqKeyInput.value = config.groqKey;
+            activeProviderSelect.value = config.provider;
+            
+            updateModelList();
+            checkStatus();
+
+            // Temp Slider
             tempSlider.addEventListener('input', () => {
-                tempValue.textContent = parseFloat(tempSlider.value).toFixed(2);
+                tempValue.textContent = tempSlider.value;
             });
 
-            const sendButton = document.getElementById('send-button');
-            const chatInput = document.getElementById('chat-input');
-            const chatHistory = document.getElementById('chat-history');
-
-            const handleSend = () => {
-                const prompt = chatInput.value.trim();
-                if (!prompt) return;
-
-                // Add user message
-                chatHistory.innerHTML += `
-                <div class="flex items-start space-x-4 justify-end">
-                    <div class="bg-accent text-accent-fg p-4 rounded-lg max-w-2xl">
-                        <p class="font-bold mb-1">You</p><p>${prompt}</p>
-                    </div>
-                </div>`;
-                chatInput.value = '';
-                chatHistory.scrollTop = chatHistory.scrollHeight;
-            };
-
+            // Event Listeners
             sendButton.addEventListener('click', handleSend);
+            newChatBtn.addEventListener('click', startNewChat);
+            
             chatInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') handleSend();
             });
         });
+
+        // --- NEW CHAT LOGIC ---
+        function startNewChat() {
+            // Clear history
+            chatHistory.innerHTML = `
+                <div class="flex items-start space-x-4">
+                    <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent">AI</div>
+                    <div class="bg-tertiary p-4 rounded-lg max-w-3xl">
+                        <p class="font-bold text-accent mb-1">OneTail Secure</p>
+                        <p>Chat cleared. Memory wiped. Ready for a new topic.</p>
+                    </div>
+                </div>
+            `;
+            // Reset Stats
+            sessionTokens = 0;
+            tokenDisplay.textContent = "0";
+            speedDisplay.textContent = "0 t/s";
+            chatInput.value = '';
+            chatInput.focus();
+        }
+
+        // --- PURGE LOGIC ---
+        function purgeData() {
+            if(confirm("CRITICAL: This will delete all API keys from this browser and reload the page. Are you sure?")) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+
+        // --- SETTINGS LOGIC ---
+        function toggleSettings() {
+            settingsModal.classList.toggle('hidden');
+            if (!settingsModal.classList.contains('hidden')) {
+                switchTab(activeProviderSelect.value);
+            }
+        }
+
+        function switchTab(provider) {
+            document.querySelectorAll('.provider-panel').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`panel-${provider}`).classList.remove('hidden');
+            
+            ['hf', 'gemini', 'groq'].forEach(p => {
+                const btn = document.getElementById(`tab-${p}`);
+                if (p === provider) {
+                    btn.className = "text-sm font-bold text-accent border-b-2 border-accent pb-1";
+                } else {
+                    btn.className = "text-sm font-medium text-fg-secondary hover:text-fg-primary pb-1";
+                }
+            });
+        }
+
+        function saveSettings() {
+            config.provider = activeProviderSelect.value;
+            config.hfToken = hfTokenInput.value.trim();
+            config.geminiKey = geminiKeyInput.value.trim();
+            config.groqKey = groqKeyInput.value.trim();
+            
+            localStorage.setItem('provider', config.provider);
+            localStorage.setItem('hf_token', config.hfToken);
+            localStorage.setItem('gemini_key', config.geminiKey);
+            localStorage.setItem('groq_key', config.groqKey);
+            
+            updateModelList();
+            checkStatus();
+            toggleSettings();
+        }
+
+        function updateModelList() {
+            const provider = activeProviderSelect.value;
+            const providerModels = models[provider] || [];
+            
+            modelSelector.innerHTML = providerModels.map(m => 
+                `<option value="${m.id}">${m.name}</option>`
+            ).join('');
+        }
+
+        function checkStatus() {
+            let hasKey = false;
+            if (config.provider === 'hf' && config.hfToken) hasKey = true;
+            if (config.provider === 'gemini' && config.geminiKey) hasKey = true;
+            if (config.provider === 'groq' && config.groqKey) hasKey = true;
+
+            if (hasKey) {
+                statusLight.classList.remove('text-red-500');
+                statusLight.classList.add('text-green-400');
+                statusLabel.textContent = "Keys Loaded";
+            } else {
+                statusLight.classList.remove('text-green-400');
+                statusLight.classList.add('text-red-500');
+                statusLabel.textContent = "No API Key";
+            }
+            return hasKey;
+        }
+
+        // --- CHAT LOGIC ---
+        async function handleSend() {
+            const prompt = chatInput.value.trim();
+            if (!prompt) return;
+            
+            if (!checkStatus()) {
+                alert(`Please set up your ${config.provider.toUpperCase()} API key in Settings.`);
+                toggleSettings();
+                return;
+            }
+
+            // Estimate input tokens (approx 4 chars per token)
+            const estimatedInputTokens = Math.ceil(prompt.length / 4);
+
+            // UI Updates
+            chatInput.value = '';
+            appendMessage('user', prompt);
+            sendButton.disabled = true;
+            
+            const thinkingId = appendThinking();
+            const modelId = modelSelector.value;
+            const temperature = parseFloat(tempSlider.value);
+            const startTime = performance.now();
+
+            try {
+                let response = null; // Object containing { text, usage }
+
+                // Route to API
+                if (config.provider === 'gemini') {
+                    response = await callGemini(prompt, modelId, config.geminiKey, temperature);
+                } else if (config.provider === 'groq') {
+                    response = await callGroq(prompt, modelId, config.groqKey, temperature);
+                } else if (config.provider === 'hf') {
+                    response = await callHuggingFace(prompt, modelId, config.hfToken, temperature);
+                }
+
+                const endTime = performance.now();
+                const durationSec = (endTime - startTime) / 1000;
+
+                // Update Stats
+                let outputTokens = 0;
+                let totalTokens = 0;
+
+                if (response.usage) {
+                    // Use exact API usage if available
+                    totalTokens = response.usage.total_tokens || (response.usage.prompt_tokens + response.usage.completion_tokens);
+                    outputTokens = response.usage.completion_tokens || (totalTokens - estimatedInputTokens);
+                } else {
+                    // Fallback estimation for HF
+                    outputTokens = Math.ceil(response.text.length / 4);
+                    totalTokens = estimatedInputTokens + outputTokens;
+                }
+
+                const speed = outputTokens / durationSec;
+
+                // Update UI State
+                sessionTokens += totalTokens;
+                tokenDisplay.textContent = sessionTokens.toLocaleString();
+                speedDisplay.textContent = speed.toFixed(1) + " t/s";
+
+                // Remove thinking, add response
+                document.getElementById(thinkingId).remove();
+                appendMessage('ai', response.text);
+
+            } catch (error) {
+                document.getElementById(thinkingId).remove();
+                appendMessage('error', `Error: ${error.message}`);
+            } finally {
+                sendButton.disabled = false;
+                chatInput.focus();
+            }
+        }
+
+        function appendMessage(role, text) {
+            const div = document.createElement('div');
+            div.className = "flex items-start space-x-4" + (role === 'user' ? " justify-end" : "");
+            
+            let content = "";
+            if (role === 'user') {
+                content = `
+                    <div class="bg-accent text-accent-fg p-4 rounded-lg max-w-2xl shadow-md">
+                        <p class="font-bold mb-1 text-xs opacity-70">You</p>
+                        <div class="whitespace-pre-wrap">${text}</div>
+                    </div>
+                `;
+            } else if (role === 'ai') {
+                const parsedText = marked.parse(text);
+                content = `
+                    <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent">AI</div>
+                    <div class="bg-tertiary p-4 rounded-lg max-w-3xl shadow-md prose prose-invert text-sm text-fg-primary">
+                        ${parsedText}
+                    </div>
+                `;
+            } else if (role === 'error') {
+                content = `
+                     <div class="flex-shrink-0 w-10 h-10 bg-red-900 rounded-full flex items-center justify-center font-bold text-white">!</div>
+                     <div class="bg-red-900/50 p-4 rounded-lg max-w-2xl border border-red-700 text-red-200">
+                        ${text}
+                    </div>
+                `;
+            }
+
+            div.innerHTML = content;
+            chatHistory.appendChild(div);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        function appendThinking() {
+            const id = 'thinking-' + Date.now();
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = "flex items-start space-x-4";
+            div.innerHTML = `
+                <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent animate-pulse">...</div>
+                <div class="bg-tertiary p-4 rounded-lg text-fg-secondary italic animate-pulse">
+                    Thinking...
+                </div>
+            `;
+            chatHistory.appendChild(div);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+            return id;
+        }
+
+        // --- API CALLS (Returning { text, usage }) ---
+        async function callGemini(prompt, model, key, temp) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+            const resp = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: temp }
+                })
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                throw new Error(`Gemini Error ${resp.status}: ${err.error?.message || resp.statusText}`);
+            }
+            const data = await resp.json();
+            // Extract Gemini Usage Metadata if available
+            const usage = data.usageMetadata ? {
+                prompt_tokens: data.usageMetadata.promptTokenCount,
+                completion_tokens: data.usageMetadata.candidatesTokenCount,
+                total_tokens: data.usageMetadata.totalTokenCount
+            } : null;
+            
+            return { text: data.candidates[0].content.parts[0].text, usage: usage };
+        }
+
+        async function callGroq(prompt, model, key, temp) {
+            const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${key}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    messages: [{ role: "user", content: prompt }],
+                    model: model,
+                    temperature: temp
+                })
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                throw new Error(`Groq Error: ${err.error?.message || resp.statusText}`);
+            }
+            const data = await resp.json();
+            return { 
+                text: data.choices[0].message.content, 
+                usage: data.usage // Groq provides standard usage object
+            };
+        }
+
+        async function callHuggingFace(prompt, model, token, temp) {
+            const resp = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
+                method: "POST",
+                headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    inputs: prompt,
+                    parameters: { temperature: temp, return_full_text: false }
+                })
+            });
+            if (!resp.ok) throw new Error(`HF Error: ${resp.status} ${resp.statusText}`);
+            const data = await resp.json();
+            const text = Array.isArray(data) ? data[0].generated_text : data.generated_text;
+            // HF doesn't send usage, return null to trigger estimation
+            return { text: text, usage: null };
+        }
     </script>
 </body>
 </html>
