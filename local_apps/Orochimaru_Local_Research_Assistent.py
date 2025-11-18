@@ -81,7 +81,7 @@ NORMAL_RAG_SYSTEM_PROMPT = """You are an accurate and helpful AI assistant speci
 Your primary goal is to answer the user's question SOLELY based on the provided document context.
 Strictly adhere to the following rules:
 1.  **Answer only from the provided context.** Do not use any outside knowledge.
-2.  If the answer is not explicitly present in the provided context, state clearly and concisely: \"I cannot find the answer to your question in the provided document.\" Do NOT attempt to guess or infer.
+2.  If the answer is not explicitly present in the provided context, state clearly and concisely: "I cannot find the answer to your question in the provided document." Do NOT attempt to guess or infer.
 3.  Do not make up any information.
 4.  If applicable, cite the page number(s) from which you extracted the information. The page numbers are provided in the context as '[Page X]:'.
 """
@@ -135,7 +135,7 @@ class ResearchApp(tk.Tk):
         self.setup_styles()
         self.embedding_model_name = self.app_config.get("embedding_model_name", "mxbai-embed-large")
         self.reviewer_var = tk.StringVar()
-        self.create_widgets() # Moved initialization of widgets here
+        self.create_widgets()
         self._initialize_ollama() # Moved after create_widgets
         self.start_services()
 
@@ -286,7 +286,7 @@ class ResearchApp(tk.Tk):
         top_bar.grid(row=0, column=0, sticky="ew", padx=5, pady=(0,5))
         self.current_chat_label = ttk.Label(top_bar, text="New Chat", font=(Style.UI_FONT[0], 12, "bold"))
         self.current_chat_label.pack(side=tk.LEFT, padx=(0, 20))
-        self.stats_label = ttk.Label(top_bar, text="RAM: --%  |  Tok/s: --", font=Style.UI_FONT, foreground=Style.FG_SECONDARY)
+        self.stats_label = ttk.Label(top_bar, text="RAM: --%", font=Style.UI_FONT, foreground=Style.FG_SECONDARY)
         self.stats_label.pack(side=tk.LEFT, padx=0)
         
         # Right-aligned buttons
@@ -332,7 +332,7 @@ class ResearchApp(tk.Tk):
 
     def start_services(self):
         print("--- Starting Application Services (TTS, Model Polling, UI Updates) ---")
-        if pyttsx3:
+        if pyttsx3: 
             print("Starting TTS worker thread...")
             threading.Thread(target=tts_worker, daemon=True).start()
         self.after(1000, lambda: self.update_system_stats())
@@ -443,13 +443,16 @@ class ResearchApp(tk.Tk):
         self.after(0, self.finalize_response)
 
     def find_relevant_chunks(self, query_vector, doc_id, top_k=5):
-        if doc_id not in self.pdf_text_db: return []
+        if doc_id not in self.pdf_text_db:
+            return []
 
         mmap_path = os.path.join(self.vector_cache_dir, f"{doc_id}.mmap")
-        if not os.path.exists(mmap_path): return []
+        if not os.path.exists(mmap_path):
+            return []
 
         num_chunks = len(self.pdf_text_db[doc_id])
-        if num_chunks == 0: return []
+        if num_chunks == 0:
+            return []
         
         try:
             mmap_vectors = np.memmap(mmap_path, dtype=np.float16, mode='r', shape=(num_chunks, len(query_vector)))
@@ -1028,16 +1031,8 @@ class ResearchApp(tk.Tk):
             else:
                 print("3. WARNING: Existing server found, but it does NOT have the required embedding model.")
                 print(f"   - Required model: '{embedding_model_needed}'")
-                messagebox.showwarning("Ollama Server Issue", 
-                    f"An existing Ollama server was found, but it does not have the required embedding model: '{embedding_model_needed}'.\n\n"
-                    "Please do one of the following:\n"
-                    "1. Shut down the external Ollama server and restart this application. The application will then start its own managed server with the correct models.\n"
-                    "2. Manually restart your external Ollama server to force it to recognize the new model files.\n\n"
-                    "Document features will be disabled until the embedding model is loaded.")
-                # Continue with the existing client, but features will be disabled.
-                self.ollama_client = external_client
-                self.populate_models()
-                return
+                print("   - The application will now attempt to start its own managed Ollama server.")
+                print("   - Please ensure the external Ollama server is shut down if you encounter port conflicts.")
 
         except Exception:
             print("1. No existing Ollama server found. Proceeding to start a local one.")
@@ -1233,8 +1228,7 @@ class ConsoleRedirector:
 
         self.text_widget.config(state=tk.DISABLED)
 
-    def flush(self):
-        pass
+    def flush(self): pass
 
 
 class SettingsWindow(tk.Toplevel):
@@ -1260,6 +1254,7 @@ class SettingsWindow(tk.Toplevel):
 
 
 
+
         self.configure(bg=Style.BG_PRIMARY)
 
 
@@ -1267,6 +1262,7 @@ class SettingsWindow(tk.Toplevel):
 
 
         self.transient(master) # Set to be on top of the main window
+
 
 
 
@@ -1279,6 +1275,7 @@ class SettingsWindow(tk.Toplevel):
 
 
 
+
     def create_widgets(self):
 
 
@@ -1286,6 +1283,7 @@ class SettingsWindow(tk.Toplevel):
 
 
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
 
 
 
@@ -1313,6 +1311,7 @@ class SettingsWindow(tk.Toplevel):
 
 
 
+
         # Model Folder
 
 
@@ -1332,6 +1331,7 @@ class SettingsWindow(tk.Toplevel):
 
 
         ttk.Button(model_frame, text="Browse", command=self.browse_model_folder, style='Tool.TButton').pack(side=tk.RIGHT, padx=(5,0))
+
 
 
 
@@ -1359,6 +1359,7 @@ class SettingsWindow(tk.Toplevel):
 
 
 
+
         # Embedding Model Name
 
 
@@ -1375,6 +1376,7 @@ class SettingsWindow(tk.Toplevel):
 
 
         self.embed_model_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
 
 
 
@@ -1399,17 +1401,14 @@ class SettingsWindow(tk.Toplevel):
 
 
 
+
     def open_config_file(self):
-
         config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
-
         if os.path.exists(config_path):
-
             os.startfile(config_path)
-
         else:
-
             messagebox.showerror("Error", "System_Config.json not found.")
+
 
 
 
@@ -1431,6 +1430,7 @@ class SettingsWindow(tk.Toplevel):
 
 
 
+
     def browse_ollama_path(self):
 
 
@@ -1444,6 +1444,7 @@ class SettingsWindow(tk.Toplevel):
 
 
             self.ollama_path_entry.insert(0, file_path)
+
 
 
 
@@ -1465,6 +1466,7 @@ class SettingsWindow(tk.Toplevel):
 
 
 
+
     def browse_vector_cache_dir(self):
 
 
@@ -1478,6 +1480,7 @@ class SettingsWindow(tk.Toplevel):
 
 
             self.vector_cache_entry.insert(0, folder_path)
+
 
 
 
