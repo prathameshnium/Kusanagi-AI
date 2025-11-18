@@ -88,7 +88,8 @@
                 </select>
 
                 <div class="flex justify-between items-center">
-                    <button onclick="purgeData()" class="text-red-400 text-xs hover:text-red-200 underline decoration-dotted" title="Wipes all keys and reloads">⚠️ Purge All Data</button>
+                    <!-- Removed redundant link button here, moved to main header as fire emoji -->
+                    <span class="text-xs text-fg-secondary">Data is local.</span>
                     <div class="flex gap-2">
                         <button onclick="toggleSettings()" class="px-4 py-2 text-fg-secondary hover:text-fg-primary">Cancel</button>
                         <button onclick="saveSettings()" class="px-4 py-2 bg-accent text-accent-fg rounded font-bold hover:bg-yellow-500 transition">Save</button>
@@ -176,6 +177,8 @@
                 </div>
 
                 <div class="flex items-center space-x-3">
+                    <button onclick="purgeData()" class="text-lg hover:scale-110 transition duration-200" title="🔥 NUCLEAR OPTION: Delete all keys and data immediately">🔥</button>
+                    <div class="w-[1px] h-6 bg-tertiary"></div>
                     <button onclick="toggleSettings()" class="text-sm bg-tertiary hover:bg-secondary text-fg-primary px-3 py-1 rounded border border-accent/30 transition" title="Configure API Keys">⚙️ Settings</button>
                 </div>
             </header>
@@ -307,8 +310,23 @@
 
         // --- PURGE LOGIC ---
         function purgeData() {
-            if(confirm("CRITICAL: This will delete all API keys from this browser and reload the page. Are you sure?")) {
+            if(confirm("🔥 NUCLEAR OPTION: Delete all API keys, chat history, and local data? This cannot be undone.")) {
+                // 1. Wipe Storage
                 localStorage.clear();
+                sessionStorage.clear();
+                
+                // 2. Wipe Memory State
+                config = { provider: 'gemini', hfToken: '', geminiKey: '', groqKey: '' };
+                
+                // 3. Wipe UI Inputs
+                hfTokenInput.value = "";
+                geminiKeyInput.value = "";
+                groqKeyInput.value = "";
+                
+                // 4. Wipe Chat
+                chatHistory.innerHTML = "";
+                
+                // 5. Reload to ensure fresh state
                 location.reload();
             }
         }
