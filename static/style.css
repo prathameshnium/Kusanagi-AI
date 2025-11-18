@@ -23,10 +23,10 @@ body {
 
 .home-button {
     position: fixed;
-    top: 20px;
-    left: 20px;
-    background-color: var(--accent);
-    color: #0f172a;
+    top: 1rem;
+    right: 1rem;
+    background-color: var(--secondary);
+    color: var(--accent);
     width: 40px;
     height: 40px;
     border-radius: 50%;
@@ -35,13 +35,14 @@ body {
     justify-content: center;
     text-decoration: none;
     font-weight: bold;
-    transition: background-color 0.3s ease;
-    z-index: 1000;
-    border: 2px solid #0f172a;
+    transition: all 0.3s ease;
+    z-index: 1001; /* Ensure it's above other headers */
+    border: 1px solid var(--border);
 }
 
 .home-button:hover {
-    background-color: var(--accent-hover);
+    background-color: var(--tertiary);
+    transform: scale(1.1);
 }
 
 /* Form elements */
@@ -50,13 +51,13 @@ input[type="password"],
 input[type="number"],
 textarea,
 select {
-    background-color: var(--tertiary) !important;
-    color: var(--fg-primary) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 0.5rem !important;
-    padding: 0.75rem !important;
-    width: 100% !important;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease !important;
+    background-color: var(--tertiary);
+    color: var(--fg-primary);
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.75rem;
+    width: 100%;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 input[type="text"]:focus,
@@ -64,29 +65,55 @@ input[type="password"]:focus,
 input[type="number"]:focus,
 textarea:focus,
 select:focus {
-    outline: none !important;
-    border-color: var(--accent) !important;
-    box-shadow: 0 0 0 2px rgba(255, 171, 64, 0.5) !important;
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px rgba(255, 171, 64, 0.5);
 }
+
+/* Buttons */
+.btn {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-weight: bold;
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.btn-accent {
+    background-color: var(--accent);
+    color: var(--secondary);
+    border-color: var(--accent);
+}
+
+.btn-accent:hover {
+    background-color: var(--accent-hover);
+}
+
+.btn-secondary {
+    background-color: var(--tertiary);
+    color: var(--fg-primary);
+    border-color: var(--border);
+}
+
+.btn-secondary:hover {
+    background-color: var(--border);
+}
+
 
 /* Settings Modal */
 .settings-modal {
-    background-color: rgba(15, 23, 42, 0.9) !important;
-    backdrop-filter: blur(8px) !important;
+    background-color: rgba(15, 23, 42, 0.9);
+    backdrop-filter: blur(8px);
 }
 
-.settings-modal > div {
-    background-color: var(--secondary) !important;
-    border: 1px solid var(--border) !important;
+.settings-modal-content {
+    background-color: var(--secondary);
+    border: 1px solid var(--border);
 }
 
 
-/* Custom scrollbar for a professional look */
+/* Custom scrollbar */
 ::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #193549; } /* primary */
+::-webkit-scrollbar-track { background: #193549; }
 ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #718096; }
-.listbox-item.active {
-    background-color: #193549; /* primary */
-    border-color: #ffab40; /* accent */
-}

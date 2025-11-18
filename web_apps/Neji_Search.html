@@ -29,8 +29,8 @@
     </div>
 
     <!-- SETTINGS MODAL -->
-    <div id="settings-modal" class="hidden absolute inset-0 bg-black/80 z-[60] flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-secondary p-6 rounded-lg shadow-2xl max-w-md w-full border border-tertiary">
+    <div id="settings-modal" class="hidden absolute inset-0 settings-modal z-[60] flex items-center justify-center backdrop-blur-sm">
+        <div class="settings-modal-content p-6 rounded-lg shadow-2xl max-w-md w-full border">
             <h2 class="text-xl font-bold text-accent mb-4">AI Agent Configuration</h2>
             
             <div class="bg-tertiary/50 p-3 rounded mb-4 text-xs text-fg-secondary border border-tertiary">
@@ -47,24 +47,24 @@
             <!-- HF Inputs -->
             <div id="panel-hf" class="provider-panel">
                 <label class="block text-sm text-fg-secondary mb-2">Hugging Face Token</label>
-                <input type="password" id="hf-token-input" class="w-full bg-tertiary text-fg-primary p-3 rounded border border-tertiary focus:border-accent outline-none mb-4" placeholder="hf_...">
+                <input type="password" id="hf-token-input" class="w-full text-fg-primary p-3 rounded border border-tertiary focus:border-accent outline-none mb-4">
             </div>
 
             <!-- Gemini Inputs -->
             <div id="panel-gemini" class="provider-panel hidden">
                 <label class="block text-sm text-fg-secondary mb-2">Gemini API Key</label>
-                <input type="password" id="gemini-key-input" class="w-full bg-tertiary text-fg-primary p-3 rounded border border-tertiary focus:border-accent outline-none mb-4" placeholder="AIza...">
+                <input type="password" id="gemini-key-input" class="w-full text-fg-primary p-3 rounded border border-tertiary focus:border-accent outline-none mb-4" placeholder="AIza...">
             </div>
 
             <!-- Groq Inputs -->
             <div id="panel-groq" class="provider-panel hidden">
                 <label class="block text-sm text-fg-secondary mb-2">Groq API Key</label>
-                <input type="password" id="groq-key-input" class="w-full bg-tertiary text-fg-primary p-3 rounded border border-tertiary focus:border-accent outline-none mb-4" placeholder="gsk_...">
+                <input type="password" id="groq-key-input" class="w-full text-fg-primary p-3 rounded border border-tertiary focus:border-accent outline-none mb-4" placeholder="gsk_...">
             </div>
             
             <div class="border-t border-tertiary mt-2 pt-4">
                 <label class="block text-sm text-fg-secondary mb-2">Active Planning Model</label>
-                <select id="active-provider-select" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none mb-4">
+                <select id="active-provider-select" class="w-full text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none mb-4">
                     <option value="hf">Hugging Face (Mistral/Phi)</option>
                     <option value="gemini">Google Gemini (Recommended)</option>
                     <option value="groq">Groq (Fast Llama 3)</option>
@@ -73,8 +73,8 @@
                 <div class="flex justify-between items-center gap-2">
                     <button onclick="clearAllData()" class="text-red-400 text-xs hover:text-red-300 underline">Purge All Data</button>
                     <div class="flex gap-2">
-                        <button onclick="toggleSettings()" class="px-4 py-2 text-fg-secondary hover:text-fg-primary">Cancel</button>
-                        <button onclick="saveSettings()" class="px-4 py-2 bg-accent text-accent-fg rounded font-bold">Save</button>
+                        <button onclick="toggleSettings()" class="btn btn-secondary">Cancel</button>
+                        <button onclick="saveSettings()" class="btn btn-accent">Save</button>
                     </div>
                 </div>
             </div>

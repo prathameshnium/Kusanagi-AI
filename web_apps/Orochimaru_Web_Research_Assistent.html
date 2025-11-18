@@ -27,8 +27,8 @@
     </a>
 
     <!-- SETTINGS MODAL -->
-    <div id="settings-modal" class="hidden absolute inset-0 bg-black/90 z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="bg-secondary p-6 rounded-lg shadow-2xl max-w-md w-full border border-tertiary relative">
+    <div id="settings-modal" class="hidden absolute inset-0 settings-modal z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="settings-modal-content p-6 rounded-lg shadow-2xl max-w-md w-full border relative">
             <div class="flex justify-between items-start mb-4">
                 <h2 class="text-xl font-bold text-accent">Secure Configuration</h2>
                 <button onclick="toggleSettings()" class="text-fg-secondary hover:text-fg-primary">✕</button>
@@ -45,7 +45,7 @@
             
             <div class="mb-4">
                 <label class="block text-sm text-fg-secondary mb-2">AI Provider</label>
-                <select id="provider-select" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none" onchange="updateKeyInput()">
+                <select id="provider-select" class="w-full text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none" onchange="updateKeyInput()">
                     <option value="gemini">Google Gemini (Recommended)</option>
                     <option value="groq">Groq (Fastest)</option>
                     <option value="hf">Hugging Face</option>
@@ -56,15 +56,15 @@
             <div class="mb-6" id="api-key-container">
                 <label class="block text-sm text-fg-secondary mb-2">API Key / Endpoint</label>
                 <!-- autocomplete="off" prevents browser saving keys -->
-                <input type="password" id="api-key-input" autocomplete="off" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none" placeholder="Enter key...">
+                <input type="password" id="api-key-input" autocomplete="off" class="w-full text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none" placeholder="Enter key...">
                 <p id="ollama-hint" class="hidden text-[10px] text-fg-secondary mt-1">Default: http://localhost:11434 (Leave empty for default)</p>
             </div>
 
             <div class="flex justify-between items-center pt-4 border-t border-tertiary">
                 <button onclick="purgeData()" class="text-danger text-xs hover:text-red-200 underline decoration-dotted" title="Wipe local storage and reload">🔥 Secure Wipe</button>
                 <div class="flex gap-2">
-                    <button onclick="toggleSettings()" class="px-4 py-2 text-fg-secondary hover:text-fg-primary">Cancel</button>
-                    <button onclick="saveSettings()" class="px-4 py-2 bg-accent text-accent-fg rounded font-bold hover:bg-yellow-500">Save Configuration</button>
+                    <button onclick="toggleSettings()" class="btn btn-secondary">Cancel</button>
+                    <button onclick="saveSettings()" class="btn btn-accent">Save Configuration</button>
                 </div>
             </div>
         </div>
