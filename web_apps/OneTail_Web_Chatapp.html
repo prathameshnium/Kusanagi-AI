@@ -88,7 +88,6 @@
                 </select>
 
                 <div class="flex justify-between items-center">
-                    <!-- Removed redundant link button here, moved to main header as fire emoji -->
                     <span class="text-xs text-fg-secondary">Data is local.</span>
                     <div class="flex gap-2">
                         <button onclick="toggleSettings()" class="px-4 py-2 text-fg-secondary hover:text-fg-primary">Cancel</button>
@@ -162,7 +161,10 @@
             <header class="flex-shrink-0 flex justify-between items-center p-2 bg-secondary/50 rounded-t-lg mx-2 mt-2 border-b border-tertiary">
                 <div class="flex items-center gap-2">
                     <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse" title="Secure Connection"></div>
-                    <h2 id="chat-header-title" class="text-lg font-bold">Secure Conversation</h2>
+                    <!-- Replaced Text with Padlock Icon -->
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-accent" title="Secure Session Active">
+                        <path fill-rule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clip-rule="evenodd" />
+                    </svg>
                 </div>
                 
                 <!-- Stats Display -->
@@ -177,7 +179,7 @@
                 </div>
 
                 <div class="flex items-center space-x-3">
-                    <button onclick="purgeData()" class="text-lg hover:scale-110 transition duration-200" title="🔥 NUCLEAR OPTION: Delete all keys and data immediately">🔥</button>
+                    <button onclick="purgeData()" class="text-lg hover:scale-110 transition duration-200" title="Delete All Data (Keys & History)">🔥</button>
                     <div class="w-[1px] h-6 bg-tertiary"></div>
                     <button onclick="toggleSettings()" class="text-sm bg-tertiary hover:bg-secondary text-fg-primary px-3 py-1 rounded border border-accent/30 transition" title="Configure API Keys">⚙️ Settings</button>
                 </div>
@@ -310,7 +312,7 @@
 
         // --- PURGE LOGIC ---
         function purgeData() {
-            if(confirm("🔥 NUCLEAR OPTION: Delete all API keys, chat history, and local data? This cannot be undone.")) {
+            if(confirm("Delete all API keys, chat history, and local data? This cannot be undone.")) {
                 // 1. Wipe Storage
                 localStorage.clear();
                 sessionStorage.clear();
@@ -578,7 +580,7 @@
                 },
                 body: JSON.stringify({
                     inputs: prompt,
-                    parameters: { temperature: temp, return_full_text: false }
+                    parameters: { temperature: temp, return_full_text: false, do_sample: true } // Added do_sample: true
                 })
             });
             if (!resp.ok) throw new Error(`HF Error: ${resp.status} ${resp.statusText}`);
