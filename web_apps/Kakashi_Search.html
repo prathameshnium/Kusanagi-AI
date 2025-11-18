@@ -17,10 +17,10 @@
                 extend: {
                     fontFamily: { sans: ['Segoe UI', 'sans-serif'] },
                     colors: {
-                        'primary': '#193549',
-                        'secondary': '#002240',
-                        'tertiary': '#25435A',
-                        'accent': '#ffab40',
+                        'primary': '#193549',    // Dark Blue Background
+                        'secondary': '#002240',  // Darker Components
+                        'tertiary': '#25435A',   // Borders/Inputs
+                        'accent': '#ffab40',     // Orange/Yellow
                         'accent-hover': '#e69a38',
                         'fg-primary': '#FFFFFF',
                         'fg-secondary': '#97B1C2',
@@ -339,6 +339,7 @@
             const startTime = performance.now();
             const allResults = [];
             
+            // Use all 5 prompts as requested
             const activePrompts = prompts.slice(0, 5);
             
             const searchPromises = activePrompts.map(async (p) => {
@@ -357,6 +358,12 @@
             // Deduplicate by URL
             const uniqueResults = [];
             const urls = new Set();
+            
+            // Add External Cards first (Federated Search)
+            uniqueResults.push({ source: 'Qwant', title: `Search Qwant for '${query}'`, snippet: "Private European search engine results.", url: `https://www.qwant.com/?q=${encodeURIComponent(query)}`, meta: 'External' });
+            uniqueResults.push({ source: 'StartPage', title: `Search StartPage for '${query}'`, snippet: "Google results without tracking.", url: `https://www.startpage.com/do/search?query=${encodeURIComponent(query)}`, meta: 'External' });
+            uniqueResults.push({ source: 'SearXNG', title: `Search SearXNG for '${query}'`, snippet: "Open-source metasearch engine aggregator.", url: `https://searx.space/?q=${encodeURIComponent(query)}`, meta: 'External' });
+            
             allResults.forEach(r => {
                 if (!urls.has(r.url)) {
                     urls.add(r.url);
@@ -420,9 +427,9 @@
                 return;
             }
 
-            // Sort mechanism
-            const typeScore = { 'OpenAlex': 4, 'Wikipedia': 3, 'DuckDuckGo': 2, 'HackerNews': 1 };
-            results.sort((a, b) => typeScore[b.source] - typeScore[a.source]);
+            // Sort mechanism (External cards stay top)
+            const typeScore = { 'Qwant': 10, 'StartPage': 9, 'SearXNG': 8, 'OpenAlex': 4, 'Wikipedia': 3, 'DuckDuckGo': 2, 'HackerNews': 1 };
+            results.sort((a, b) => (typeScore[b.source] || 0) - (typeScore[a.source] || 0));
 
             results.forEach(res => {
                 const card = document.createElement('div');
@@ -433,6 +440,7 @@
                 if(res.source === 'DuckDuckGo') badgeClass = "bg-orange-900/50 text-orange-200";
                 if(res.source === 'OpenAlex') badgeClass = "bg-green-900/50 text-green-200";
                 if(res.source === 'HackerNews') badgeClass = "bg-orange-600/20 text-orange-400";
+                if(['Qwant', 'StartPage', 'SearXNG'].includes(res.source)) badgeClass = "bg-blue-600 text-white font-bold";
 
                 card.innerHTML = `
                     <div class="flex items-start justify-between mb-1.5">
@@ -498,7 +506,25 @@
             } catch(e) { return []; }
         }
 
-        // --- SETTINGS ---
+        // --- SETTINGS & METRICS ---
+        function updateMetrics(tokens, speed) {
+            sessionTokens += tokens;
+            const headerTokens = document.getElementById('header-tokens');
+            if(headerTokens) headerTokens.textContent = sessionTokens.toLocaleString();
+
+            const headerSpeed = document.getElementById('header-speed');
+            if(headerSpeed && speed) headerSpeed.textContent = speed.toFixed(1) + " t/s";
+        }
+        
+        function updateRAM() {
+            const headerRam = document.getElementById('header-ram');
+            if (performance.memory) {
+                headerRam.textContent = `${Math.round(performance.memory.usedJSHeapSize / 1024 / 1024)} MB`;
+            } else {
+                headerRam.textContent = "--";
+            }
+        }
+
         function populateModels() {
             const provider = document.getElementById('provider-select').value;
             const select = document.getElementById('model-select');
