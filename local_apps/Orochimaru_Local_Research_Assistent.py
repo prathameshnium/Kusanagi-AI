@@ -282,12 +282,6 @@ class ResearchApp(tk.Tk):
         main_area.grid_rowconfigure(1, weight=1)
         main_area.grid_columnconfigure(0, weight=1)
 
-    def _create_main_content(self):
-        main_area = ttk.Frame(self)
-        main_area.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
-        main_area.grid_rowconfigure(1, weight=1)
-        main_area.grid_columnconfigure(0, weight=1)
-
         top_bar = ttk.Frame(main_area)
         top_bar.grid(row=0, column=0, sticky="ew", padx=5, pady=(0,5))
         self.current_chat_label = ttk.Label(top_bar, text="New Chat", font=(Style.UI_FONT[0], 12, "bold"))
@@ -319,10 +313,12 @@ class ResearchApp(tk.Tk):
         action_buttons_frame.grid_columnconfigure(0, weight=1)
         action_buttons_frame.grid_columnconfigure(1, weight=1)
         action_buttons_frame.grid_columnconfigure(2, weight=1)
+        action_buttons_frame.grid_columnconfigure(3, weight=1)
 
         ttk.Button(action_buttons_frame, text="Summarize Document", style='Accent.Sidebar.TButton', command=self.on_summarize_button_click).grid(row=0, column=0, sticky="ew", padx=(0,5))
         ttk.Button(action_buttons_frame, text="Review Document", style='Accent.Sidebar.TButton', command=self.on_review_button_click).grid(row=0, column=1, sticky="ew", padx=5)
-        ttk.Button(action_buttons_frame, text="Checker", style='Accent.Sidebar.TButton', command=self.on_check_mode_button_click).grid(row=0, column=2, sticky="ew", padx=(5,0))
+        ttk.Button(action_buttons_frame, text="Paraphrase", style='Accent.Sidebar.TButton', command=self.on_paraphrase_button_click).grid(row=0, column=2, sticky="ew", padx=5)
+        ttk.Button(action_buttons_frame, text="Checker", style='Accent.Sidebar.TButton', command=self.on_check_mode_button_click).grid(row=0, column=3, sticky="ew", padx=(5,0))
 
         input_frame = ttk.Frame(main_area)
         input_frame.grid(row=3, column=0, sticky="ew", padx=5, pady=5)
@@ -604,6 +600,8 @@ class ResearchApp(tk.Tk):
             self.stop_loading_event.set()
             self.after(0, lambda: self.entry_box.config(state=tk.NORMAL))
 
+
+
     def on_paraphrase_button_click(self):
         if not self.current_chat_id or not self.chat_sessions.get(self.current_chat_id):
             return messagebox.showinfo("No Chat", "Please select a chat with a previous response to paraphrase.")
@@ -623,44 +621,104 @@ class ResearchApp(tk.Tk):
 
         threading.Thread(target=self.paraphrase_thread, args=(last_bot_response, self.current_chat_id), daemon=True).start()
 
-    def on_paraphrase_button_click(self):
-        messagebox.showinfo("Not Implemented", "Paraphrase mode is not yet implemented.")
-
     def paraphrase_thread(self, text_to_paraphrase, chat_id):
-        pass
+        try:
+            print("Executing paraphrase thread...")
+            self.stop_loading_event.clear()
+            threading.Thread(target=self.run_loading_animation, daemon=True).start()
+            
+            self.after(0, lambda: self.append_to_chat(f"{self.model_var.get().split(':')[0].capitalize()} (Paraphrase):\n", "bot_name_tag"))
+            
+            prompt = f"Please paraphrase the following text:\n\n---\n{text_to_paraphrase}\n---"
+            self.chat_sessions[chat_id].append({'role': 'user', 'content': "Paraphrase the last response."})
+
+            messages = [{'role': 'system', 'content': "You are a helpful AI assistant. Your task is to paraphrase the given text, rephrasing it in a different style or tone while preserving the original meaning."}, {'role': 'user', 'content': prompt}]
+            response = self.ollama_client.chat(model=self.model_var.get(), messages=messages, stream=True)
+            self.stream_response_to_chat(response)
+
+        except Exception as e:
+            self.after(0, self.append_to_chat, f"\nError during paraphrasing: {e}\n\n", "error_tag")
+        finally:
+            self.stop_loading_event.set()
+            self.after(0, lambda: self.entry_box.config(state=tk.NORMAL))
 
     def populate_models(self):
-        print("Populating available models...")
+        print("\n--- Populating Models ---")
         try:
             if not self.ollama_client:
+                print("1. Ollama client not initialized. Aborting.")
                 raise ConnectionError("Ollama client not initialized.")
 
-            models_list = self.ollama_client.list().get('models', [])
+            print("1. Calling ollama_client.list() to get models...")
+            models_response = self.ollama_client.list()
+            print(f"2. Raw response from Ollama: {models_response}")
+
+            models_list = models_response.get('models', [])
+            if not models_list:
+                print("3. WARNING: 'models' key not found in response or is empty. No models will be loaded.")
+                model_folder_path = self.app_config.get('model_folder')
+                print(f"   - This usually means the OLLAMA_MODELS path is incorrect or the directory is empty.")
+                print(f"   - Current OLLAMA_MODELS path set at server start: '{model_folder_path}'")
+                if os.path.exists(model_folder_path):
+                    if not os.listdir(model_folder_path):
+                        print(f"   - DIAGNOSIS: The directory exists but is empty. Please place your Ollama models inside it.")
+                    else:
+                        print(f"   - DIAGNOSIS: The directory exists and is not empty.")
+                        subdirs = [d for d in os.listdir(model_folder_path) if os.path.isdir(os.path.join(model_folder_path, d))]
+                        if 'manifests' not in subdirs or 'blobs' not in subdirs:
+                            print(f"     - PROBLEM: The folder '{model_folder_path}' should directly contain 'manifests' and 'blobs' subdirectories, but it does not.")
+                            if subdirs:
+                                print(f"     - It appears you have nested model folders inside: {subdirs}")
+                                print(f"     - ACTION: Please move the CONTENTS of each model folder (e.g., the 'manifests' and 'blobs' from within '{subdirs[0]}') into the main '{model_folder_path}' directory.")
+                                print(f"     - All models must be consolidated into this single directory for Ollama to find them.")
+                        else:
+                             print(f"   - Please verify that the model files within '{model_folder_path}' are correct and not corrupted.")
+                else:
+                    print(f"   - DIAGNOSIS: The directory does not exist. Please check the 'model_folder' path in your System_Config.json.")
+
             model_names = sorted([m['model'] for m in models_list])
+            print(f"3. Extracted and sorted model names: {model_names}")
+
             self.status_light.config(foreground="#3AD900"); self.status_label.config(text="Connected")
+            
             chat_models = [name for name in model_names if "embed" not in name]
+            print(f"4. Filtered chat models (names not containing 'embed'): {chat_models}")
+
             self.model_selector['values'] = chat_models or ["No models found"]
+            print(f"5. Set model selector values to: {self.model_selector['values']}")
             
             # Check for embedding model for offline portability
+            print(f"\n6. Checking for required embedding model: '{self.embedding_model_name}'")
             if any(self.embedding_model_name in n for n in model_names):
                 self.embedding_model_available = True
                 self.embed_status_label.config(text=f'{self.embedding_model_name} (Ready)', foreground="#3AD900")
                 self.load_pdf_button.config(state=tk.NORMAL)
+                print("   - SUCCESS: Embedding model found.")
             else:
                 self.embedding_model_available = False
-                self.embed_status_label.config(text=f'{self.embedding_model_name} (Not Found - Offline)', foreground=Style.ERROR)
+                self.embed_status_label.config(text=f'{self.embedding_model_name} (Not Found)', foreground=Style.ERROR)
                 self.load_pdf_button.config(state=tk.DISABLED)
-                print(f"WARNING: Embedding model '{self.embedding_model_name}' not found. Document features will be disabled.")
+                print(f"   - WARNING: Embedding model '{self.embedding_model_name}' not found. Document features will be disabled.")
 
-            if self.model_selector.get() not in chat_models:
-                self.model_var.set(chat_models[0] if chat_models else "")
-            if not self.current_chat_id: self.start_new_chat()
+            current_selection = self.model_selector.get()
+            if current_selection not in chat_models:
+                new_selection = chat_models[0] if chat_models else ""
+                self.model_var.set(new_selection)
+                print(f"7. Current model selection ('{current_selection}') is invalid. Setting to: '{new_selection}'")
+
+            if not self.current_chat_id:
+                print("8. No current chat session. Starting a new one.")
+                self.start_new_chat()
+            print("--- Model Population Complete ---")
+
         except Exception as e:
-            print(f"Ollama connection failed: {e}")
+            print(f"\n--- Ollama Connection/Population FAILED ---")
+            print(f"ERROR: {e}")
             self.status_light.config(foreground=Style.ERROR); self.status_label.config(text="Ollama Not Found")
             self.model_selector['values'] = ["Connection Failed"]; self.model_var.set("Connection Failed")
             self.load_pdf_button.config(state=tk.DISABLED) # Also disable on connection failure
             if self.ollama_client:
+                print("Retrying in 5 seconds...")
                 self.after(5000, lambda: self.populate_models())
 
     def update_system_stats(self):
@@ -863,40 +921,55 @@ class ResearchApp(tk.Tk):
         print("--- Initializing Ollama Connection ---")
         ollama_path = self.app_config.get("ollama_path")
         model_folder = self.app_config.get("model_folder")
+        embedding_model_needed = self.app_config.get("embedding_model_name")
 
-        # This client is used to check for an externally running server
-        self.ollama_client = ollama.Client(host='127.0.0.1', timeout=5)
+        # Try to connect to an existing server first
         try:
-            # Check if Ollama is already running
-            print("Checking for existing Ollama server...")
-            self.ollama_client.list()
-            print("Connected to an existing Ollama server.")
-            # Set a longer timeout for the rest of the session
-            self.ollama_client = ollama.Client(host='127.0.0.1', timeout=120)
-            self.populate_models()
-            return # Skip starting our own server
-        except Exception:
-            print("No existing Ollama server found. Attempting to start a local one.")
+            print("1. Checking for an existing Ollama server...")
+            external_client = ollama.Client(host='127.0.0.1', timeout=5)
+            external_models = external_client.list().get('models', [])
+            external_model_names = [m['model'] for m in external_models]
+            print(f"2. Found existing server with models: {external_model_names}")
 
-            if not ollama_path or not os.path.exists(ollama_path):
-                self.ollama_client = None # Ensure client is None if path is invalid
-                print("Ollama executable path is not configured or invalid. Cannot start local server.")
-                messagebox.showwarning("Ollama Not Found", "Could not find a running Ollama instance or start a local one. Please configure the path to ollama.exe in settings or start Ollama manually.")
-                self.status_light.config(foreground=Style.ERROR); self.status_label.config(text="Ollama Not Found")
-                self.model_selector['values'] = ["Connection Failed"]; self.model_var.set("Connection Failed")
-                self.load_pdf_button.config(state=tk.DISABLED)
-                return
-
-            print(f"Ollama executable path from config: {ollama_path}")
-            print(f"Does ollama_path exist? {os.path.exists(ollama_path)}")
-            try:
-                self.ollama_process = self._start_ollama_server(ollama_path, model_folder)
+            # Check if the existing server has the required embedding model
+            if any(embedding_model_needed in name for name in external_model_names):
+                print("3. SUCCESS: Existing server has the required embedding model.")
+                print("   - Using the existing Ollama server.")
                 self.ollama_client = ollama.Client(host='127.0.0.1', timeout=120)
-                print("Waiting for local Ollama server to become responsive...")
-                self.after(100, lambda: self._check_server_readiness(time.time(), 60)) # Schedule the check
-            except Exception as e:
-                messagebox.showerror("Ollama Start Error", f"Failed to start local Ollama server: {e}")
-                self.ollama_client = None # Ensure client is None if startup fails
+                self.populate_models()
+                return # Success, we are done.
+            else:
+                print("3. WARNING: Existing server found, but it does NOT have the required embedding model.")
+                print(f"   - Required model: '{embedding_model_needed}'")
+                print("   - The application will now attempt to start its own managed Ollama server.")
+                print("   - Please ensure the external Ollama server is shut down if you encounter port conflicts.")
+
+        except Exception:
+            print("1. No existing Ollama server found. Proceeding to start a local one.")
+            pass # This is expected if no server is running, so we just continue
+
+        # If we are here, it means either no server was running or the existing one was unsuitable.
+        # We will now start our own managed server.
+        print("\n--- Starting Managed Ollama Server ---")
+        if not ollama_path or not os.path.exists(ollama_path):
+            self.ollama_client = None
+            print("ERROR: Ollama executable path is not configured or invalid. Cannot start local server.")
+            messagebox.showerror("Ollama Not Found", "Ollama executable not found. Please configure the path to ollama.exe in settings.")
+            self.status_light.config(foreground=Style.ERROR); self.status_label.config(text="Ollama Not Found")
+            self.model_selector['values'] = ["Connection Failed"]; self.model_var.set("Connection Failed")
+            self.load_pdf_button.config(state=tk.DISABLED)
+            return
+
+        print(f"1. Executable path: {ollama_path}")
+        print(f"2. Model folder to be used: {model_folder}")
+        try:
+            self.ollama_process = self._start_ollama_server(ollama_path, model_folder)
+            self.ollama_client = ollama.Client(host='127.0.0.1', timeout=120)
+            print("3. Waiting for managed Ollama server to become responsive...")
+            self.after(100, lambda: self._check_server_readiness(time.time(), 60))
+        except Exception as e:
+            messagebox.showerror("Ollama Start Error", f"Failed to start local Ollama server: {e}")
+            self.ollama_client = None
 
     def _check_server_readiness(self, start_time, max_wait):
         """Non-blocking check for Ollama server readiness."""
@@ -957,61 +1030,77 @@ class ResearchApp(tk.Tk):
 
 
     def _load_config(self):
+        print("\n--- Loading Configuration ---")
         config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
+        print(f"1. Project Root: '{PROJECT_ROOT}'")
+        print(f"2. Checking for config file at: '{config_path}'")
 
-        # Define default relative paths. These are used if the config file is missing
-        # or if a specific key is not in the config file.
         default_config = {
             "ollama_path": os.path.join("Portable_AI_Assets", "ollama_main", "ollama.exe"),
-            # NOTE: Ollama can only be started with one model directory. This default prioritizes
-            # the embedding model for document analysis. To use other models (e.g., 'tinyllama'),
-            # they must be located within this same directory.
-            "model_folder": os.path.join("Portable_AI_Assets", "text_embedding_model"),
+            # NOTE: Ollama can only be started with one model directory. All models, including the
+            # embedding model required for document analysis (e.g., 'mxbai-embed-large'), must be
+            # located within this single 'model_folder' directory.
+            "model_folder": os.path.join("Portable_AI_Assets", "AI-models"),
             "vector_cache_dir": os.path.join("Portable_AI_Assets", "vector_cache"),
             "embedding_model_name": "mxbai-embed-large"
         }
+        print(f"3. Default config loaded: {json.dumps(default_config, indent=2)}")
 
         config_from_file = {}
         if os.path.exists(config_path):
             try:
                 with open(config_path, 'r') as f:
                     config_from_file = json.load(f)
+                print(f"4. Successfully loaded config from file: {json.dumps(config_from_file, indent=2)}")
             except (json.JSONDecodeError, IOError) as e:
-                print(f"Warning: Could not read or parse '{config_path}'. Using default settings. Error: {e}")
+                print(f"4. WARNING: Could not read or parse '{config_path}'. Using default settings. Error: {e}")
+        else:
+            print("4. Config file not found. Using default settings.")
 
         # Start with defaults, then layer config from file on top
         final_config = default_config.copy()
         final_config.update(config_from_file)
+        print(f"5. Merged config (defaults + file): {json.dumps(final_config, indent=2)}")
 
-        print("--- Resolving Application Paths ---")
+        print("\n--- Resolving and Validating Paths ---")
         # All paths are treated as relative to the project root for portability.
         for key in ["ollama_path", "model_folder", "vector_cache_dir"]:
+            print(f"\nProcessing path for '{key}':")
             path_value = final_config[key]
+            print(f"  - Initial value: '{path_value}'")
             
             # If path is not absolute, resolve it relative to the project root
             if not os.path.isabs(path_value):
+                print("  - Path is relative. Resolving against project root.")
                 absolute_path = os.path.normpath(os.path.join(PROJECT_ROOT, path_value))
             else:
+                print("  - Path is absolute.")
                 absolute_path = os.path.normpath(path_value)
+            print(f"  - Resolved absolute path: '{absolute_path}'")
 
             # If the resolved path from the config is invalid, fall back to the default path
             if not os.path.exists(absolute_path) and key != "vector_cache_dir":
-                print(f"  - WARNING: Configured path for '{key}' not found: '{absolute_path}'")
+                print(f"  - WARNING: Path does not exist: '{absolute_path}'")
                 default_relative_path = default_config[key]
                 absolute_path = os.path.normpath(os.path.join(PROJECT_ROOT, default_relative_path))
                 print(f"  - Falling back to default path: '{absolute_path}'")
             
             final_config[key] = absolute_path # Update config with the validated, absolute path
-            print(f"  - '{key}': '{final_config[key]}'")
-            if not os.path.exists(final_config[key]) and key != "vector_cache_dir":
-                 print(f"    - WARNING: The path does not exist.")
+            print(f"  - Final path for '{key}': '{final_config[key]}'")
+            if os.path.exists(final_config[key]):
+                print("    - Path validation: OK")
+            elif key != "vector_cache_dir":
+                 print("    - Path validation: FAILED - Path does not exist.")
         
         # Ensure the vector cache directory exists.
         try:
+            print(f"\nEnsuring vector cache directory exists at: '{final_config['vector_cache_dir']}'")
             os.makedirs(final_config["vector_cache_dir"], exist_ok=True)
         except OSError as e:
             print(f"Error creating vector cache directory '{final_config['vector_cache_dir']}': {e}")
 
+        print(f"\n--- Configuration Loading Complete ---")
+        print(f"Final configuration object: {json.dumps(final_config, indent=2)}")
         return final_config
 
     def _save_config(self, app_config):
