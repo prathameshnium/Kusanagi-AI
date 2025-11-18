@@ -161,7 +161,6 @@
                         <span>AI Link:</span>
                         <span id="status-ai" class="text-fg-secondary">Disconnected</span>
                     </div>
-                    <!-- Added missing status-doc element to fix JS error -->
                     <div class="flex justify-between">
                         <span>Document:</span>
                         <span id="status-doc" class="text-fg-secondary truncate max-w-[100px]">None</span>
@@ -220,10 +219,28 @@
         <main class="flex-1 flex flex-col max-h-screen relative bg-primary">
             <!-- Top Bar -->
             <header class="flex-shrink-0 h-14 border-b border-tertiary flex items-center justify-between px-4 bg-secondary/50">
-                <div class="flex items-center gap-2">
-                    <div class="w-2 h-2 bg-success rounded-full secure-indicator" title="Encrypted RAM Session"></div>
-                    <span class="text-lg font-bold text-fg-primary" id="chat-header">Secure Workspace</span>
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 bg-success rounded-full secure-indicator" title="Encrypted RAM Session"></div>
+                        <span class="text-lg font-bold text-fg-primary" id="chat-header">Secure Workspace</span>
+                    </div>
+                    
+                    <!-- Performance Monitor -->
+                    <div class="hidden md:flex items-center gap-3 text-[10px] font-mono text-fg-secondary bg-secondary/80 px-3 py-1 rounded border border-tertiary">
+                         <div title="Browser Memory Usage (Approx)">
+                            <span class="text-accent">RAM:</span> <span id="perf-ram" class="text-fg-primary">--</span>
+                        </div>
+                        <div class="w-[1px] h-3 bg-tertiary"></div>
+                        <div title="Total Tokens Used">
+                            <span class="text-accent">Tokens:</span> <span id="perf-tokens" class="text-fg-primary">0</span>
+                        </div>
+                        <div class="w-[1px] h-3 bg-tertiary"></div>
+                        <div title="Tokens Per Second">
+                            <span class="text-accent">Speed:</span> <span id="perf-speed" class="text-fg-primary">--</span>
+                        </div>
+                    </div>
                 </div>
+
                 <div class="flex items-center gap-3">
                     <button onclick="speakLastResponse()" class="text-fg-secondary hover:text-accent text-lg" title="Read Aloud">🔊</button>
                     <div class="h-4 w-[1px] bg-tertiary"></div>
@@ -273,6 +290,7 @@
         // MEMORY-ONLY STORAGE
         let loadedDocuments = {};
         let lastAIResponse = ""; 
+        let sessionTotalTokens = 0;
 
         const MODELS = {
             gemini: [
@@ -321,7 +339,41 @@
             const slider = document.getElementById('temp-slider');
             const valDisplay = document.getElementById('temp-val');
             slider.addEventListener('input', (e) => valDisplay.textContent = e.target.value);
+            
+            // Start Memory Monitor
+            setInterval(updatePerfStats, 2000);
         });
+
+        // --- PERFORMANCE MONITOR ---
+        function updatePerfStats(tokensUsed = 0, speed = 0) {
+            // Update Tokens
+            if (tokensUsed > 0) {
+                sessionTotalTokens += tokensUsed;
+                document.getElementById('perf-tokens').textContent = sessionTotalTokens.toLocaleString();
+            }
+            
+            // Update Speed if provided
+            if (speed > 0) {
+                document.getElementById('perf-speed').textContent = speed.toFixed(1) + " t/s";
+            }
+
+            // Update RAM (Best Effort)
+            const ramEl = document.getElementById('perf-ram');
+            if (performance.memory) {
+                // Chrome/Edge only
+                const usedMB = Math.round(performance.memory.usedJSHeapSize / 1024 / 1024);
+                ramEl.textContent = `${usedMB} MB`;
+            } else {
+                // Fallback: Estimate based on loaded text length
+                let charCount = 0;
+                Object.values(loadedDocuments).forEach(chunks => {
+                    chunks.forEach(c => charCount += c.length);
+                });
+                // Rough estimate: chars * 2 bytes + overhead
+                const estMB = Math.round((charCount * 2) / 1024 / 1024) + 20; // Base overhead
+                ramEl.textContent = `~${estMB} MB`;
+            }
+        }
 
         // --- SETTINGS & CONFIG ---
         function toggleSettings() {
@@ -574,15 +626,28 @@
                 const selectedModel = document.getElementById('model-select').value;
                 const temperature = parseFloat(document.getElementById('temp-slider').value);
 
-                let responseText = "";
-                if (config.provider === 'gemini') responseText = await callGemini(fullPrompt, selectedModel, temperature);
-                else if (config.provider === 'groq') responseText = await callGroq(fullPrompt, selectedModel, temperature);
-                else if (config.provider === 'hf') responseText = await callHF(fullPrompt, selectedModel, temperature);
-                else if (config.provider === 'ollama') responseText = await callOllama(fullPrompt, selectedModel, temperature);
+                // Track Start Time
+                const startTime = performance.now();
+
+                let result = { text: "", usage: null };
+                if (config.provider === 'gemini') result = await callGemini(fullPrompt, selectedModel, temperature);
+                else if (config.provider === 'groq') result = await callGroq(fullPrompt, selectedModel, temperature);
+                else if (config.provider === 'hf') result = await callHF(fullPrompt, selectedModel, temperature);
+                else if (config.provider === 'ollama') result = await callOllama(fullPrompt, selectedModel, temperature);
+
+                const endTime = performance.now();
+                
+                // Calculate Stats
+                const durationSec = (endTime - startTime) / 1000;
+                // Fallback token estimation if API doesn't provide usage
+                const estimatedTokens = result.usage ? (result.usage.total_tokens || 0) : Math.ceil((fullPrompt.length + result.text.length) / 4);
+                const speed = estimatedTokens / durationSec;
+
+                updatePerfStats(estimatedTokens, speed);
 
                 document.getElementById(thinkingId).remove();
-                appendAIMessage(responseText);
-                lastAIResponse = responseText;
+                appendAIMessage(result.text);
+                lastAIResponse = result.text;
 
             } catch (error) {
                 document.getElementById(thinkingId).remove();
@@ -636,16 +701,24 @@
             const selectedModel = document.getElementById('model-select').value;
             const temperature = parseFloat(document.getElementById('temp-slider').value);
             
+            const startTime = performance.now();
+
             try {
-                let responseText = "";
-                if (config.provider === 'gemini') responseText = await callGemini(fullPrompt, selectedModel, temperature);
-                else if (config.provider === 'groq') responseText = await callGroq(fullPrompt, selectedModel, temperature);
-                else if (config.provider === 'hf') responseText = await callHF(fullPrompt, selectedModel, temperature);
-                else if (config.provider === 'ollama') responseText = await callOllama(fullPrompt, selectedModel, temperature);
+                let result = { text: "", usage: null };
+                if (config.provider === 'gemini') result = await callGemini(fullPrompt, selectedModel, temperature);
+                else if (config.provider === 'groq') result = await callGroq(fullPrompt, selectedModel, temperature);
+                else if (config.provider === 'hf') result = await callHF(fullPrompt, selectedModel, temperature);
+                else if (config.provider === 'ollama') result = await callOllama(fullPrompt, selectedModel, temperature);
+
+                const endTime = performance.now();
+                const durationSec = (endTime - startTime) / 1000;
+                const estimatedTokens = result.usage ? (result.usage.total_tokens || 0) : Math.ceil((fullPrompt.length + result.text.length) / 4);
+                const speed = estimatedTokens / durationSec;
+                updatePerfStats(estimatedTokens, speed);
 
                 document.getElementById(thinkingId).remove();
-                appendAIMessage(responseText);
-                lastAIResponse = responseText;
+                appendAIMessage(result.text);
+                lastAIResponse = result.text;
             } catch (error) {
                 document.getElementById(thinkingId).remove();
                 appendSystemMessage(error.message, true);
@@ -704,6 +777,8 @@
 
         function clearChat() {
             document.getElementById('chat-history').innerHTML = '';
+            sessionTotalTokens = 0; // Reset stats on clear
+            updatePerfStats(0, 0); // Reset UI
             appendSystemMessage("Chat history cleared from RAM.");
         }
 
@@ -721,7 +796,11 @@
                 });
                 if (resp.ok) {
                     const data = await resp.json();
-                    return data.candidates[0].content.parts[0].text;
+                    const usage = data.usageMetadata || null;
+                    return { 
+                        text: data.candidates[0].content.parts[0].text,
+                        usage: usage
+                    };
                 } else { 
                     const err = await resp.json();
                     throw new Error(err.error?.message || "Gemini Error");
@@ -741,7 +820,10 @@
             });
             if (!resp.ok) throw new Error("Groq Error");
             const data = await resp.json();
-            return data.choices[0].message.content;
+            return {
+                text: data.choices[0].message.content,
+                usage: data.usage // Groq returns usage object
+            };
         }
 
         async function callHF(prompt, modelId, temp) {
@@ -755,7 +837,9 @@
             });
             if (!resp.ok) throw new Error("Hugging Face Error");
             const data = await resp.json();
-            return Array.isArray(data) ? data[0].generated_text : data.generated_text;
+            const text = Array.isArray(data) ? data[0].generated_text : data.generated_text;
+            // HF doesn't return usage, so we return null and let estimate handle it
+            return { text: text, usage: null };
         }
 
         async function callOllama(prompt, modelId, temp) {
@@ -771,7 +855,13 @@
             });
             if (!resp.ok) throw new Error("Ollama Error. Check CORS.");
             const data = await resp.json();
-            return data.response;
+            // Ollama returns eval_count (output) and prompt_eval_count (input)
+            const usage = {
+                prompt_tokens: data.prompt_eval_count || 0,
+                completion_tokens: data.eval_count || 0,
+                total_tokens: (data.prompt_eval_count || 0) + (data.eval_count || 0)
+            };
+            return { text: data.response, usage: usage };
         }
 
     </script>
