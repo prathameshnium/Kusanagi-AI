@@ -142,27 +142,27 @@
 <body class="min-h-screen flex flex-col">
 
     <!-- Settings Modal -->
-    <div id="settings-modal" class="hidden fixed inset-0 settings-modal z-[100] flex items-center justify-center backdrop-blur-sm">
-        <div class="settings-modal-content p-6 rounded-lg shadow-2xl max-w-md w-full border">
+    <div id="settings-modal" class="hidden fixed inset-0 settings-modal z-[100] flex items-center justify-center backdrop-blur-sm bg-slate-900/50">
+        <div class="settings-modal-content glass-card p-6 rounded-lg shadow-2xl max-w-md w-full">
             <div class="flex justify-between items-start mb-4">
                 <h2 class="text-xl font-bold text-accent">Global Configuration</h2>
-                <button onclick="toggleSettings()" class="text-fg-secondary hover:text-fg-primary">✕</button>
+                <button onclick="toggleSettings()" class="text-slate-400 hover:text-white">✕</button>
             </div>
-            <div class="bg-tertiary/50 p-3 rounded mb-4 text-xs text-fg-secondary border border-tertiary">
+            <div class="bg-tertiary/50 p-3 rounded mb-4 text-xs text-slate-400 border border-tertiary">
                 <strong>Note:</strong> These keys are saved in your browser's <code>localStorage</code> and will be used by all web apps.
             </div>
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm text-fg-secondary mb-2">Google Gemini API Key</label>
-                    <input type="password" id="gemini-key-input" class="w-full" placeholder="AIza...">
+                    <label class="block text-sm text-slate-400 mb-2">Google Gemini API Key</label>
+                    <input type="password" id="gemini-key-input" class="w-full bg-secondary border border-tertiary rounded-lg p-2 text-white placeholder-slate-500 focus:ring-2 focus:ring-accent outline-none" placeholder="AIza...">
                 </div>
                 <div>
-                    <label class="block text-sm text-fg-secondary mb-2">Groq API Key</label>
-                    <input type="password" id="groq-key-input" class="w-full" placeholder="gsk_...">
+                    <label class="block text-sm text-slate-400 mb-2">Groq API Key</label>
+                    <input type="password" id="groq-key-input" class="w-full bg-secondary border border-tertiary rounded-lg p-2 text-white placeholder-slate-500 focus:ring-2 focus:ring-accent outline-none" placeholder="gsk_...">
                 </div>
                 <div>
-                    <label class="block text-sm text-fg-secondary mb-2">Hugging Face Token</label>
-                    <input type="password" id="hf-token-input" class="w-full" placeholder="hf_...">
+                    <label class="block text-sm text-slate-400 mb-2">Hugging Face Token</label>
+                    <input type="password" id="hf-token-input" class="w-full bg-secondary border border-tertiary rounded-lg p-2 text-white placeholder-slate-500 focus:ring-2 focus:ring-accent outline-none" placeholder="hf_...">
                 </div>
             </div>
             <div class="flex justify-between items-center mt-6 pt-4 border-t border-tertiary">
