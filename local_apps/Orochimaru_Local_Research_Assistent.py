@@ -11,6 +11,7 @@ import gc
 import datetime
 import json
 import signal
+import shutil
 
 # --- PROJECT ROOT ---
 # Assumes the script is in a subdirectory of the project root (e.g., 'local_apps')

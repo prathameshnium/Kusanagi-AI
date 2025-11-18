@@ -39,6 +39,8 @@ last_job_id = 0
 after_id = None # To store the ID of the scheduled 'after' job
 selected_model = None # Will be a tk.StringVar
 model_frame = None # To hold the frame for model radio buttons
+prediction_list = None
+
 
 # --- Ollama & System Config ---
 config = {}
@@ -509,7 +511,7 @@ temperature_slider.pack(anchor='center', pady=10)
 ttk.Label(sidebar_frame, text="Model", font=(Style.UI_FONT[0], 12, "bold"), style='TLabel').pack(anchor='center', pady=(20, 5))
 
 # --- Prediction Listbox ---
-ttk.Label(main_frame, text="Next Word Suggestions:", font=(Style.UI_FONT[0], 12, "bold'), style='TLabel').pack(anchor='w', pady=(10, 5))
+ttk.Label(main_frame, text="Next Word Suggestions:", font=(Style.UI_FONT[0], 12, "bold"), style='TLabel').pack(anchor='w', pady=(10, 5))
 prediction_list = tk.Listbox(main_frame, bg=Style.BG_TERTIARY, fg=Style.FG_PRIMARY,
                              borderwidth=0, highlightthickness=0,
                              font=(Style.CHAT_FONT[0], 12), selectbackground=Style.ACCENT,
