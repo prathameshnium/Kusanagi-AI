@@ -3,212 +3,589 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Orochimaru - Local RAG AI</title>
-    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;700&display=swap" rel="stylesheet">
+    <title>Orochimaru - Private Local RAG</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        /* Custom scrollbar for a professional look */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #193549; } /* primary */
-        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #718096; }
-        .listbox-item.active {
-            background-color: #193549; /* primary */
-            border-color: #ffab40; /* accent */
-        }
-        html {
-            font-size: 14px; /* Default is 16px. Reducing this scales down rem-based units. */
-        }
-        body { font-family: 'Segoe UI', sans-serif; }
-        .tab-button.active {
-            background-color: #193549; /* primary */
-            color: #FFFFFF; /* fg-primary */
-        }
-        .tab-button {
-            background-color: #25435A; /* tertiary */
-            color: #97B1C2; /* fg-secondary */
-        }
-    </style>
+    <!-- PDF.js for local parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- Marked for Markdown -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
     <script>
+        // Configure PDF.js worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        
         tailwind.config = {
             theme: {
                 extend: {
                     fontFamily: { sans: ['Segoe UI', 'sans-serif'] },
                     colors: {
-                        'primary': '#193549',   // Main content dark blue
-                        'secondary': '#002240', // Sidebar darker blue
-                        'tertiary': '#25435A',   // Input fields
-                        'accent': '#ffab40',    // Orange/Yellow accent
-                        'accent-fg': '#002240', // Text on accent
+                        'primary': '#193549',
+                        'secondary': '#002240',
+                        'tertiary': '#25435A',
+                        'accent': '#ffab40',
+                        'accent-fg': '#002240',
                         'fg-primary': '#FFFFFF',
-                        'fg-secondary': '#97B1C2', // Muted text
+                        'fg-secondary': '#97B1C2',
                     }
                 }
             }
         }
     </script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #193549; }
+        ::-webkit-scrollbar-thumb { background: #4a5568; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #718096; }
+        body { font-family: 'Segoe UI', sans-serif; }
+        .prose p { margin-bottom: 0.5em; }
+        .prose ul { list-style-type: disc; padding-left: 1.5em; }
+        .prose code { background: rgba(255,255,255,0.1); padding: 2px 4px; rounded: 3px; font-family: monospace; }
+        .tab-button.active { background-color: #193549; color: #FFFFFF; border-bottom: 2px solid #ffab40; }
+        .tab-button { background-color: #002240; color: #97B1C2; }
+    </style>
 </head>
 <body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden">
+
+    <!-- SETTINGS MODAL -->
+    <div id="settings-modal" class="hidden absolute inset-0 bg-black/80 z-50 flex items-center justify-center backdrop-blur-sm">
+        <div class="bg-secondary p-6 rounded-lg shadow-2xl max-w-md w-full border border-tertiary">
+            <div class="flex justify-between items-start mb-4">
+                <h2 class="text-xl font-bold text-accent">Secure Configuration</h2>
+                <button onclick="toggleSettings()" class="text-fg-secondary hover:text-fg-primary">✕</button>
+            </div>
+
+            <div class="bg-green-900/20 border border-green-900 p-3 rounded mb-4 text-xs text-green-200">
+                <strong>🛡️ Privacy Architecture:</strong> 
+                <ul class="list-disc ml-4 mt-1">
+                    <li>PDFs processed <strong>locally</strong> (Browser RAM).</li>
+                    <li><strong>Ollama users:</strong> Set <code>OLLAMA_ORIGINS="*"</code> in your environment variables.</li>
+                </ul>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm text-fg-secondary mb-2">AI Provider</label>
+                <select id="provider-select" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none" onchange="updateKeyInput()">
+                    <option value="gemini">Google Gemini (Recommended)</option>
+                    <option value="groq">Groq (Fastest)</option>
+                    <option value="hf">Hugging Face</option>
+                    <option value="ollama">Local Ollama (localhost:11434)</option>
+                </select>
+            </div>
+
+            <div class="mb-6" id="api-key-container">
+                <label class="block text-sm text-fg-secondary mb-2">API Key / Endpoint</label>
+                <input type="password" id="api-key-input" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none" placeholder="Enter key...">
+                <p id="ollama-hint" class="hidden text-[10px] text-fg-secondary mt-1">Default: http://localhost:11434 (Leave empty for default)</p>
+            </div>
+
+            <div class="flex justify-between items-center">
+                <button onclick="purgeData()" class="text-red-400 text-xs hover:text-red-200 underline">🔥 Purge All Data</button>
+                <div class="flex gap-2">
+                    <button onclick="toggleSettings()" class="px-4 py-2 text-fg-secondary hover:text-fg-primary">Cancel</button>
+                    <button onclick="saveSettings()" class="px-4 py-2 bg-accent text-accent-fg rounded font-bold hover:bg-yellow-500">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="flex h-full max-h-screen">
         
         <!-- === Sidebar === -->
-        <aside class="w-64 flex-shrink-0 bg-secondary flex flex-col p-4">
+        <aside class="w-72 flex-shrink-0 bg-secondary flex flex-col p-4 border-r border-tertiary overflow-y-auto custom-scrollbar">
             <!-- Header -->
-            <div class="px-1">
+            <div class="px-1 mb-4">
                 <h1 class="text-2xl font-bold text-accent">Orochimaru</h1>
-                <p class="text-sm font-bold text-accent">Developed by Prathamesh Deshmukh</p>
-                <p class="text-sm text-fg-secondary mt-1">Local RAG AI Assistant</p>
+                <p class="text-xs text-fg-secondary mt-1">Local RAG Assistant</p>
             </div>
 
-            <!-- Status -->
-            <div class="flex items-center space-x-2 px-2 mt-4">
-                <span class="text-green-400 text-lg">●</span>
-                <span class="text-sm text-fg-primary">Connected</span>
+            <!-- File Upload -->
+            <div class="mb-6">
+                <input type="file" id="pdf-upload" accept=".pdf" class="hidden" onchange="handleFileUpload(this)">
+                <button onclick="document.getElementById('pdf-upload').click()" class="w-full bg-accent text-accent-fg font-bold py-3 px-4 rounded-md hover:bg-yellow-600 transition duration-200 flex items-center justify-center gap-2 shadow-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                    Load Document
+                </button>
+                <p class="text-[10px] text-center text-fg-secondary mt-2">Processed locally. No upload.</p>
             </div>
 
-            <!-- Load Document -->
-            <button class="w-full bg-accent text-accent-fg font-bold py-2.5 px-4 rounded-md mt-4 hover:bg-yellow-600 transition duration-200">
-                📄 Load Document
-            </button>
-
-            <hr class="border-tertiary my-4">
-
-            <!-- Model Controls -->
-            <div class="px-1 space-y-3">
-                <div>
-                    <label class="text-sm font-semibold text-fg-primary">Chat Model:</label>
-                    <select class="w-full bg-tertiary text-fg-primary p-2 rounded-md mt-1 focus:outline-none focus:ring-2 focus:ring-accent">
-                        <option>qwen:1.8b-chat</option>
-                        <option>llama3:8b</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="text-sm font-semibold text-fg-primary flex justify-between">
-                        <span>Temperature:</span>
-                        <span>0.00</span>
-                    </label>
-                    <input type="range" min="0" max="1" step="0.01" value="0" class="w-full h-2 bg-tertiary rounded-lg appearance-none cursor-pointer mt-1">
-                </div>
-            </div>
-
-            <hr class="border-tertiary my-4">
-
-            <!-- Embedding Model -->
-            <div class="px-1">
-                <p class="text-sm font-semibold text-fg-primary">Embedding Model:</p>
-                <p class="text-sm text-green-400">mxbai-embed-large (Ready)</p>
-            </div>
-
-            <!-- History Tabs -->
-            <div class="flex-grow flex flex-col mt-4 overflow-hidden">
-                <!-- Tab Buttons -->
-                <div class="flex-shrink-0 flex border-b border-tertiary">
-                    <button id="tab-btn-chats" class="tab-button active flex-1 py-2 text-sm font-semibold rounded-t-md">Chats</button>
-                    <button id="tab-btn-docs" class="tab-button flex-1 py-2 text-sm font-semibold rounded-t-md">Documents</button>
-                </div>
-                <!-- Tab Content -->
-                <div class="flex-grow bg-secondary overflow-hidden">
-                    <!-- Chats Panel -->
-                    <div id="tab-panel-chats" class="h-full flex flex-col">
-                        <div class="flex-shrink-0 p-2 flex space-x-2">
-                            <button class="bg-tertiary hover:bg-primary p-2 rounded-md text-fg-primary">➕</button>
-                            <button class="bg-tertiary hover:bg-primary p-2 rounded-md text-fg-primary">➖</button>
-                        </div>
-                        <div class="flex-grow bg-tertiary rounded-b-md p-1 space-y-1 overflow-y-auto">
-                            <div class="listbox-item p-2 rounded-md cursor-pointer hover:bg-primary">
-                                <h3 class="font-semibold text-fg-primary truncate">Chat 1</h3>
-                            </div>
-                        </div>
+            <!-- Status Panel -->
+            <div class="bg-tertiary/30 rounded-lg p-3 mb-4 border border-tertiary">
+                <h3 class="text-xs font-bold text-fg-secondary uppercase mb-2">System Status</h3>
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between">
+                        <span>AI Link:</span>
+                        <span id="status-ai" class="text-red-400">Disconnected</span>
                     </div>
-                    <!-- Documents Panel -->
-                    <div id="tab-panel-docs" class="h-full flex-col hidden">
-                        <div class="flex-shrink-0 p-2 flex space-x-2">
-                            <button class="bg-tertiary hover:bg-primary p-2 rounded-md text-fg-primary">➖</button>
-                        </div>
-                        <div class="flex-grow bg-tertiary rounded-b-md p-1 space-y-1 overflow-y-auto">
-                            <div class="listbox-item active p-2 rounded-md cursor-pointer border border-transparent">
-                                <h3 class="font-semibold text-fg-primary truncate">History_of_Science_101.pdf</h3>
-                            </div>
-                        </div>
+                    <div class="flex justify-between">
+                        <span>Document:</span>
+                        <span id="status-doc" class="text-fg-secondary truncate max-w-[100px]">None</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>Chunks:</span>
+                        <span id="status-chunks" class="text-fg-primary">0</span>
                     </div>
                 </div>
             </div>
 
+            <!-- Quick Actions -->
+            <div id="quick-actions" class="space-y-2 opacity-50 pointer-events-none transition-opacity">
+                <button onclick="runQuickAction('summarize')" class="w-full text-left px-3 py-2 rounded hover:bg-tertiary text-sm text-fg-primary border border-transparent hover:border-accent transition flex items-center gap-2">
+                    📝 Summarize
+                </button>
+                <button onclick="runQuickAction('key_points')" class="w-full text-left px-3 py-2 rounded hover:bg-tertiary text-sm text-fg-primary border border-transparent hover:border-accent transition flex items-center gap-2">
+                    🔑 Key Points
+                </button>
+                
+                <!-- Review Dropdown Trigger -->
+                <div class="relative">
+                    <button onclick="toggleReviewMenu()" class="w-full text-left px-3 py-2 rounded hover:bg-tertiary text-sm text-fg-primary border border-transparent hover:border-accent transition flex items-center gap-2 justify-between">
+                        <span>🧐 Expert Review</span>
+                        <span class="text-[10px]">▼</span>
+                    </button>
+                    
+                    <!-- Review Personas (Hidden by default) -->
+                    <div id="review-menu" class="hidden ml-4 mt-1 border-l-2 border-tertiary pl-2 space-y-1">
+                        <button onclick="runReview('Physicist')" class="w-full text-left px-2 py-1.5 text-xs text-fg-secondary hover:text-accent transition">🔬 Physicist</button>
+                        <button onclick="runReview('Chemist')" class="w-full text-left px-2 py-1.5 text-xs text-fg-secondary hover:text-accent transition">🧪 Chemist</button>
+                        <button onclick="runReview('Editor')" class="w-full text-left px-2 py-1.5 text-xs text-fg-secondary hover:text-accent transition">✍️ Editor</button>
+                        <button onclick="runReview('Chief Editor')" class="w-full text-left px-2 py-1.5 text-xs text-fg-secondary hover:text-accent transition">👔 Chief Editor</button>
+                    </div>
+                </div>
+
+                <button onclick="runQuickAction('paraphrase')" class="w-full text-left px-3 py-2 rounded hover:bg-tertiary text-sm text-fg-primary border border-transparent hover:border-accent transition flex items-center gap-2">
+                    🔄 Paraphrase Last
+                </button>
+            </div>
+
+            <div class="mt-auto pt-4 border-t border-tertiary">
+                 <button onclick="toggleSettings()" class="flex items-center gap-2 text-sm text-fg-secondary hover:text-accent transition">
+                    <span>⚙️</span> Configure Keys
+                 </button>
+            </div>
         </aside>
 
-        <!-- === Main Chat Area === -->
-        <main class="flex-1 flex flex-col max-h-screen p-2">
+        <!-- === Main Area === -->
+        <main class="flex-1 flex flex-col max-h-screen relative bg-primary">
             <!-- Top Bar -->
-            <header class="flex-shrink-0 flex justify-between items-center p-2">
-                <h2 id="chat-title" class="text-lg font-bold">New Chat</h2>
-                <div class="flex items-center space-x-2">
-                    <span class="text-sm text-fg-secondary">RAM: 25% | Tok/s: --</span>
-                    <button class="text-lg text-fg-secondary hover:text-fg-primary">🔊</button>
-                    <button class="text-lg text-fg-secondary hover:text-fg-primary">💾</button>
-                    <button class="text-lg text-fg-secondary hover:text-fg-primary">🗑️</button>
-                    <button class="text-lg text-fg-secondary hover:text-fg-primary">⚙️</button>
+            <header class="flex-shrink-0 h-14 border-b border-tertiary flex items-center justify-between px-4 bg-secondary/50">
+                <div class="flex items-center gap-2">
+                    <span class="text-lg font-bold text-fg-primary" id="chat-header">RAG Workspace</span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button onclick="speakLastResponse()" class="text-fg-secondary hover:text-accent text-lg" title="Read Aloud">🔊</button>
+                    <div class="h-4 w-[1px] bg-tertiary"></div>
+                    <button onclick="clearChat()" class="text-fg-secondary hover:text-red-400 text-sm" title="Clear Chat">🗑️ Clear</button>
                 </div>
             </header>
 
-            <!-- Chat History -->
-            <div id="chat-history" class="flex-grow p-4 overflow-y-auto space-y-6 bg-primary rounded-md">
-                <!-- Mockup of an AI greeting -->
+            <!-- Chat Container -->
+            <div id="chat-history" class="flex-grow overflow-y-auto p-4 space-y-6 custom-scrollbar">
+                <!-- Welcome Message -->
                 <div class="flex items-start space-x-4">
-                    <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent">O</div>
-                    <div class="bg-tertiary p-4 rounded-lg max-w-2xl">
+                    <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent border border-accent">O</div>
+                    <div class="bg-tertiary p-4 rounded-lg max-w-3xl shadow-md">
                         <p class="font-bold text-accent mb-1">Orochimaru</p>
-                        <p>Ready to assist.</p>
+                        <p>I am ready. Load a PDF to begin analysis.</p>
                     </div>
                 </div>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="flex-shrink-0 grid grid-cols-3 gap-2 p-2">
-                <button class="bg-accent text-accent-fg font-bold py-2 px-4 rounded-md hover:bg-yellow-600 transition duration-200">Summarize Document</button>
-                <button class="bg-accent text-accent-fg font-bold py-2 px-4 rounded-md hover:bg-yellow-600 transition duration-200">Review Document</button>
-                <button class="bg-accent text-accent-fg font-bold py-2 px-4 rounded-md hover:bg-yellow-600 transition duration-200">Checker</button>
-            </div>
-
-            <!-- Input Bar -->
-            <div class="flex-shrink-0 p-2">
-                <div class="flex bg-tertiary rounded-md p-1.5">
-                    <input id="chat-input" type="text" placeholder="Ask a question or type a command..." class="w-full bg-transparent p-2 text-lg text-fg-primary placeholder-fg-secondary focus:outline-none">
-                    <button id="send-button" class="bg-accent text-accent-fg rounded-md p-3 ml-2 hover:bg-yellow-600 transition duration-200">
-                        <span class="font-bold text-2xl leading-none">➤</span>
-                    </button>
+            <!-- Input Area -->
+            <div class="flex-shrink-0 p-4 bg-primary border-t border-tertiary">
+                <div class="max-w-4xl mx-auto relative">
+                    <div class="flex bg-tertiary rounded-lg border border-tertiary focus-within:border-accent shadow-lg transition-colors">
+                        <input id="chat-input" type="text" placeholder="Ask a question about the document..." class="w-full bg-transparent p-3 text-fg-primary placeholder-fg-secondary focus:outline-none" onkeydown="if(event.key === 'Enter') handleSend()">
+                        <button onclick="handleSend()" id="send-btn" class="px-4 text-accent hover:text-white transition">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                        </button>
+                    </div>
+                    <div class="text-center mt-2">
+                         <span id="context-indicator" class="text-[10px] text-fg-secondary opacity-0 transition-opacity">Searching local chunks...</span>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
 
     <script>
+        // --- STATE MANAGEMENT ---
+        let config = {
+            provider: localStorage.getItem('orc_provider') || 'gemini',
+            apiKey: localStorage.getItem('orc_key') || ''
+        };
+        
+        let documentChunks = []; // Stores text chunks in RAM
+        let documentLoaded = false;
+        let lastAIResponse = ""; // For Paraphrase/TTS
+
+        const REVIEW_PERSONAS = {
+            "Physicist": "You are a reviewer with expertise in Physics. Focus on the underlying physical principles, theoretical models, and the validity of any physical measurements presented.",
+            "Chemist": "You are a reviewer with expertise in Chemistry. Focus on the chemical compositions, reactions, and material properties from a chemical standpoint.",
+            "Editor": "You are an editor. Review the paper for clarity, grammar, style, and overall structure. Ensure the arguments are presented logically.",
+            "Chief Editor": "You are the Chief Editor. Synthesize points into a single, cohesive, and balanced final review."
+        };
+
+        // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {
-            const tabButtons = {
-                chats: document.getElementById('tab-btn-chats'),
-                docs: document.getElementById('tab-btn-docs'),
-            };
-            const tabPanels = {
-                chats: document.getElementById('tab-panel-chats'),
-                docs: document.getElementById('tab-panel-docs'),
-            };
+            checkStatus();
+            document.getElementById('provider-select').value = config.provider;
+            document.getElementById('api-key-input').value = config.apiKey;
+            updateKeyInput();
+        });
 
-            function switchTab(tabName) {
-                // Handle buttons
-                Object.values(tabButtons).forEach(btn => btn.classList.remove('active'));
-                tabButtons[tabName].classList.add('active');
+        // --- SETTINGS ---
+        function toggleSettings() {
+            document.getElementById('settings-modal').classList.toggle('hidden');
+        }
 
-                // Handle panels
-                Object.values(tabPanels).forEach(panel => panel.classList.add('hidden'));
-                tabPanels[tabName].classList.remove('hidden');
-                tabPanels[tabName].classList.add('flex');
+        function updateKeyInput() {
+            const provider = document.getElementById('provider-select').value;
+            const hint = document.getElementById('ollama-hint');
+            const input = document.getElementById('api-key-input');
+            
+            if (provider === 'ollama') {
+                input.placeholder = "http://localhost:11434";
+                hint.classList.remove('hidden');
+            } else {
+                input.placeholder = "Enter API Key...";
+                hint.classList.add('hidden');
+            }
+        }
+
+        function saveSettings() {
+            const provider = document.getElementById('provider-select').value;
+            let key = document.getElementById('api-key-input').value.trim();
+            
+            if (provider === 'ollama' && !key) key = "http://localhost:11434";
+            
+            if(key) {
+                config.provider = provider;
+                config.apiKey = key;
+                localStorage.setItem('orc_provider', provider);
+                localStorage.setItem('orc_key', key);
+                checkStatus();
+                toggleSettings();
+            } else {
+                alert("API Key cannot be empty");
+            }
+        }
+
+        function purgeData() {
+            if(confirm("Destroy all keys and document data from memory?")) {
+                localStorage.removeItem('orc_provider');
+                localStorage.removeItem('orc_key');
+                location.reload();
+            }
+        }
+
+        function checkStatus() {
+            const statusEl = document.getElementById('status-ai');
+            if(config.apiKey) {
+                statusEl.textContent = config.provider === 'ollama' ? "Local (Ollama)" : "Cloud Active";
+                statusEl.className = "text-green-400 font-bold";
+            } else {
+                statusEl.textContent = "Missing Key";
+                statusEl.className = "text-red-400";
+            }
+        }
+
+        // --- PDF PROCESSING (LOCAL) ---
+        async function handleFileUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            if (file.type !== 'application/pdf') {
+                alert("Please upload a valid PDF file.");
+                return;
             }
 
-            tabButtons.chats.addEventListener('click', () => switchTab('chats'));
-            tabButtons.docs.addEventListener('click', () => switchTab('docs'));
+            const statusDoc = document.getElementById('status-doc');
+            statusDoc.textContent = "Parsing...";
+            appendSystemMessage(`Processing <strong>${file.name}</strong> locally...`);
 
-            // Set initial state
-            switchTab('chats');
-        });
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                
+                let fullText = "";
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    fullText += textContent.items.map(item => item.str).join(' ') + "\n";
+                    statusDoc.textContent = `${Math.round((i / pdf.numPages) * 100)}%`;
+                }
+
+                documentChunks = chunkText(fullText, 1000, 200);
+                
+                documentLoaded = true;
+                statusDoc.textContent = file.name;
+                document.getElementById('status-chunks').textContent = documentChunks.length;
+                document.getElementById('quick-actions').classList.remove('opacity-50', 'pointer-events-none');
+                
+                appendSystemMessage(`Document loaded. ${documentChunks.length} chunks indexed in RAM.`);
+
+            } catch (error) {
+                console.error(error);
+                appendSystemMessage("Error parsing PDF.", true);
+                statusDoc.textContent = "Error";
+            }
+        }
+
+        function chunkText(text, chunkSize, overlap) {
+            const chunks = [];
+            for (let i = 0; i < text.length; i += (chunkSize - overlap)) {
+                chunks.push(text.slice(i, i + chunkSize));
+            }
+            return chunks;
+        }
+
+        // --- LOCAL RETRIEVAL ---
+        function retrieveRelevantChunks(query, limit = 5) {
+            if (documentChunks.length === 0) return [];
+            const queryTerms = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+            
+            const scoredChunks = documentChunks.map(chunk => {
+                const chunkLower = chunk.toLowerCase();
+                let score = 0;
+                queryTerms.forEach(term => {
+                    score += (chunkLower.match(new RegExp(term, "g")) || []).length;
+                });
+                return { text: chunk, score: score };
+            });
+
+            return scoredChunks.filter(c => c.score > 0).sort((a, b) => b.score - a.score).slice(0, limit).map(c => c.text);
+        }
+
+        // --- CHAT LOGIC ---
+        async function handleSend() {
+            const input = document.getElementById('chat-input');
+            const query = input.value.trim();
+            if (!query) return;
+            
+            if (!config.apiKey) {
+                alert("Please configure your API Key/Endpoint in Settings.");
+                toggleSettings();
+                return;
+            }
+
+            input.value = '';
+            appendUserMessage(query);
+            const thinkingId = appendThinking();
+            const indicator = document.getElementById('context-indicator');
+
+            try {
+                let context = "";
+                let systemInstruction = "You are Orochimaru. Answer concisely.";
+
+                // Normal Document Query
+                if (documentLoaded) {
+                    indicator.style.opacity = "1";
+                    const relevantChunks = retrieveRelevantChunks(query);
+                    if (relevantChunks.length > 0) {
+                        context = "CONTEXT:\n" + relevantChunks.join("\n---\n");
+                        systemInstruction += " Use the context provided.";
+                    }
+                }
+
+                const fullPrompt = `${systemInstruction}\n\n${context}\n\nUSER: ${query}`;
+                
+                let responseText = "";
+                if (config.provider === 'gemini') responseText = await callGemini(fullPrompt);
+                else if (config.provider === 'groq') responseText = await callGroq(fullPrompt);
+                else if (config.provider === 'hf') responseText = await callHF(fullPrompt);
+                else if (config.provider === 'ollama') responseText = await callOllama(fullPrompt);
+
+                document.getElementById(thinkingId).remove();
+                appendAIMessage(responseText);
+                lastAIResponse = responseText;
+
+            } catch (error) {
+                document.getElementById(thinkingId).remove();
+                appendSystemMessage(`Error: ${error.message}`, true);
+            } finally {
+                indicator.style.opacity = "0";
+            }
+        }
+
+        function toggleReviewMenu() {
+            document.getElementById('review-menu').classList.toggle('hidden');
+        }
+
+        function runReview(role) {
+            if (!documentLoaded) return;
+            const systemPrompt = REVIEW_PERSONAS[role] || "You are a helpful assistant.";
+            
+            // For review, we might want broader context, but for local RAG we pick top chunks
+            // or simply pass a directive to review. 
+            // Since we can't pass the WHOLE PDF to most LLMs via string easily in browser RAG without hitting limits,
+            // we will simulate a review request asking for general critique based on loaded chunks.
+            
+            // Ideally we retrieve chunks relevant to "summary conclusion methodology"
+            const relevant = retrieveRelevantChunks("conclusion results methodology abstract", 8); 
+            const context = relevant.join("\n\n");
+            
+            const prompt = `${systemPrompt}\n\nBased on these excerpts from the document:\n${context}\n\nProvide a critical review.`;
+            
+            // Hack: Put prompt in chat box and send (visible to user)
+            // Or send directly hidden. Let's show it.
+            document.getElementById('chat-input').value = `[${role} Review]`; 
+            
+            // We override handleSend logic slightly by injecting custom prompt
+            callCustomPrompt(prompt, `Requesting ${role} Review...`);
+        }
+
+        async function runQuickAction(type) {
+            if (!documentLoaded && type !== 'paraphrase') return;
+            
+            let prompt = "";
+            let displayMsg = "";
+
+            if (type === 'summarize') {
+                const chunks = retrieveRelevantChunks("abstract summary conclusion introduction", 6);
+                prompt = "Summarize the following text:\n" + chunks.join("\n");
+                displayMsg = "Generating Summary...";
+            } else if (type === 'key_points') {
+                const chunks = retrieveRelevantChunks("important key points results", 6);
+                prompt = "Extract bullet points from:\n" + chunks.join("\n");
+                displayMsg = "Extracting Key Points...";
+            } else if (type === 'paraphrase') {
+                if(!lastAIResponse) return alert("No response to paraphrase.");
+                prompt = "Paraphrase this text in a different style:\n" + lastAIResponse;
+                displayMsg = "Paraphrasing...";
+            }
+
+            callCustomPrompt(prompt, displayMsg);
+        }
+
+        async function callCustomPrompt(fullPrompt, userFacingText) {
+            appendUserMessage(userFacingText);
+            const thinkingId = appendThinking();
+            
+            try {
+                let responseText = "";
+                if (config.provider === 'gemini') responseText = await callGemini(fullPrompt);
+                else if (config.provider === 'groq') responseText = await callGroq(fullPrompt);
+                else if (config.provider === 'hf') responseText = await callHF(fullPrompt);
+                else if (config.provider === 'ollama') responseText = await callOllama(fullPrompt);
+
+                document.getElementById(thinkingId).remove();
+                appendAIMessage(responseText);
+                lastAIResponse = responseText;
+            } catch (error) {
+                document.getElementById(thinkingId).remove();
+                appendSystemMessage(error.message, true);
+            }
+        }
+
+        // --- TTS ---
+        function speakLastResponse() {
+            if (!lastAIResponse) return;
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(lastAIResponse);
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // --- UI HELPERS ---
+        function appendUserMessage(text) {
+            const div = document.createElement('div');
+            div.className = "flex items-start space-x-4 justify-end";
+            div.innerHTML = `<div class="bg-accent text-accent-fg p-3 rounded-lg max-w-2xl shadow-md"><p class="text-sm">${text}</p></div>`;
+            document.getElementById('chat-history').appendChild(div);
+            scrollToBottom();
+        }
+
+        function appendAIMessage(text) {
+            const div = document.createElement('div');
+            div.className = "flex items-start space-x-4";
+            div.innerHTML = `<div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent border border-accent">O</div><div class="bg-tertiary p-4 rounded-lg max-w-3xl shadow-md prose prose-invert text-sm text-fg-primary">${marked.parse(text)}</div>`;
+            document.getElementById('chat-history').appendChild(div);
+            scrollToBottom();
+        }
+
+        function appendSystemMessage(text, isError = false) {
+            const div = document.createElement('div');
+            div.className = "flex justify-center my-2";
+            div.innerHTML = `<span class="text-xs px-3 py-1 rounded-full ${isError ? 'bg-red-900/50 text-red-200' : 'bg-blue-900/30 text-blue-200'}">${text}</span>`;
+            document.getElementById('chat-history').appendChild(div);
+            scrollToBottom();
+        }
+
+        function appendThinking() {
+            const id = 'thinking-' + Date.now();
+            const div = document.createElement('div');
+            div.id = id;
+            div.className = "flex items-start space-x-4";
+            div.innerHTML = `<div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent border border-accent animate-pulse">...</div><div class="bg-tertiary p-3 rounded-lg text-fg-secondary italic text-sm">Thinking...</div>`;
+            document.getElementById('chat-history').appendChild(div);
+            scrollToBottom();
+            return id;
+        }
+
+        function scrollToBottom() {
+            const el = document.getElementById('chat-history');
+            el.scrollTop = el.scrollHeight;
+        }
+
+        function clearChat() {
+            document.getElementById('chat-history').innerHTML = '';
+            appendSystemMessage("Chat cleared.");
+        }
+
+        // --- API CALLS ---
+        async function callGemini(prompt) {
+            const models = ["gemini-2.5-flash", "gemini-1.5-flash"];
+            let lastError = null;
+            for (const model of models) {
+                try {
+                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
+                    const resp = await fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                    });
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        return data.candidates[0].content.parts[0].text;
+                    } else { lastError = await resp.json(); }
+                } catch(e) { lastError = e; }
+            }
+            throw new Error(lastError?.error?.message || "Gemini Error");
+        }
+
+        async function callGroq(prompt) {
+            const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ messages: [{ role: "user", content: prompt }], model: "llama3-8b-8192" })
+            });
+            if (!resp.ok) throw new Error("Groq Error");
+            const data = await resp.json();
+            return data.choices[0].message.content;
+        }
+
+        async function callHF(prompt) {
+            const resp = await fetch("https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.3", {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ inputs: prompt, parameters: { return_full_text: false } })
+            });
+            if (!resp.ok) throw new Error("Hugging Face Error");
+            const data = await resp.json();
+            return Array.isArray(data) ? data[0].generated_text : data.generated_text;
+        }
+
+        async function callOllama(prompt) {
+            // Localhost access usually requires OLLAMA_ORIGINS="*"
+            const resp = await fetch(`${config.apiKey}/api/generate`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ model: "qwen2:1.5b", prompt: prompt, stream: false })
+            });
+            if (!resp.ok) throw new Error("Ollama Error. Check CORS settings.");
+            const data = await resp.json();
+            return data.response;
+        }
+
     </script>
 </body>
 </html>
