@@ -81,7 +81,7 @@ NORMAL_RAG_SYSTEM_PROMPT = """You are an accurate and helpful AI assistant speci
 Your primary goal is to answer the user's question SOLELY based on the provided document context.
 Strictly adhere to the following rules:
 1.  **Answer only from the provided context.** Do not use any outside knowledge.
-2.  If the answer is not explicitly present in the provided context, state clearly and concisely: "I cannot find the answer to your question in the provided document." Do NOT attempt to guess or infer.
+2.  If the answer is not explicitly present in the provided context, state clearly and concisely: \"I cannot find the answer to your question in the provided document.\" Do NOT attempt to guess or infer.
 3.  Do not make up any information.
 4.  If applicable, cite the page number(s) from which you extracted the information. The page numbers are provided in the context as '[Page X]:'.
 """
@@ -135,7 +135,7 @@ class ResearchApp(tk.Tk):
         self.setup_styles()
         self.embedding_model_name = self.app_config.get("embedding_model_name", "mxbai-embed-large")
         self.reviewer_var = tk.StringVar()
-        self.create_widgets()
+        self.create_widgets() # Moved initialization of widgets here
         self._initialize_ollama() # Moved after create_widgets
         self.start_services()
 
@@ -286,7 +286,7 @@ class ResearchApp(tk.Tk):
         top_bar.grid(row=0, column=0, sticky="ew", padx=5, pady=(0,5))
         self.current_chat_label = ttk.Label(top_bar, text="New Chat", font=(Style.UI_FONT[0], 12, "bold"))
         self.current_chat_label.pack(side=tk.LEFT, padx=(0, 20))
-        self.stats_label = ttk.Label(top_bar, text="RAM: --%", font=Style.UI_FONT, foreground=Style.FG_SECONDARY)
+        self.stats_label = ttk.Label(top_bar, text="RAM: --%  |  Tok/s: --", font=Style.UI_FONT, foreground=Style.FG_SECONDARY)
         self.stats_label.pack(side=tk.LEFT, padx=0)
         
         # Right-aligned buttons
@@ -332,7 +332,7 @@ class ResearchApp(tk.Tk):
 
     def start_services(self):
         print("--- Starting Application Services (TTS, Model Polling, UI Updates) ---")
-        if pyttsx3: 
+        if pyttsx3:
             print("Starting TTS worker thread...")
             threading.Thread(target=tts_worker, daemon=True).start()
         self.after(1000, lambda: self.update_system_stats())
@@ -443,16 +443,13 @@ class ResearchApp(tk.Tk):
         self.after(0, self.finalize_response)
 
     def find_relevant_chunks(self, query_vector, doc_id, top_k=5):
-        if doc_id not in self.pdf_text_db:
-            return []
+        if doc_id not in self.pdf_text_db: return []
 
         mmap_path = os.path.join(self.vector_cache_dir, f"{doc_id}.mmap")
-        if not os.path.exists(mmap_path):
-            return []
+        if not os.path.exists(mmap_path): return []
 
         num_chunks = len(self.pdf_text_db[doc_id])
-        if num_chunks == 0:
-            return []
+        if num_chunks == 0: return []
         
         try:
             mmap_vectors = np.memmap(mmap_path, dtype=np.float16, mode='r', shape=(num_chunks, len(query_vector)))
@@ -663,16 +660,39 @@ class ResearchApp(tk.Tk):
                     if not os.listdir(model_folder_path):
                         print(f"   - DIAGNOSIS: The directory exists but is empty. Please place your Ollama models inside it.")
                     else:
-                        print(f"   - DIAGNOSIS: The directory exists and is not empty.")
+                        print(f"   - DIAGNOSIS: The directory '{model_folder_path}' exists and is not empty.")
                         subdirs = [d for d in os.listdir(model_folder_path) if os.path.isdir(os.path.join(model_folder_path, d))]
-                        if 'manifests' not in subdirs or 'blobs' not in subdirs:
-                            print(f"     - PROBLEM: The folder '{model_folder_path}' should directly contain 'manifests' and 'blobs' subdirectories, but it does not.")
-                            if subdirs:
-                                print(f"     - It appears you have nested model folders inside: {subdirs}")
-                                print(f"     - ACTION: Please move the CONTENTS of each model folder (e.g., the 'manifests' and 'blobs' from within '{subdirs[0]}') into the main '{model_folder_path}' directory.")
-                                print(f"     - All models must be consolidated into this single directory for Ollama to find them.")
+                        
+                        # Check for signs of nested model directories
+                        nested_model_folders = []
+                        for subdir in subdirs:
+                            if subdir not in ['manifests', 'blobs']:
+                                nested_path = os.path.join(model_folder_path, subdir)
+                                try:
+                                    nested_subdirs = [d for d in os.listdir(nested_path) if os.path.isdir(os.path.join(nested_path, d))]
+                                    if 'manifests' in nested_subdirs and 'blobs' in nested_subdirs:
+                                        nested_model_folders.append(subdir)
+                                except OSError:
+                                    pass # Ignore if we can't read a subdir
+
+                        if nested_model_folders:
+                            print(f"     - PROBLEM: Found nested model folders: {nested_model_folders}")
+                            print(f"     - The main model folder '{model_folder_path}' should contain the merged contents of all models.")
+                            print(f"     - ACTION: Automatically consolidating model files...")
+                            
+                            # Automatically consolidate models
+                            self._consolidate_models(model_folder_path, nested_model_folders)
+                            
+                            # Repopulate after consolidation
+                            print("     - Rerunning model population after consolidation...")
+                            self.after(100, self.populate_models)
+                            return
+                        elif 'manifests' not in subdirs or 'blobs' not in subdirs:
+                            print(f"     - PROBLEM: The folder '{model_folder_path}' is missing the required 'manifests' and/or 'blobs' subdirectories.")
+                            print(f"     - ACTION: Please ensure this path points to a valid Ollama models directory.")
                         else:
-                             print(f"   - Please verify that the model files within '{model_folder_path}' are correct and not corrupted.")
+                            print(f"   - The folder structure appears correct, but Ollama still finds no models.")
+                            print(f"   - Please double-check that the files inside '{os.path.join(model_folder_path, 'manifests')}' are correct and not corrupted.")
                 else:
                     print(f"   - DIAGNOSIS: The directory does not exist. Please check the 'model_folder' path in your System_Config.json.")
 
@@ -917,6 +937,73 @@ class ResearchApp(tk.Tk):
         self._save_config(self.app_config)
         messagebox.showinfo("Settings Saved", "Settings have been saved. Restart the application for some changes to take full effect.")
 
+    def _consolidate_models(self, model_folder_path, nested_model_folders):
+        print("--- Consolidating Models ---")
+        
+        def move_contents(src_dir, dst_dir):
+            if not os.path.exists(dst_dir):
+                os.makedirs(dst_dir)
+            for item in os.listdir(src_dir):
+                s = os.path.join(src_dir, item)
+                d = os.path.join(dst_dir, item)
+                try:
+                    shutil.move(s, d)
+                    print(f"Moved {s} to {d}")
+                except shutil.Error as e:
+                    print(f"Could not move {s} to {d}: {e}. It might already exist.")
+
+
+        main_manifests_dir = os.path.join(model_folder_path, 'manifests')
+        main_blobs_dir = os.path.join(model_folder_path, 'blobs')
+
+        # Consolidate nested model folders
+        for folder in nested_model_folders:
+            nested_dir = os.path.join(model_folder_path, folder)
+            nested_manifests = os.path.join(nested_dir, 'manifests')
+            nested_blobs = os.path.join(nested_dir, 'blobs')
+            
+            if os.path.exists(nested_manifests):
+                print(f"Moving manifests from {nested_dir}...")
+                move_contents(nested_manifests, main_manifests_dir)
+            if os.path.exists(nested_blobs):
+                print(f"Moving blobs from {nested_dir}...")
+                move_contents(nested_blobs, main_blobs_dir)
+            
+            # Clean up empty directories
+            try:
+                if os.path.exists(nested_manifests) and not os.listdir(nested_manifests): os.rmdir(nested_manifests)
+                if os.path.exists(nested_blobs) and not os.listdir(nested_blobs): os.rmdir(nested_blobs)
+                if os.path.exists(nested_dir) and not os.listdir(nested_dir): os.rmdir(nested_dir)
+                print(f"Cleaned up {nested_dir}")
+            except OSError as e:
+                print(f"Could not remove {nested_dir}: {e}")
+
+        # Consolidate text embedding model
+        base_dir = os.path.abspath(os.path.join(model_folder_path, '..'))
+        text_embedding_dir = os.path.join(base_dir, 'text_embedding_model')
+
+        if os.path.exists(text_embedding_dir):
+            print("Consolidating text embedding model...")
+            embedding_manifests = os.path.join(text_embedding_dir, 'manifests')
+            embedding_blobs = os.path.join(text_embedding_dir, 'blobs')
+
+            if os.path.exists(embedding_manifests):
+                move_contents(embedding_manifests, main_manifests_dir)
+            if os.path.exists(embedding_blobs):
+                move_contents(embedding_blobs, main_blobs_dir)
+
+            try:
+                if os.path.exists(embedding_manifests) and not os.listdir(embedding_manifests): os.rmdir(embedding_manifests)
+                if os.path.exists(embedding_blobs) and not os.listdir(embedding_blobs): os.rmdir(embedding_blobs)
+                if os.path.exists(text_embedding_dir) and not os.listdir(text_embedding_dir): os.rmdir(text_embedding_dir)
+                print(f"Cleaned up {text_embedding_dir}")
+            except OSError as e:
+                print(f"Could not remove {text_embedding_dir}: {e}")
+        
+        print("--- Consolidation Complete ---")
+
+
+
     def _initialize_ollama(self):
         print("--- Initializing Ollama Connection ---")
         ollama_path = self.app_config.get("ollama_path")
@@ -941,8 +1028,16 @@ class ResearchApp(tk.Tk):
             else:
                 print("3. WARNING: Existing server found, but it does NOT have the required embedding model.")
                 print(f"   - Required model: '{embedding_model_needed}'")
-                print("   - The application will now attempt to start its own managed Ollama server.")
-                print("   - Please ensure the external Ollama server is shut down if you encounter port conflicts.")
+                messagebox.showwarning("Ollama Server Issue", 
+                    f"An existing Ollama server was found, but it does not have the required embedding model: '{embedding_model_needed}'.\n\n"
+                    "Please do one of the following:\n"
+                    "1. Shut down the external Ollama server and restart this application. The application will then start its own managed server with the correct models.\n"
+                    "2. Manually restart your external Ollama server to force it to recognize the new model files.\n\n"
+                    "Document features will be disabled until the embedding model is loaded.")
+                # Continue with the existing client, but features will be disabled.
+                self.ollama_client = external_client
+                self.populate_models()
+                return
 
         except Exception:
             print("1. No existing Ollama server found. Proceeding to start a local one.")
@@ -1138,7 +1233,8 @@ class ConsoleRedirector:
 
         self.text_widget.config(state=tk.DISABLED)
 
-    def flush(self): pass
+    def flush(self):
+        pass
 
 
 class SettingsWindow(tk.Toplevel):
@@ -1164,7 +1260,6 @@ class SettingsWindow(tk.Toplevel):
 
 
 
-
         self.configure(bg=Style.BG_PRIMARY)
 
 
@@ -1172,7 +1267,6 @@ class SettingsWindow(tk.Toplevel):
 
 
         self.transient(master) # Set to be on top of the main window
-
 
 
 
@@ -1185,7 +1279,6 @@ class SettingsWindow(tk.Toplevel):
 
 
 
-
     def create_widgets(self):
 
 
@@ -1193,7 +1286,6 @@ class SettingsWindow(tk.Toplevel):
 
 
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
 
 
 
@@ -1221,7 +1313,6 @@ class SettingsWindow(tk.Toplevel):
 
 
 
-
         # Model Folder
 
 
@@ -1241,7 +1332,6 @@ class SettingsWindow(tk.Toplevel):
 
 
         ttk.Button(model_frame, text="Browse", command=self.browse_model_folder, style='Tool.TButton').pack(side=tk.RIGHT, padx=(5,0))
-
 
 
 
@@ -1269,7 +1359,6 @@ class SettingsWindow(tk.Toplevel):
 
 
 
-
         # Embedding Model Name
 
 
@@ -1286,7 +1375,6 @@ class SettingsWindow(tk.Toplevel):
 
 
         self.embed_model_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
 
 
 
@@ -1311,14 +1399,17 @@ class SettingsWindow(tk.Toplevel):
 
 
 
-
     def open_config_file(self):
-        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
-        if os.path.exists(config_path):
-            os.startfile(config_path)
-        else:
-            messagebox.showerror("Error", "System_Config.json not found.")
 
+        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
+
+        if os.path.exists(config_path):
+
+            os.startfile(config_path)
+
+        else:
+
+            messagebox.showerror("Error", "System_Config.json not found.")
 
 
 
@@ -1340,7 +1431,6 @@ class SettingsWindow(tk.Toplevel):
 
 
 
-
     def browse_ollama_path(self):
 
 
@@ -1354,7 +1444,6 @@ class SettingsWindow(tk.Toplevel):
 
 
             self.ollama_path_entry.insert(0, file_path)
-
 
 
 
@@ -1376,7 +1465,6 @@ class SettingsWindow(tk.Toplevel):
 
 
 
-
     def browse_vector_cache_dir(self):
 
 
@@ -1390,7 +1478,6 @@ class SettingsWindow(tk.Toplevel):
 
 
             self.vector_cache_entry.insert(0, folder_path)
-
 
 
 
