@@ -650,6 +650,33 @@ class ResearchApp(tk.Tk):
                 print("1. Ollama client not initialized. Aborting.")
                 raise ConnectionError("Ollama client not initialized.")
 
+            # --- Consolidation Check ---
+            # Always check for unconsolidated models first.
+            model_folder_path = self.app_config.get('model_folder')
+            if os.path.exists(model_folder_path):
+                subdirs = [d for d in os.listdir(model_folder_path) if os.path.isdir(os.path.join(model_folder_path, d))]
+                nested_model_folders = []
+                for subdir in subdirs:
+                    if subdir not in ['manifests', 'blobs']:
+                        nested_path = os.path.join(model_folder_path, subdir)
+                        try:
+                            nested_subdirs = [d for d in os.listdir(nested_path) if os.path.isdir(os.path.join(nested_path, d))]
+                            if 'manifests' in nested_subdirs and 'blobs' in nested_subdirs:
+                                nested_model_folders.append(subdir)
+                        except OSError:
+                            pass # Ignore if we can't read a subdir
+
+                base_dir = os.path.abspath(os.path.join(model_folder_path, '..'))
+                text_embedding_dir = os.path.join(base_dir, 'text_embedding_model')
+
+                if nested_model_folders or os.path.exists(text_embedding_dir):
+                    print(f"     - DIAGNOSIS: Found potential unconsolidated model folders. Consolidating now.")
+                    self._consolidate_models(model_folder_path, nested_model_folders)
+                    print("     - Rerunning model population after consolidation...")
+                    self.after(100, self.populate_models)
+                    return
+            # --- End Consolidation Check ---
+
             print("1. Calling ollama_client.list() to get models...")
             models_response = self.ollama_client.list()
             print(f"2. Raw response from Ollama: {models_response}")
@@ -664,41 +691,14 @@ class ResearchApp(tk.Tk):
                     if not os.listdir(model_folder_path):
                         print(f"   - DIAGNOSIS: The directory exists but is empty. Please place your Ollama models inside it.")
                     else:
-                        print(f"   - DIAGNOSIS: The directory '{model_folder_path}' exists and is not empty.")
+                        print(f"   - DIAGNOSIS: The directory '{model_folder_path}' exists and is not empty, but Ollama found no models.")
                         subdirs = [d for d in os.listdir(model_folder_path) if os.path.isdir(os.path.join(model_folder_path, d))]
-                        
-                        # Check for signs of nested model directories
-                        nested_model_folders = []
-                        for subdir in subdirs:
-                            if subdir not in ['manifests', 'blobs']:
-                                nested_path = os.path.join(model_folder_path, subdir)
-                                try:
-                                    nested_subdirs = [d for d in os.listdir(nested_path) if os.path.isdir(os.path.join(nested_path, d))]
-                                    if 'manifests' in nested_subdirs and 'blobs' in nested_subdirs:
-                                        nested_model_folders.append(subdir)
-                                except OSError:
-                                    pass # Ignore if we can't read a subdir
-
-                        if nested_model_folders:
-                            print(f"     - PROBLEM: Found nested model folders: {nested_model_folders}")
-                            print(f"     - The main model folder '{model_folder_path}' should contain the merged contents of all models.")
-                            print(f"     - ACTION: Automatically consolidating model files...")
-                            
-                            # Automatically consolidate models
-                            self._consolidate_models(model_folder_path, nested_model_folders)
-                            
-                            # Repopulate after consolidation
-                            print("     - Rerunning model population after consolidation...")
-                            self.after(100, self.populate_models)
-                            return
-                        elif 'manifests' not in subdirs or 'blobs' not in subdirs:
+                        if 'manifests' not in subdirs or 'blobs' not in subdirs:
                             print(f"     - PROBLEM: The folder '{model_folder_path}' is missing the required 'manifests' and/or 'blobs' subdirectories.")
-                            print(f"     - ACTION: Please ensure this path points to a valid Ollama models directory.")
                         else:
-                            print(f"   - The folder structure appears correct, but Ollama still finds no models.")
-                            print(f"   - Please double-check that the files inside '{os.path.join(model_folder_path, 'manifests')}' are correct and not corrupted.")
+                             print(f"   - The folder structure appears correct. Check for corrupted model files.")
                 else:
-                    print(f"   - DIAGNOSIS: The directory does not exist. Please check the 'model_folder' path in your System_Config.json.")
+                    print(f"   - DIAGNOSIS: The directory does not exist. Please check 'model_folder' in System_Config.json.")
 
             model_names = sorted([m['model'] for m in models_list])
             print(f"3. Extracted and sorted model names: {model_names}")
@@ -712,17 +712,28 @@ class ResearchApp(tk.Tk):
             print(f"5. Set model selector values to: {self.model_selector['values']}")
             
             # Check for embedding model for offline portability
-            print(f"\n6. Checking for required embedding model: '{self.embedding_model_name}'")
-            if any(self.embedding_model_name in n for n in model_names):
+            print(f"\n6. Checking for a suitable embedding model (e.g., containing 'mxbai' and 'embed')...")
+            
+            found_embedding_model = None
+            for name in model_names:
+                if "mxbai" in name and "embed" in name:
+                    found_embedding_model = name
+                    break # Found one, use it
+
+            if found_embedding_model:
+                # Use the actual model name found, without the tag, for embedding calls.
+                self.embedding_model_name = found_embedding_model.split(':')[0]
                 self.embedding_model_available = True
                 self.embed_status_label.config(text=f'{self.embedding_model_name} (Ready)', foreground="#3AD900")
                 self.load_pdf_button.config(state=tk.NORMAL)
-                print("   - SUCCESS: Embedding model found.")
+                print(f"   - SUCCESS: Found and selected embedding model: '{self.embedding_model_name}'")
             else:
                 self.embedding_model_available = False
-                self.embed_status_label.config(text=f'{self.embedding_model_name} (Not Found)', foreground=Style.ERROR)
+                # Display the name from config as it's what was expected
+                expected_model = self.app_config.get("embedding_model_name", "mxbai-embed-large")
+                self.embed_status_label.config(text=f'{expected_model} (Not Found)', foreground=Style.ERROR)
                 self.load_pdf_button.config(state=tk.DISABLED)
-                print(f"   - WARNING: Embedding model '{self.embedding_model_name}' not found. Document features will be disabled.")
+                print(f"   - WARNING: No embedding model containing 'mxbai' and 'embed' was found. Document features will be disabled.")
 
             current_selection = self.model_selector.get()
             if current_selection not in chat_models:
@@ -1022,16 +1033,22 @@ class ResearchApp(tk.Tk):
             external_model_names = [m['model'] for m in external_models]
             print(f"2. Found existing server with models: {external_model_names}")
 
-            # Check if the existing server has the required embedding model
-            if any(embedding_model_needed in name for name in external_model_names):
-                print("3. SUCCESS: Existing server has the required embedding model.")
+            # Check if the existing server has a suitable embedding model
+            found_on_external = False
+            for name in external_model_names:
+                if "mxbai" in name and "embed" in name:
+                    found_on_external = True
+                    break
+
+            if found_on_external:
+                print("3. SUCCESS: Existing server has a suitable embedding model.")
                 print("   - Using the existing Ollama server.")
                 self.ollama_client = ollama.Client(host='127.0.0.1', timeout=120)
                 self.populate_models()
                 return # Success, we are done.
             else:
-                print("3. WARNING: Existing server found, but it does NOT have the required embedding model.")
-                print(f"   - Required model: '{embedding_model_needed}'")
+                print("3. WARNING: Existing server found, but it does NOT have a suitable 'mxbai' embedding model.")
+                print(f"   - Required model name should contain: 'mxbai' and 'embed'")
                 print("   - The application will now attempt to start its own managed Ollama server.")
                 print("   - Please ensure the external Ollama server is shut down if you encounter port conflicts.")
 
@@ -1131,7 +1148,7 @@ class ResearchApp(tk.Tk):
             # NOTE: Ollama can only be started with one model directory. All models, including the
             # embedding model required for document analysis (e.g., 'mxbai-embed-large'), must be
             # located within this single 'model_folder' directory.
-            "model_folder": os.path.join("Portable_AI_Assets", "AI-models"),
+            "model_folder": os.path.join("Portable_AI_Assets", "models"),
             "vector_cache_dir": os.path.join("Portable_AI_Assets", "vector_cache"),
             "embedding_model_name": "mxbai-embed-large"
         }
@@ -1237,7 +1254,6 @@ class SettingsWindow(tk.Toplevel):
 
     def __init__(self, master, current_config, save_callback):
 
-
         super().__init__(master)
 
 
@@ -1276,21 +1292,14 @@ class SettingsWindow(tk.Toplevel):
 
 
 
-
     def create_widgets(self):
-
 
         main_frame = ttk.Frame(self, style='TFrame')
 
 
         main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-
-
-
-
         # Ollama Path
-
 
         ollama_frame = ttk.Frame(main_frame, style='TFrame')
 
@@ -1309,12 +1318,7 @@ class SettingsWindow(tk.Toplevel):
 
         ttk.Button(ollama_frame, text="Browse", command=self.browse_ollama_path, style='Tool.TButton').pack(side=tk.RIGHT, padx=(5,0))
 
-
-
-
-
         # Model Folder
-
 
         model_frame = ttk.Frame(main_frame, style='TFrame')
 
@@ -1326,82 +1330,33 @@ class SettingsWindow(tk.Toplevel):
 
 
         self.model_folder_entry = ttk.Entry(model_frame, style='TEntry')
-
-
         self.model_folder_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-
         ttk.Button(model_frame, text="Browse", command=self.browse_model_folder, style='Tool.TButton').pack(side=tk.RIGHT, padx=(5,0))
-
-
-
-
 
         # Vector Cache Directory
 
-
         vector_cache_frame = ttk.Frame(main_frame, style='TFrame')
-
-
         vector_cache_frame.pack(fill=tk.X, pady=5)
-
-
         ttk.Label(vector_cache_frame, text="Vector Cache Directory:", style='TLabel').pack(side=tk.LEFT, anchor='w', padx=(0, 10))
-
-
         self.vector_cache_entry = ttk.Entry(vector_cache_frame, style='TEntry')
-
-
         self.vector_cache_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-
         ttk.Button(vector_cache_frame, text="Browse", command=self.browse_vector_cache_dir, style='Tool.TButton').pack(side=tk.RIGHT, padx=(5,0))
-
-
-
-
 
         # Embedding Model Name
 
-
         embed_model_frame = ttk.Frame(main_frame, style='TFrame')
-
-
         embed_model_frame.pack(fill=tk.X, pady=5)
-
-
         ttk.Label(embed_model_frame, text="Embedding Model Name:", style='TLabel').pack(side=tk.LEFT, anchor='w', padx=(0, 10))
-
-
         self.embed_model_entry = ttk.Entry(embed_model_frame, style='TEntry')
-
-
         self.embed_model_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-
-
-
 
         # Buttons
 
-
         button_frame = ttk.Frame(main_frame, style='TFrame')
-
-
         button_frame.pack(fill=tk.X, pady=15)
-
-
         ttk.Button(button_frame, text="Open Config File", command=self.open_config_file, style='Tool.TButton').pack(side=tk.LEFT, padx=5)
-
-
         ttk.Button(button_frame, text="Save", command=self.save_settings, style='Accent.Sidebar.TButton').pack(side=tk.RIGHT, padx=5)
-
-
         ttk.Button(button_frame, text="Cancel", command=self.destroy, style='Tool.TButton').pack(side=tk.RIGHT)
-
-
-
-
 
     def open_config_file(self):
         config_path = os.path.join(PROJECT_ROOT, "System_Config.json")

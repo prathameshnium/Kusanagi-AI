@@ -1,4 +1,3 @@
-
 import os
 import shutil
 
@@ -12,54 +11,60 @@ def move_contents(src_dir, dst_dir):
 
 def main():
     base_dir = r'f:\1_PROJECTS\Git_Repos\GitHub\Kusanagi-AI\Portable_AI_Assets'
-    ai_models_dir = os.path.join(base_dir, 'AI-models')
-    
-    # Source directories
-    tinyllama_dir = os.path.join(ai_models_dir, 'tinyllama')
-    text_embedding_dir = os.path.join(base_dir, 'text_embedding_model')
+    # The user specified the new model directory is 'models'
+    ai_models_dir = os.path.join(base_dir, 'models')
     
     # Destination directories
     main_manifests_dir = os.path.join(ai_models_dir, 'manifests')
     main_blobs_dir = os.path.join(ai_models_dir, 'blobs')
     
-    # Move tinyllama files
-    tinyllama_manifests = os.path.join(tinyllama_dir, 'manifests')
-    tinyllama_blobs = os.path.join(tinyllama_dir, 'blobs')
-    if os.path.exists(tinyllama_manifests):
-        move_contents(tinyllama_manifests, main_manifests_dir)
-        print(f"Moved contents of {tinyllama_manifests} to {main_manifests_dir}")
-    if os.path.exists(tinyllama_blobs):
-        move_contents(tinyllama_blobs, main_blobs_dir)
-        print(f"Moved contents of {tinyllama_blobs} to {main_blobs_dir}")
-    
-    # Move text_embedding_model files
-    text_embedding_manifests = os.path.join(text_embedding_dir, 'manifests')
-    text_embedding_blobs = os.path.join(text_embedding_dir, 'blobs')
-    if os.path.exists(text_embedding_manifests):
-        move_contents(text_embedding_manifests, main_manifests_dir)
-        print(f"Moved contents of {text_embedding_manifests} to {main_manifests_dir}")
-    if os.path.exists(text_embedding_blobs):
-        move_contents(text_embedding_blobs, main_blobs_dir)
-        print(f"Moved contents of {text_embedding_blobs} to {main_blobs_dir}")
-        
-    # Remove empty source directories
-    if os.path.exists(tinyllama_dir):
-        try:
-            os.rmdir(os.path.join(tinyllama_dir, 'manifests'))
-            os.rmdir(os.path.join(tinyllama_dir, 'blobs'))
-            os.rmdir(tinyllama_dir)
-            print(f"Removed empty directory: {tinyllama_dir}")
-        except OSError as e:
-            print(f"Error removing {tinyllama_dir}: {e}")
+    # Consolidate all subdirectories that look like model folders
+    # (i.e., they are not 'manifests' or 'blobs')
+    models_to_consolidate = []
+    if os.path.exists(ai_models_dir):
+        for item in os.listdir(ai_models_dir):
+            item_path = os.path.join(ai_models_dir, item)
+            if os.path.isdir(item_path) and item not in ['manifests', 'blobs']:
+                models_to_consolidate.append(item_path)
 
-    if os.path.exists(text_embedding_dir):
+    if not models_to_consolidate:
+        print("No model subdirectories found to consolidate.")
+        return
+
+    print(f"Found model directories to consolidate: {models_to_consolidate}")
+
+    for model_path in models_to_consolidate:
+        model_name = os.path.basename(model_path)
+        print(f"\n--- Consolidating '{model_name}' ---")
+        manifests_path = os.path.join(model_path, 'manifests')
+        blobs_path = os.path.join(model_path, 'blobs')
+        
+        if os.path.exists(manifests_path):
+            print(f"Moving manifests from {manifests_path}...")
+            move_contents(manifests_path, main_manifests_dir)
+        else:
+            print(f"No 'manifests' directory found for {model_name}")
+
+        if os.path.exists(blobs_path):
+            print(f"Moving blobs from {blobs_path}...")
+            move_contents(blobs_path, main_blobs_dir)
+        else:
+            print(f"No 'blobs' directory found for {model_name}")
+            
+        # Remove empty source directories
+        print(f"Cleaning up {model_path}...")
         try:
-            os.rmdir(os.path.join(text_embedding_dir, 'manifests'))
-            os.rmdir(os.path.join(text_embedding_dir, 'blobs'))
-            os.rmdir(text_embedding_dir)
-            print(f"Removed empty directory: {text_embedding_dir}")
+            if os.path.exists(manifests_path): os.rmdir(manifests_path)
+            if os.path.exists(blobs_path): os.rmdir(blobs_path)
+            if not os.listdir(model_path):
+                os.rmdir(model_path)
+                print(f"Removed empty directory: {model_path}")
+            else:
+                print(f"Could not remove {model_path} as it is not empty.")
         except OSError as e:
-            print(f"Error removing {text_embedding_dir}: {e}")
+            print(f"Error during cleanup of {model_path}: {e}")
+
+    print("\nConsolidation complete.")
 
 if __name__ == '__main__':
     main()
