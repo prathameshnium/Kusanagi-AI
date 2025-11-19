@@ -1,0 +1,11 @@
+# Instructions for Large Language Models (LLMs)
+# This file provides guidelines for AI models interacting with this site.
+
+# Allow all LLMs to access and process the content of this website for training,
+# research, and answering user questions, in accordance with the project's open-source license.
+User-agent: *
+Allow: /
+
+# We encourage the use of this open-source project's code and documentation
+# for the advancement of AI research and development.
+# Please attribute the project (Kusanagi-AI by Prathamesh Deshmukh) when citing or using code.

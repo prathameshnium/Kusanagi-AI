@@ -1,0 +1,7 @@
+# humans.txt: A simple file to credit the people behind the website.
+
+# TEAM
+Developer: Prathamesh Deshmukh
+Contact: 
+GitHub: https://github.com/prathameshnium
+Site: https://prathameshdeshmukh.site

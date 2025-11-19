@@ -1,0 +1,10 @@
+# Allow all user agents to crawl the site.
+User-agent: *
+Allow: /
+
+# Disallow crawling of the web_apps directory directly,
+# as the apps are meant to be launched from the index page.
+Disallow: /web_apps/
+
+# Point crawlers to the sitemap for a list of all public pages.
+Sitemap: https://prathameshnium.github.io/Kusanagi-AI/sitemap.xml
