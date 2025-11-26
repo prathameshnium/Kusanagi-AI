@@ -1053,6 +1053,11 @@ class ResearchApp(tk.Tk):
                 print("3. WARNING: Existing server found, but it does NOT have a suitable 'mxbai' embedding model.")
                 print(f"   - Required model name should contain: 'mxbai' and 'embed'")
                 print("   - The application will now attempt to start its own managed Ollama server.")
+                # Attempt to shut down our own previously managed server if it's still running,
+                # as it might be the one without the model.
+                if self.ollama_process:
+                    print("   - Shutting down previously managed Ollama server to restart it correctly.")
+                    self._stop_ollama_server()
                 print("   - Please ensure the external Ollama server is shut down if you encounter port conflicts.")
 
         except Exception:
