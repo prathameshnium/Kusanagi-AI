@@ -12,6 +12,7 @@ import datetime
 import json
 import signal
 import shutil
+import httpx
 
 # --- PROJECT ROOT ---
 # Assumes the script is in a subdirectory of the project root (e.g., 'local_apps')
@@ -1028,7 +1029,9 @@ class ResearchApp(tk.Tk):
         # Try to connect to an existing server first
         try:
             print("1. Checking for an existing Ollama server...")
-            external_client = ollama.Client(host='127.0.0.1', timeout=5)
+            # Set a shorter connect timeout to avoid long hangs on startup
+            timeout = httpx.Timeout(5.0, connect=2.0)
+            external_client = ollama.Client(host='127.0.0.1', timeout=timeout)
             external_models = external_client.list().get('models', [])
             external_model_names = [m['model'] for m in external_models]
             print(f"2. Found existing server with models: {external_model_names}")
