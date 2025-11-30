@@ -457,20 +457,26 @@ class ResearchApp(tk.Tk):
             return []
         
         try:
+            # Vectors are pre-normalized, so we can load them directly.
             mmap_vectors = np.memmap(mmap_path, dtype=np.float16, mode='r', shape=(num_chunks, len(query_vector)))
         except ValueError:
             print(f"Warning: Could not load mmap for {doc_id} with expected shape. Re-processing might be needed.")
             return []
 
-        query_vector_norm = query_vector / np.linalg.norm(query_vector)
+        # Normalize the query vector. Use float32 for precision.
+        query_vector = np.array(query_vector, dtype=np.float32)
+        query_norm = np.linalg.norm(query_vector)
+        if query_norm == 0:
+            return [] # Cannot compare with a zero vector.
         
-        norms = np.linalg.norm(mmap_vectors, axis=1)
-        mmap_vectors_norm = mmap_vectors / norms[:, np.newaxis]
-        mmap_vectors_norm[norms == 0] = 0
+        query_vector_norm = query_vector / query_norm
 
-        similarities = np.dot(mmap_vectors_norm, query_vector_norm)
+        # The dot product of two normalized vectors is the cosine similarity.
+        # Cast query vector to the same dtype as mmap_vectors for dot product.
+        similarities = np.dot(mmap_vectors, query_vector_norm.astype(mmap_vectors.dtype))
 
-        top_k_indices = np.argsort(similarities)[::-1][:top_k]
+        # Get the indices of the top k similarities, sorted from highest to lowest.
+        top_k_indices = np.argsort(similarities)[-top_k:][::-1]
 
         relevant_chunks = []
         for i in top_k_indices:
@@ -818,14 +824,23 @@ class ResearchApp(tk.Tk):
                     last_update = time.time()
                 
                 response = self.ollama_client.embeddings(model=self.embedding_model_name, prompt=chunk["text"])
-                vector = np.array(response['embedding'], dtype=np.float16)
-                
+                # Use float32 for precision during normalization
+                vector = np.array(response['embedding'], dtype=np.float32)
+
+                # Normalize the vector
+                norm = np.linalg.norm(vector)
+                if norm > 0:
+                    vector /= norm
+
                 if mmap_vectors is None:
                     mmap_shape = (total_chunks, len(vector))
+                    # Store as float16 to save space and for faster dot products
                     mmap_vectors = np.memmap(os.path.join(self.vector_cache_dir, f"{pdf_id}.mmap"), dtype=np.float16, mode='w+', shape=mmap_shape)
                 
-                mmap_vectors[i] = vector
-            mmap_vectors.flush()
+                mmap_vectors[i] = vector.astype(np.float16)
+            
+            if mmap_vectors is not None:
+                mmap_vectors.flush()
             print(f"Successfully embedded '{pdf_id}'.")
             self.after(0, lambda: self.append_to_chat(f"Ready to chat with '{pdf_id}'.\n\n", "thinking_tag"))
 
