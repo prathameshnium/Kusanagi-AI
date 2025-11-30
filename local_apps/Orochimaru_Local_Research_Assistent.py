@@ -103,22 +103,33 @@ def tts_worker():
     while True:
         is_muted, text = tts_queue.get()
         if not is_muted:
+            print(f"  [TTS] Speaking: '{text[:40].strip()}...'")
             engine.say(text)
             engine.runAndWait()
         tts_queue.task_done()
 
-def embed_chunk_worker(args):
+# --- Worker Initializers & Process-Local Globals ---
+# These are defined at the top level to be accessible for multiprocessing forks.
+_ollama_client_process_local = None
+_embedding_model_name_process_local = None
+
+def init_embed_worker(embedding_model_name):
+    """Initializer for the multiprocessing pool to create a single Ollama client per process."""
+    global _ollama_client_process_local, _embedding_model_name_process_local
+    import ollama
+    # Each process gets its own client, initialized once.
+    _ollama_client_process_local = ollama.Client(host='127.0.0.1', timeout=120)
+    _embedding_model_name_process_local = embedding_model_name
+
+def embed_chunk_worker(chunk_text):
     """Worker function for multiprocessing pool to embed and normalize a text chunk."""
     # Imports must be here for the process fork
-    import ollama
     import numpy as np
     import sys
     
-    chunk_text, embedding_model_name = args
     try:
-        # Each process gets its own ollama client.
-        client = ollama.Client(host='127.0.0.1', timeout=120)
-        response = client.embeddings(model=embedding_model_name, prompt=chunk_text)
+        # The client is pre-initialized by init_embed_worker and stored in a global.
+        response = _ollama_client_process_local.embeddings(model=_embedding_model_name_process_local, prompt=chunk_text)
         
         # Normalize vector inside the worker. Use float32 for precision.
         vector = np.array(response['embedding'], dtype=np.float32)
@@ -133,26 +144,28 @@ def embed_chunk_worker(args):
         print(f"Error in embedding worker: {e}", file=sys.stderr)
         return None
 
-def parse_page_worker(args):
-    """Worker function to extract text and create chunks from a single PDF page."""
+def parse_pages_worker(args):
+    """Worker function to extract text from a range of PDF pages."""
     import fitz
     import sys
     
-    pdf_path, page_num = args
+    pdf_path, page_numbers = args
+    page_chunks = []
     try:
+        # Open the document once per worker process
         doc = fitz.open(pdf_path)
-        page = doc.load_page(page_num)
-        text = page.get_text("text")
+        for page_num in page_numbers:
+            page = doc.load_page(page_num)
+            text = page.get_text("text")
+            if text:
+                # Create chunks from the page text
+                for i in range(0, len(text), 800):
+                    page_chunks.append({"text": text[i:i+1000], "page": page_num + 1})
         doc.close()
-        
-        page_chunks = []
-        if text:
-            for i in range(0, len(text), 800):
-                page_chunks.append({"text": text[i:i+1000], "page": page_num + 1})
         return page_chunks
     except Exception as e:
-        print(f"Error parsing page {page_num} of {pdf_path}: {e}", file=sys.stderr)
-        return [] # Return empty list on failure for this page
+        print(f"Error parsing pages in {pdf_path}: {e}", file=sys.stderr)
+        return [] # Return empty list on failure for this batch of pages
 
 
 
@@ -455,7 +468,7 @@ class ResearchApp(tk.Tk):
         token_count, start_time, last_update_time, update_interval = 0, time.time(), time.time(), 0.05
         first_token_received = False
 
-        sentence_enders = re.compile(r'([.!?\n])') # Regex to split by sentence endings, keeping the delimiter
+        sentence_enders = re.compile(r'[.!?\n]') # Find sentence endings
 
         for chunk in response_stream:
             if not first_token_received:
@@ -470,20 +483,16 @@ class ResearchApp(tk.Tk):
             if time.time() - last_update_time > update_interval:
                 self.after(0, self.append_to_chat, "".join(token_batch)); token_batch.clear(); last_update_time = time.time()
 
-            # Process tts_buffer for complete sentences
-            parts = sentence_enders.split(tts_buffer)
-            new_tts_buffer = ""
-            for i in range(0, len(parts), 2):
-                sentence = parts[i]
-                if i + 1 < len(parts): # If there's a delimiter
-                    delimiter = parts[i+1]
-                    if delimiter in ['.', '?', '!', '\n']: # Only consider these as sentence endings for TTS
-                        self.speak_text((sentence + delimiter).strip())
-                    else: # Keep other delimiters (like spaces) in the buffer
-                        new_tts_buffer += sentence + delimiter
-                else: # No delimiter, keep in buffer
-                    new_tts_buffer += sentence
-            tts_buffer = new_tts_buffer
+            # More efficient TTS processing: find sentences and speak them
+            while True:
+                match = sentence_enders.search(tts_buffer)
+                if match:
+                    end_pos = match.end()
+                    sentence = tts_buffer[:end_pos]
+                    tts_buffer = tts_buffer[end_pos:]
+                    self.speak_text(sentence.strip())
+                else:
+                    break # No more complete sentences in buffer
 
         if token_batch: self.after(0, self.append_to_chat, "".join(token_batch))
         if tts_buffer.strip(): # Speak any remaining text in the buffer
@@ -851,33 +860,48 @@ class ResearchApp(tk.Tk):
         try:
             print(f"Processing and embedding '{pdf_id}'...")
             self.after(0, lambda: self.load_pdf_button.config(state=tk.DISABLED))
-            self.after(0, lambda: self.status_label.config(text=f"Parsing '{pdf_id}'...", foreground=Style.ACCENT))
             
-            # --- Text Extraction and Chunking ---
-            doc = fitz.open(pdf_path)
+            # --- Stage 1: Parallel Text Extraction and Chunking ---
+            self.after(0, lambda: self.status_label.config(text=f"Parsing '{pdf_id}'...", foreground=Style.ACCENT))
+            try:
+                doc = fitz.open(pdf_path)
+                page_count = doc.page_count
+                doc.close()
+            except Exception as e:
+                raise ValueError(f"Could not open or read PDF: {e}")
+
+            if page_count == 0:
+                raise ValueError("PDF is empty.")
+
+            num_processes_parse = min(cpu_count(), page_count) if page_count > 0 else 1
+            # Split page numbers into batches for each worker to reduce file I/O
+            page_batches = np.array_split(range(page_count), num_processes_parse)
+            parse_args = [(pdf_path, batch.tolist()) for batch in page_batches if batch.size > 0]
+            
             chunks = []
-            for page in doc:
-                text = page.get_text("text")
-                if text:
-                    for i in range(0, len(text), 800):
-                        chunks.append({"text": text[i:i+1000], "page": page.number + 1})
-            doc.close()
+            with Pool(processes=num_processes_parse) as pool:
+                processed_pages = 0
+                # Use imap to get results as they are ready and update UI
+                for i, page_chunks in enumerate(pool.imap(parse_pages_worker, parse_args)):
+                    chunks.extend(page_chunks)
+                    processed_pages += len(parse_args[i][1]) # Add number of pages from the processed batch
+                    self.after(0, lambda p=processed_pages: self.status_label.config(text=f"Parsing page: {p}/{page_count}"))
 
             if not chunks:
-                raise ValueError("Could not extract text from PDF.")
+                raise ValueError("Could not extract any text from PDF.")
             
             self.pdf_text_db[pdf_id] = chunks
             total_chunks = len(chunks)
 
-            # --- Embedding Generation with Multiprocessing ---
-            self.after(0, lambda: self.status_label.config(text=f"Embedding 0/{total_chunks}"))
+            # --- Stage 2: Parallel Embedding Generation ---
+            self.after(0, lambda: self.status_label.config(text=f"Embedding 0/{total_chunks}", foreground=Style.ACCENT))
 
-            worker_args = [(chunk['text'], self.embedding_model_name) for chunk in chunks]
-            
-            num_processes = min(cpu_count(), total_chunks) if total_chunks > 0 else 1
+            worker_args = [chunk['text'] for chunk in chunks]
+            num_processes_embed = min(cpu_count(), total_chunks) if total_chunks > 0 else 1
             
             results = []
-            with Pool(processes=num_processes) as pool:
+            # Initialize each worker process with a single Ollama client
+            with Pool(processes=num_processes_embed, initializer=init_embed_worker, initargs=(self.embedding_model_name,)) as pool:
                 for i, result in enumerate(pool.imap(embed_chunk_worker, worker_args)):
                     if result is None:
                         raise ValueError(f"Chunk {i} failed to embed. Check console for details.")
@@ -886,9 +910,12 @@ class ResearchApp(tk.Tk):
                     if (i + 1) % 5 == 0 or (i + 1) == total_chunks:
                         self.after(0, lambda p=i+1: self.status_label.config(text=f"Embedding: {p}/{total_chunks}"))
             
-            # --- Vector Saving ---
-            self.after(0, lambda: self.status_label.config(text=f"Saving 0/{total_chunks}"))
+            # --- Stage 3: Vector Saving ---
+            self.after(0, lambda: self.status_label.config(text=f"Saving 0/{total_chunks}", foreground=Style.ACCENT))
             
+            if not results:
+                raise ValueError("Embedding process returned no results.")
+
             first_vector = results[0]
             mmap_shape = (total_chunks, len(first_vector))
             mmap_vectors = np.memmap(os.path.join(self.vector_cache_dir, f"{pdf_id}.mmap"), dtype=np.float16, mode='w+', shape=mmap_shape)
