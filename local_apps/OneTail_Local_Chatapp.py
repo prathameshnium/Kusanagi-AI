@@ -64,21 +64,32 @@ def tts_worker():
             engine.runAndWait()
         tts_queue.task_done()
 
+def get_project_root():
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    else:
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+PROJECT_ROOT = get_project_root()
+
 class ResearchApp(tk.Tk):
     def __init__(self):
         super().__init__()
         print("--- App Initializing ---")
+        self.app_config = self._load_config()
         self.cot_var = tk.BooleanVar(value=False)
-        self.config = self._load_config()
-        self.ollama_client = None # Initialize to None
-        self.ollama_process = None # To store the subprocess
-        self._initialize_ollama()
+        self.ollama_client = None 
+        self.ollama_process = None 
+        
         self.title("One Tail Chat app")
         self.geometry("1200x800")
         self.configure(bg=Style.BG_PRIMARY)
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
         self.setup_styles()
         self.create_widgets()
+        self._initialize_ollama()
+        
         self.start_services()
         self.is_muted = False
         self.last_tok_per_sec = ""
@@ -412,85 +423,81 @@ class ResearchApp(tk.Tk):
             with open(file_path, "w", encoding="utf-8") as f: f.write(content)
             
     def open_settings_window(self):
-        settings_dialog = SettingsWindow(self, self.config, self._save_and_update_config)
+        settings_dialog = SettingsWindow(self, self.app_config, self._save_and_update_config)
         self.wait_window(settings_dialog)
 
     
     def _save_and_update_config(self, new_config):
-        self.config = new_config
-        self._save_config(self.config)
+        self.app_config = new_config
+        self._save_config(self.app_config)
         messagebox.showinfo("Settings Saved", "Settings have been saved. Restart the application for some changes to take full effect.")
 
     def _initialize_ollama(self):
         print("--- Initializing Ollama Connection ---")
-        ollama_path = self.config.get("ollama_path")
+        ollama_path = self.app_config.get("ollama_path")
+        model_folder = self.app_config.get("model_folder")
 
-        # This client is used to check for an externally running server
-        self.ollama_client = ollama.Client(host='127.0.0.1', timeout=5)
         try:
-            # Check if Ollama is already running
-            print("Checking for existing Ollama server...")
+            print("1. Checking for an existing Ollama server...")
+            # Use a shorter timeout for the initial check
+            self.ollama_client = ollama.Client(host='127.0.0.1', timeout=3)
             self.ollama_client.list()
-            print("Connected to an existing Ollama server.")
+            print("2. SUCCESS: Connected to an existing Ollama server.")
             # Set a longer timeout for the rest of the session
             self.ollama_client = ollama.Client(host='127.0.0.1', timeout=120)
-            return # Skip starting our own server
+            self.after(100, self.populate_models) # Populate models after a short delay
+            return
         except Exception:
-            print("No existing Ollama server found. Attempting to start a local one.")
+            print("1. No existing Ollama server found. Proceeding to start a local one.")
+            pass
 
-        if ollama_path and os.path.exists(ollama_path):
-            try:
-                model_folder = self.config.get("model_folder")
-                self.ollama_process = self._start_ollama_server(ollama_path, model_folder)
-                
-                # Set a longer timeout for operations
-                self.ollama_client = ollama.Client(host='127.0.0.1', timeout=120)
-                print("Waiting for local Ollama server to become responsive...")
+        print("\n--- Starting Managed Ollama Server ---")
+        if not ollama_path or not os.path.exists(ollama_path):
+            self.ollama_client = None
+            print("ERROR: Ollama executable path is not configured or invalid.")
+            messagebox.showerror("Ollama Not Found", "Ollama executable not found. Please configure the path in settings.")
+            self.status_light.config(foreground=Style.ERROR); self.status_label.config(text="Ollama Not Found")
+            self.model_selector['values'] = ["Connection Failed"]; self.model_var.set("Connection Failed")
+            return
 
-                max_wait_time = 60 # seconds
-                start_wait_time = time.time()
-                server_ready = False
-                while time.time() - start_wait_time < max_wait_time:
-                    try:
-                        # Use a lightweight request to check if the server is up
-                        self.ollama_client.list() 
-                        server_ready = True
-                        print("Local Ollama server is responsive.")
-                        break
-                    except Exception:
-                        self.after(0, lambda: self.status_label.config(text=f"Waiting... ({int(time.time() - start_wait_time)}s)"))
-                        time.sleep(1) # Wait 1 second before retrying
-                
-                if not server_ready:
-                    messagebox.showerror("Ollama Start Error", f"Local Ollama server did not respond within {max_wait_time} seconds. Check logs/ollama_server.log for details.")
-                    self.on_closing()
-                    return
+        print(f"1. Executable path: {ollama_path}")
+        print(f"2. Model folder to be used: {model_folder}")
+        try:
+            self.ollama_process = self._start_ollama_server(ollama_path, model_folder)
+            self.ollama_client = ollama.Client(host='127.0.0.1', timeout=120)
+            print("3. Waiting for managed Ollama server to become responsive...")
+            self.after(100, lambda: self._check_server_readiness(time.time(), 60))
+        except Exception as e:
+            messagebox.showerror("Ollama Start Error", f"Failed to start local Ollama server: {e}")
+            self.ollama_client = None
 
-            except Exception as e:
-                messagebox.showerror("Ollama Start Error", f"Failed to start local Ollama server: {e}")
-                self.ollama_client = None # Ensure client is None if startup fails
-        else:
-            self.ollama_client = None # Ensure client is None if path is invalid
-            print("Ollama executable path is not configured or invalid. Cannot start local server.")
-            messagebox.showwarning("Ollama Not Found", "Could not find a running Ollama instance or start a local one. Please configure the path to ollama.exe in settings or start Ollama manually.")
+    def _check_server_readiness(self, start_time, max_wait):
+        elapsed_time = time.time() - start_time
+        if elapsed_time > max_wait:
+            messagebox.showerror("Ollama Start Error", f"Local Ollama server did not respond within {max_wait} seconds.")
+            self.on_closing()
+            return
+
+        try:
+            self.ollama_client.list()
+            print("Local Ollama server is responsive.")
+            self.after(100, self.populate_models)
+        except Exception:
+            self.status_label.config(text=f"Waiting... ({int(elapsed_time)}s)")
+            self.after(1000, lambda: self._check_server_readiness(start_time, max_wait))
 
     def _start_ollama_server(self, ollama_path, model_folder):
         print(f"Attempting to start Ollama server from: {ollama_path}")
         env = os.environ.copy()
         if model_folder and os.path.exists(model_folder):
-            print(f"Ollama model folder from config: {model_folder}")
-            print(f"Does model_folder exist? {os.path.exists(model_folder)}")
             env["OLLAMA_MODELS"] = model_folder
             print(f"Setting OLLAMA_MODELS environment variable to: {model_folder}")
 
-        # Create a log file for the server process
-        log_dir = "logs"
+        log_dir = os.path.join(PROJECT_ROOT, "logs")
         os.makedirs(log_dir, exist_ok=True)
         ollama_log_path = os.path.join(log_dir, "ollama_server.log")
-        print(f"Redirecting Ollama server output to: {ollama_log_path}")
         log_file = open(ollama_log_path, "a", encoding="utf-8")
 
-        # Start Ollama server in a detached process
         process = subprocess.Popen(
             [ollama_path, "serve"],
             env=env,
@@ -503,167 +510,158 @@ class ResearchApp(tk.Tk):
     def _stop_ollama_server(self):
         if self.ollama_process and self.ollama_process.poll() is None:
             print("Stopping Ollama server...")
-            # Terminate the process group to ensure all child processes are killed
             self.ollama_process.terminate()
-            self.ollama_process.wait(timeout=5)
-            print("Ollama server stopped.")
+            try:
+                self.ollama_process.wait(timeout=5)
+                print("Ollama server stopped.")
+            except subprocess.TimeoutExpired:
+                print("Ollama server did not terminate in time. Forcing kill.")
+                self.ollama_process.kill()
 
     def _load_config(self):
-        config_path = "System_Config.json"
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-
-        # Define default portable paths and settings
+        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
         default_config = {
-            "ollama_path": "Portable_AI_Assets/ollama_main/ollama.exe",
-            "model_folder": "Portable_AI_Assets/common-ollama-models"
+            "ollama_path": os.path.join("Portable_AI_Assets", "ollama_main", "ollama.exe"),
+            "model_folder": os.path.join("Portable_AI_Assets", "models"),
+            "vector_cache_dir": os.path.join("Portable_AI_Assets", "vector_cache"),
+            "embedding_model_name": "mxbai-embed-large"
         }
-
-        config_to_use = default_config.copy()
-
+        
+        config_from_file = {}
         if os.path.exists(config_path):
             try:
                 with open(config_path, 'r') as f:
-                    loaded_config = json.load(f)
-                    config_to_use.update(loaded_config)
+                    config_from_file = json.load(f)
             except (json.JSONDecodeError, IOError):
-                pass  # Use defaults if file is corrupt or unreadable
+                pass
 
-        # Resolve paths to be absolute
-        for path_key in ["ollama_path", "model_folder"]:
-            if path_key in config_to_use and not os.path.isabs(config_to_use[path_key]):
-                config_to_use[path_key] = os.path.join(script_dir, config_to_use[path_key])
+        final_config = default_config.copy()
+        final_config.update(config_from_file)
 
-        # Save the (potentially updated) config
-        self._save_config(config_to_use)
-        return config_to_use
+        for key in ["ollama_path", "model_folder", "vector_cache_dir"]:
+            path_value = final_config[key]
+            if not os.path.isabs(path_value):
+                absolute_path = os.path.normpath(os.path.join(PROJECT_ROOT, path_value))
+            else:
+                absolute_path = os.path.normpath(path_value)
+            
+            if not os.path.exists(absolute_path) and key != "vector_cache_dir":
+                default_relative_path = default_config[key]
+                absolute_path = os.path.normpath(os.path.join(PROJECT_ROOT, default_relative_path))
+            
+            final_config[key] = absolute_path
+        
+        return final_config
 
-    def _save_config(self, config):
-        config_path = "System_Config.json"
+    def _save_config(self, app_config):
+        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
+        relative_config = {}
+        for key, value in app_config.items():
+            if isinstance(value, str) and os.path.isabs(value) and key in ["ollama_path", "model_folder", "vector_cache_dir"]:
+                try:
+                    relative_config[key] = os.path.relpath(value, PROJECT_ROOT)
+                except ValueError:
+                    relative_config[key] = value
+            else:
+                relative_config[key] = value
+
         with open(config_path, 'w') as f:
-            json.dump(config, f, indent=4)
+            json.dump(relative_config, f, indent=4)
 
 class SettingsWindow(tk.Toplevel):
-
-
     def __init__(self, master, current_config, save_callback):
-
-
         super().__init__(master)
-
-
         self.title("Settings")
-
-
-        self.geometry("500x250")
-
-
+        self.geometry("500x350")
         self.current_config = current_config
-
-
         self.save_callback = save_callback
 
-
         self.configure(bg=Style.BG_PRIMARY)
-
-
-        self.grab_set() # Make it a modal window
-
-
-        self.transient(master) # Set to be on top of the main window
-
+        self.grab_set()
+        self.transient(master)
 
         self.create_widgets()
-
-
         self.load_settings()
 
-
     def create_widgets(self):
-
-
-        main_frame = ttk.Frame(self, style='TFrame')
-
-
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
+        main_frame = ttk.Frame(self, style='TFrame', padding=10)
+        main_frame.pack(fill=tk.BOTH, expand=True)
 
         # Ollama Path
-
-
         ollama_frame = ttk.Frame(main_frame, style='TFrame')
-
-
         ollama_frame.pack(fill=tk.X, pady=5)
-
-
-        ttk.Label(ollama_frame, text="Ollama Executable Path:", style='TLabel').pack(side=tk.LEFT, anchor='w', padx=(0, 10))
-
-
-        self.ollama_path_entry = ttk.Entry(ollama_frame, style='TEntry')
-
-
+        ttk.Label(ollama_frame, text="Ollama Executable Path:").pack(side=tk.LEFT, anchor='w', padx=(0, 10))
+        self.ollama_path_entry = ttk.Entry(ollama_frame)
         self.ollama_path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-
         ttk.Button(ollama_frame, text="Browse", command=self.browse_ollama_path, style='Tool.TButton').pack(side=tk.RIGHT, padx=(5,0))
 
-
         # Model Folder
-
-
         model_frame = ttk.Frame(main_frame, style='TFrame')
-
-
         model_frame.pack(fill=tk.X, pady=5)
-
-
-        ttk.Label(model_frame, text="Model Folder Path:", style='TLabel').pack(side=tk.LEFT, anchor='w', padx=(0, 10))
-
-
-        self.model_folder_entry = ttk.Entry(model_frame, style='TEntry')
-
-
+        ttk.Label(model_frame, text="Model Folder Path:").pack(side=tk.LEFT, anchor='w', padx=(0, 10))
+        self.model_folder_entry = ttk.Entry(model_frame)
         self.model_folder_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-
         ttk.Button(model_frame, text="Browse", command=self.browse_model_folder, style='Tool.TButton').pack(side=tk.RIGHT, padx=(5,0))
 
+        # Vector Cache Directory
+        vector_cache_frame = ttk.Frame(main_frame, style='TFrame')
+        vector_cache_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(vector_cache_frame, text="Vector Cache Directory:").pack(side=tk.LEFT, anchor='w', padx=(0, 10))
+        self.vector_cache_entry = ttk.Entry(vector_cache_frame)
+        self.vector_cache_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(vector_cache_frame, text="Browse", command=self.browse_vector_cache_dir, style='Tool.TButton').pack(side=tk.RIGHT, padx=(5,0))
+
+        # Embedding Model Name
+        embed_model_frame = ttk.Frame(main_frame, style='TFrame')
+        embed_model_frame.pack(fill=tk.X, pady=5)
+        ttk.Label(embed_model_frame, text="Embedding Model Name:").pack(side=tk.LEFT, anchor='w', padx=(0, 10))
+        self.embed_model_entry = ttk.Entry(embed_model_frame)
+        self.embed_model_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # Buttons
-
-
         button_frame = ttk.Frame(main_frame, style='TFrame')
-
-
-        button_frame.pack(fill=tk.X, pady=15)
-
-
+        button_frame.pack(fill=tk.X, pady=15, side=tk.BOTTOM)
+        ttk.Button(button_frame, text="Open Config File", command=self.open_config_file, style='Tool.TButton').pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Save", command=self.save_settings, style='Accent.Sidebar.TButton').pack(side=tk.RIGHT, padx=5)
-
-
         ttk.Button(button_frame, text="Cancel", command=self.destroy, style='Tool.TButton').pack(side=tk.RIGHT)
 
+    def open_config_file(self):
+        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
+        if os.path.exists(config_path):
+            os.startfile(config_path)
+        else:
+            messagebox.showerror("Error", "System_Config.json not found.")
 
     def load_settings(self):
         self.ollama_path_entry.insert(0, self.current_config.get("ollama_path", ""))
         self.model_folder_entry.insert(0, self.current_config.get("model_folder", ""))
+        self.vector_cache_entry.insert(0, self.current_config.get("vector_cache_dir", ""))
+        self.embed_model_entry.insert(0, self.current_config.get("embedding_model_name", ""))
 
     def browse_ollama_path(self):
-        file_path = filedialog.askopenfilename(title="Select Ollama Executable", filetypes=[("Executables", "*.exe"), ("All Files", "*.*")] )
-        if file_path:
+        path = filedialog.askopenfilename(title="Select Ollama Executable", filetypes=[("Executables", "*.exe"), ("All Files", "*.*")])
+        if path:
             self.ollama_path_entry.delete(0, tk.END)
-            self.ollama_path_entry.insert(0, file_path)
+            self.ollama_path_entry.insert(0, path)
 
     def browse_model_folder(self):
-        folder_path = filedialog.askdirectory(title="Select Model Folder")
-        if folder_path:
+        path = filedialog.askdirectory(title="Select Model Folder")
+        if path:
             self.model_folder_entry.delete(0, tk.END)
-            self.model_folder_entry.insert(0, folder_path)
+            self.model_folder_entry.insert(0, path)
+
+    def browse_vector_cache_dir(self):
+        path = filedialog.askdirectory(title="Select Vector Cache Directory")
+        if path:
+            self.vector_cache_entry.delete(0, tk.END)
+            self.vector_cache_entry.insert(0, path)
 
     def save_settings(self):
         new_config = {
             "ollama_path": self.ollama_path_entry.get(),
-            "model_folder": self.model_folder_entry.get()
+            "model_folder": self.model_folder_entry.get(),
+            "vector_cache_dir": self.vector_cache_entry.get(),
+            "embedding_model_name": self.embed_model_entry.get()
         }
         self.save_callback(new_config)
         self.destroy()
