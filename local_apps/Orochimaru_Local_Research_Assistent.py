@@ -841,7 +841,8 @@ class ResearchApp(tk.Tk):
 
             if desired_model and embedding_models:
                 for model in embedding_models:
-                    if desired_model in model:
+                    # Use a stricter check to match the model from config
+                    if model == desired_model or model.startswith(f"{desired_model}:"):
                         selected_embedding_model = model
                         break
             
