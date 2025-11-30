@@ -14,6 +14,7 @@ import signal
 import shutil
 import httpx
 from multiprocessing import Pool, cpu_count
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # --- PROJECT ROOT ---
 # Get project root for both dev and bundled (PyInstaller) environments
@@ -119,40 +120,6 @@ def tts_worker():
             engine.runAndWait()
         tts_queue.task_done()
 
-# --- Worker Initializers & Process-Local Globals ---
-# These are defined at the top level to be accessible for multiprocessing forks.
-_ollama_client_process_local = None
-_embedding_model_name_process_local = None
-
-def init_embed_worker(embedding_model_name):
-    """Initializer for the multiprocessing pool to create a single Ollama client per process."""
-    global _ollama_client_process_local, _embedding_model_name_process_local
-    import ollama
-    # Each process gets its own client, initialized once.
-    _ollama_client_process_local = ollama.Client(host='127.0.0.1', timeout=120)
-    _embedding_model_name_process_local = embedding_model_name
-
-def embed_chunk_worker(chunk_text):
-    """Worker function for multiprocessing pool to embed and normalize a text chunk."""
-    # Imports must be here for the process fork
-    import numpy as np
-    
-    try:
-        # The client is pre-initialized by init_embed_worker and stored in a global.
-        response = _ollama_client_process_local.embeddings(model=_embedding_model_name_process_local, prompt=chunk_text)
-        
-        # Normalize vector inside the worker. Use float32 for precision.
-        vector = np.array(response['embedding'], dtype=np.float32)
-        norm = np.linalg.norm(vector)
-        if norm > 0:
-            vector /= norm
-            
-        # Return as float16 to save memory during transfer
-        return vector.astype(np.float16)
-    except Exception as e:
-        # DO NOT print from a child process. Return the exception to the parent.
-        return e
-
 def parse_pages_worker(args):
     """Worker function to extract text from a range of PDF pages."""
     import fitz
@@ -167,8 +134,8 @@ def parse_pages_worker(args):
             text = page.get_text("text")
             if text:
                 # Create chunks from the page text
-                for i in range(0, len(text), 800):
-                    page_chunks.append({"text": text[i:i+1000], "page": page_num + 1})
+                for i in range(0, len(text), 400):
+                    page_chunks.append({"text": text[i:i+500], "page": page_num + 1})
         doc.close()
         return page_chunks
     except Exception as e:
@@ -205,10 +172,20 @@ class ResearchApp(tk.Tk):
         self.geometry("1200x800")
         self.configure(bg=Style.BG_PRIMARY)
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+        # Configure the root window's grid layout
+        self.grid_rowconfigure(0, weight=1)  # Main content row
+        self.grid_rowconfigure(1, weight=0)  # Console row
+        self.grid_columnconfigure(1, weight=1)
+
         self.setup_styles()
         self.embedding_model_name = self.app_config.get("embedding_model_name", "mxbai-embed-large")
         self.reviewer_var = tk.StringVar()
         self.create_widgets()
+
+        # Create and redirect the console for logging
+        self._create_and_redirect_console()
+
         self._initialize_ollama() # Moved after create_widgets
         self.start_services()
 
@@ -258,8 +235,6 @@ class ResearchApp(tk.Tk):
         threading.Thread(target=self.review_thread, args=(full_text, self.current_chat_id, reviewer_role), daemon=True).start()
 
     def create_widgets(self):
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
         self._create_sidebar()
         self._create_main_content()
 
@@ -732,6 +707,31 @@ class ResearchApp(tk.Tk):
             self.stop_loading_event.set()
             self.after(0, lambda: self.entry_box.config(state=tk.NORMAL))
 
+    def _embed_chunk_task(self, chunk_text):
+        """Worker task for thread pool to embed and normalize a text chunk."""
+        import numpy as np
+        
+        # --- DEBUG PRINTS ADDED ---
+        print(f"DEBUG: Thread started. Text length: {len(chunk_text)}")
+        try:
+            print(f"DEBUG: Sending request to Ollama for model {self.embedding_model_name}...")
+            
+            # The ollama client is thread-safe.
+            response = self.ollama_client.embeddings(model=self.embedding_model_name, prompt=chunk_text)
+            
+            print("DEBUG: Received response from Ollama.")
+            
+            vector = np.array(response['embedding'], dtype=np.float32)
+            norm = np.linalg.norm(vector)
+            if norm > 0:
+                vector /= norm
+            
+            return vector.astype(np.float16)
+            
+        except Exception as e:
+            print(f"DEBUG: Error inside thread: {e}")
+            raise e
+
     def populate_models(self):
         print("\n--- Populating Models ---")
         try:
@@ -921,27 +921,37 @@ class ResearchApp(tk.Tk):
             self.pdf_text_db[pdf_id] = chunks
             total_chunks = len(chunks)
 
-            # --- Stage 2: Parallel Embedding Generation ---
+            # --- Stage 2: Threaded Embedding Generation ---
             print(f"[Stage 2/3] Generating embeddings for {total_chunks} chunks...")
             self.after(0, lambda: self.status_label.config(text=f"Embedding 0/{total_chunks}", foreground=Style.ACCENT))
 
             worker_args = [chunk['text'] for chunk in chunks]
-            # Limit embedding concurrency to avoid overwhelming the Ollama server.
-            safe_concurrency = max(1, cpu_count() // 2)
-            num_processes_embed = min(safe_concurrency, total_chunks) if total_chunks > 0 else 1
+            # Set concurrency to 1 to prevent overloading the local Ollama server.
+            safe_concurrency = 1
+            num_threads = 1
+
+            results = [None] * total_chunks # Pre-allocate list to store results in order
             
-            results = []
-            # Use maxtasksperchild=1 to ensure a clean worker process for each task.
-            # This can prevent hangs related to worker state or resource leaks.
-            with Pool(processes=num_processes_embed, initializer=init_embed_worker, initargs=(self.embedding_model_name,), maxtasksperchild=1) as pool:
-                print(f"  - Starting embedding generation with {num_processes_embed} worker process(es) (maxtasksperchild=1)...")
-                for i, result in enumerate(pool.imap(embed_chunk_worker, worker_args)):
-                    if isinstance(result, Exception):
-                        raise ValueError(f"Embedding chunk {i+1} failed in worker. Error: {result}")
-                    results.append(result)
-                    if (i + 1) % 10 == 0 or (i + 1) == total_chunks:
-                        print(f"  - Embedded chunk {i+1}/{total_chunks}")
-                        self.after(0, lambda p=i+1: self.status_label.config(text=f"Embedding: {p}/{total_chunks}"))
+            with ThreadPoolExecutor(max_workers=num_threads) as executor:
+                print(f"  - Starting embedding generation with {num_threads} worker thread(s)...")
+                # Create a map of future to its index to reorder results
+                future_to_index = {executor.submit(self._embed_chunk_task, text): i for i, text in enumerate(worker_args)}
+
+                processed_count = 0
+                for future in as_completed(future_to_index):
+                    index = future_to_index[future]
+                    try:
+                        result = future.result()
+                        results[index] = result
+                    except Exception as e:
+                        # An exception was raised in the worker
+                        raise ValueError(f"Embedding chunk {index + 1} failed in worker. Error: {e}")
+
+                    processed_count += 1
+                    if (processed_count % 10 == 0) or (processed_count == total_chunks):
+                        print(f"  - Embedded chunk {processed_count}/{total_chunks}")
+                        self.after(0, lambda p=processed_count: self.status_label.config(text=f"Embedding: {p}/{total_chunks}"))
+
             print("  - Embedding generation complete.")
 
             # --- Stage 3: Vector Saving ---
@@ -1169,8 +1179,8 @@ class ResearchApp(tk.Tk):
         # Try to connect to an existing server first
         try:
             print("1. Checking for an existing Ollama server...")
-            # Set a shorter connect timeout to avoid long hangs on startup
-            timeout = httpx.Timeout(5.0, connect=2.0)
+            # Set a longer connect timeout to avoid long hangs on startup
+            timeout = httpx.Timeout(30.0, connect=5.0)
             external_client = ollama.Client(host='127.0.0.1', timeout=timeout)
             external_models = external_client.list().get('models', [])
             external_model_names = [m['model'] for m in external_models]
@@ -1186,7 +1196,7 @@ class ResearchApp(tk.Tk):
             if found_on_external:
                 print("3. SUCCESS: Existing server has a suitable embedding model.")
                 print("   - Using the existing Ollama server.")
-                self.ollama_client = ollama.Client(host='127.0.0.1', timeout=120)
+                self.ollama_client = ollama.Client(host='127.0.0.1', timeout=300)
                 self.populate_models()
                 return # Success, we are done.
             else:
@@ -1220,7 +1230,7 @@ class ResearchApp(tk.Tk):
         print(f"2. Model folder to be used: {model_folder}")
         try:
             self.ollama_process = self._start_ollama_server(ollama_path, model_folder)
-            self.ollama_client = ollama.Client(host='127.0.0.1', timeout=120)
+            self.ollama_client = ollama.Client(host='127.0.0.1', timeout=300)
             print("3. Waiting for managed Ollama server to become responsive...")
             self.after(100, lambda: self._check_server_readiness(time.time(), 60))
         except Exception as e:
@@ -1376,6 +1386,17 @@ class ResearchApp(tk.Tk):
 
         with open(config_path, 'w') as f:
             json.dump(relative_config, f, indent=4)
+
+    def _create_and_redirect_console(self):
+        """Creates the console widget and redirects stdout/stderr to it."""
+        self.console = scrolledtext.ScrolledText(self, height=8, bg=Style.BG_TERTIARY, font=Style.LOG_FONT)
+        self.console.tag_config("log", foreground=Style.LOG_COLOR)
+        self.console.tag_config("error", foreground=Style.ERROR)
+        self.console.grid(row=1, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
+
+        sys.stdout = ConsoleRedirector(self.console, "log")
+        sys.stderr = ConsoleRedirector(self.console, "error")
+        print("--- Console Initialized and Redirected ---")
 
 class ConsoleRedirector:
     def __init__(self, text_widget, tag=None):
@@ -1648,15 +1669,4 @@ if __name__ == "__main__":
     multiprocessing.freeze_support()
 
     app = ResearchApp()
-
-    console = scrolledtext.ScrolledText(app, height=8, bg=Style.BG_TERTIARY, font=Style.LOG_FONT)
-    console.tag_config("log", foreground=Style.LOG_COLOR)
-    console.tag_config("error", foreground=Style.ERROR)
-
-    console.grid(row=1, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
-
-    sys.stdout = ConsoleRedirector(console, "log")
-
-    sys.stderr = ConsoleRedirector(console, "error")
-
     app.mainloop()
