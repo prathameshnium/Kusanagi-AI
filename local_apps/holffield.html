@@ -86,13 +86,17 @@
         .btn-learn { background: var(--accent); color: var(--accent-fg); }
         .btn-noise { background: var(--fg-secondary); color: var(--accent-fg); }
         .btn-run { background: var(--bg-tertiary); color: var(--fg-primary); }
+        .btn-run-slow { background: var(--bg-tertiary); color: var(--fg-primary); filter: brightness(0.8); }
         .btn-clear { background: var(--error); color: var(--fg-primary); }
+        .btn-forget { background: var(--accent); color: var(--accent-fg); filter: brightness(0.7); }
 
         .stats {
             margin-top: 15px;
             text-align: left;
             font-size: 12px;
             color: var(--fg-secondary);
+            border-top: 1px solid var(--bg-tertiary);
+            padding-top: 10px;
         }
         .stat-val { float: right; color: var(--fg-primary); }
 
@@ -108,14 +112,14 @@
         .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
     </style>
     <script>
-        // Developer: Kusanagi
+        // Developer: Prathamesh Deshmukh
     </script>
 </head>
 <body>
 
     <h1>VISUAL HOPFIELD NET</h1>
     <div class="subtitle">
-        5x5 Grid (25 Neurons) | Fully Connected Graph | Developed by Kusanagi
+        5x5 Grid (25 Neurons) | Fully Connected Graph | Developed by Prathamesh Deshmukh
     </div>
 
     <div class="main-container">
@@ -137,10 +141,12 @@
 
         <div class="panel controls">
             <button class="btn-learn" onclick="learn()">1. Learn Pattern</button>
-            <button class="btn-clear" onclick="clearGrid()">2. Clear Grid</button>
+            <button class="btn-forget" onclick="forget()">2. Forget Pattern</button>
+            <button class="btn-clear" onclick="clearGrid()">3. Clear Grid</button>
             <hr style="border-color:var(--bg-tertiary); width:100%">
-            <button class="btn-noise" onclick="addNoise()">3. Add Noise</button>
-            <button class="btn-run" onclick="recover()">4. Run Live</button>
+            <button class="btn-noise" onclick="addNoise()">4. Add Noise</button>
+            <button class="btn-run" onclick="recover(20)">5. Run Live</button>
+            <button class="btn-run-slow" onclick="recover(250)">6. Run Slowly</button>
             
             <div class="stats">
                 <div>Energy: <span id="energy" class="stat-val">0.0</span></div>
@@ -317,6 +323,40 @@
         stepLearn();
     }
 
+    function forget() {
+        // Hebbian Anti-Learning: w_ij -= s_i * s_j
+        if (storedPatterns <= 0) {
+            countEl.innerText = "0";
+            return; // Nothing to forget
+        }
+
+        let i = 0;
+        const btn = document.querySelector('.btn-forget');
+        btn.disabled = true;
+        btn.innerText = "Forgetting...";
+
+        function stepForget() {
+            for (let j = 0; j < N; j++) {
+                if (i === j) continue;
+                weights[i][j] -= neurons[i] * neurons[j];
+                weights[j][i] = weights[i][j]; // Keep symmetric
+            }
+            
+            drawNetwork();
+            i++;
+            
+            if (i < N) {
+                requestAnimationFrame(stepForget);
+            } else {
+                storedPatterns--;
+                countEl.innerText = storedPatterns;
+                btn.disabled = false;
+                btn.innerText = "2. Forget Pattern";
+            }
+        }
+        stepForget();
+    }
+
     function addNoise() {
         // Flip 20% of bits
         for (let i = 0; i < N; i++) {
@@ -336,10 +376,12 @@
         stableEl.innerText = "-";
     }
 
-    async function recover() {
+    async function recover(delay) {
         const btn = document.querySelector('.btn-run');
+        const slowBtn = document.querySelector('.btn-run-slow');
         btn.disabled = true;
-        btn.innerText = "Running...";
+        slowBtn.disabled = true;
+        document.querySelector(delay > 100 ? '.btn-run-slow' : '.btn-run').innerText = "Running...";
         
         let stable = false;
         let iter = 0;
@@ -369,14 +411,16 @@
                     // Animate every flip
                     drawGrid();
                     drawNetwork();
-                    await new Promise(r => setTimeout(r, 20)); // Delay for visual effect
+                    await new Promise(r => setTimeout(r, delay)); // Delay for visual effect
                 }
             }
             iter++;
         }
         
         btn.disabled = false;
-        btn.innerText = "4. Run Live";
+        slowBtn.disabled = false;
+        btn.innerText = "5. Run Live";
+        slowBtn.innerText = "6. Run Slowly";
         stableEl.innerText = stable ? "Converged" : "Stopped";
     }
 
