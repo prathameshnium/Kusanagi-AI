@@ -5,32 +5,37 @@
     <title>Visual Hopfield Network: Live Tuning</title>
     <style>
         :root {
-            --bg-color: #121212;
-            --panel-color: #1e1e1e;
-            --border-color: #333;
-            --text-color: #e0e0e0;
-            --title-color: #ffffff;
-            --accent-color: #2a9d8f;
-            --btn-learn-bg: #2a9d8f;
-            --btn-noise-bg: #e9c46a;
-            --btn-run-bg: #3a7ca5;
-            --btn-clear-bg: #e76f51;
-            --btn-text-color: #000;
+            --bg-primary: #193549;
+            --bg-secondary: #002240;
+            --bg-tertiary: #25435A;
+            --fg-primary: #FFFFFF;
+            --fg-secondary: #97B1C2;
+            --accent: #ffab40;
+            --accent-fg: #002240;
+            --error: #FF628C;
+            --log-color: #F1FA8C;
+
             --dot-excite: #2ecc71;
             --dot-inhibit: #e74c3c;
         }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-color);
+            font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+            font-size: 11px;
+            background-color: var(--bg-secondary);
+            color: var(--fg-primary);
             display: flex;
             flex-direction: column;
             align-items: center;
             margin: 0;
             padding: 2rem;
         }
-        h1 { margin-bottom: 5px; color: var(--text); text-shadow: 0 0 10px rgba(233, 69, 96, 0.5); }
-        .subtitle { font-size: 0.9em; color: #888; margin-bottom: 20px; }
+        h1 {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: var(--accent);
+        }
+        .subtitle { font-size: 0.9em; color: var(--fg-secondary); margin-bottom: 20px; }
         
         .main-container {
             display: flex;
@@ -42,10 +47,10 @@
         }
 
         .panel {
-            background: var(--panel-color);
+            background: var(--bg-primary);
             padding: 20px;
             border-radius: 12px;
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--bg-tertiary);
             text-align: center;
         }
 
@@ -53,7 +58,7 @@
             background: #000;
             border: 1px solid var(--border-color);
             border-radius: 4px;
-            cursor: pointer;
+            cursor: pointer; 
         }
 
         .controls {
@@ -78,18 +83,18 @@
         button:hover { filter: brightness(1.2); transform: translateY(-1px); }
         button:active { transform: translateY(1px); }
 
-        .btn-learn { background: var(--btn-learn-bg); color: var(--btn-text-color); }
-        .btn-noise { background: var(--btn-noise-bg); color: var(--btn-text-color); }
-        .btn-run { background: var(--btn-run-bg); color: var(--text-color); }
-        .btn-clear { background: var(--btn-clear-bg); color: var(--text-color); }
+        .btn-learn { background: var(--accent); color: var(--accent-fg); }
+        .btn-noise { background: var(--fg-secondary); color: var(--accent-fg); }
+        .btn-run { background: var(--bg-tertiary); color: var(--fg-primary); }
+        .btn-clear { background: var(--error); color: var(--fg-primary); }
 
         .stats {
             margin-top: 15px;
             text-align: left;
             font-size: 12px;
-            color: #aaa;
+            color: var(--fg-secondary);
         }
-        .stat-val { float: right; color: var(--title-color); }
+        .stat-val { float: right; color: var(--fg-primary); }
 
         /* Legend for the graph */
         .legend {
@@ -102,18 +107,23 @@
         .legend span { display: flex; align-items: center; gap: 5px; }
         .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
     </style>
+    <script>
+        // Developer: Kusanagi
+    </script>
 </head>
 <body>
 
     <h1>VISUAL HOPFIELD NET</h1>
-    <div class="subtitle">5x5 Grid (25 Neurons) | Fully Connected Graph</div>
+    <div class="subtitle">
+        5x5 Grid (25 Neurons) | Fully Connected Graph | Developed by Kusanagi
+    </div>
 
     <div class="main-container">
         
         <div class="panel">
             <h3>INPUT GRID</h3>
             <canvas id="gridCanvas" width="200" height="200"></canvas>
-            <div style="margin-top:10px; font-size:12px; color:#666">Click to toggle pixels</div>
+            <div style="margin-top:10px; font-size:12px; color:var(--fg-secondary)">Click to toggle pixels</div>
         </div>
 
         <div class="panel">
@@ -128,7 +138,7 @@
         <div class="panel controls">
             <button class="btn-learn" onclick="learn()">1. Learn Pattern</button>
             <button class="btn-clear" onclick="clearGrid()">2. Clear Grid</button>
-            <hr style="border-color:#333; width:100%">
+            <hr style="border-color:var(--bg-tertiary); width:100%">
             <button class="btn-noise" onclick="addNoise()">3. Add Noise</button>
             <button class="btn-run" onclick="recover()">4. Run Live</button>
             
@@ -187,7 +197,7 @@
             
             gridCtx.fillStyle = neurons[i] === 1 ? '#fff' : '#000';
             gridCtx.fillRect(x, y, cellSize - 0.5, cellSize - 0.5); // Add tiny gap
-            gridCtx.strokeStyle = '#333';
+            gridCtx.strokeStyle = 'var(--bg-tertiary)';
             gridCtx.strokeRect(x, y, cellSize, cellSize);
         }
     }
