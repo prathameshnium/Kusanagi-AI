@@ -125,7 +125,6 @@ def embed_chunk_worker(chunk_text):
     """Worker function for multiprocessing pool to embed and normalize a text chunk."""
     # Imports must be here for the process fork
     import numpy as np
-    import sys
     
     try:
         # The client is pre-initialized by init_embed_worker and stored in a global.
@@ -140,14 +139,12 @@ def embed_chunk_worker(chunk_text):
         # Return as float16 to save memory during transfer
         return vector.astype(np.float16)
     except Exception as e:
-        # Cannot use UI elements here, just print to console.
-        print(f"Error in embedding worker: {e}", file=sys.stderr)
-        return None
+        # DO NOT print from a child process. Return the exception to the parent.
+        return e
 
 def parse_pages_worker(args):
     """Worker function to extract text from a range of PDF pages."""
     import fitz
-    import sys
     
     pdf_path, page_numbers = args
     page_chunks = []
@@ -164,8 +161,8 @@ def parse_pages_worker(args):
         doc.close()
         return page_chunks
     except Exception as e:
-        print(f"Error parsing pages in {pdf_path}: {e}", file=sys.stderr)
-        return [] # Return empty list on failure for this batch of pages
+        # DO NOT print from a child process. Return the exception to the parent.
+        return e
 
 
 
@@ -898,8 +895,10 @@ class ResearchApp(tk.Tk):
             with Pool(processes=num_processes_parse) as pool:
                 processed_pages = 0
                 print(f"  - Starting text extraction with {len(parse_args)} worker process(es)...")
-                for i, page_chunks in enumerate(pool.imap(parse_pages_worker, parse_args)):
-                    chunks.extend(page_chunks)
+                for i, result_batch in enumerate(pool.imap(parse_pages_worker, parse_args)):
+                    if isinstance(result_batch, Exception):
+                        raise ValueError(f"Parsing batch {i+1} failed in worker. Error: {result_batch}")
+                    chunks.extend(result_batch)
                     processed_pages += len(parse_args[i][1])
                     print(f"  - Processed batch {i+1}/{len(parse_args)}, pages done: {processed_pages}/{page_count}")
                     self.after(0, lambda p=processed_pages: self.status_label.config(text=f"Parsing page: {p}/{page_count}"))
@@ -916,14 +915,18 @@ class ResearchApp(tk.Tk):
             self.after(0, lambda: self.status_label.config(text=f"Embedding 0/{total_chunks}", foreground=Style.ACCENT))
 
             worker_args = [chunk['text'] for chunk in chunks]
-            num_processes_embed = min(cpu_count(), total_chunks) if total_chunks > 0 else 1
+            # Limit embedding concurrency to avoid overwhelming the Ollama server.
+            safe_concurrency = max(1, cpu_count() // 2)
+            num_processes_embed = min(safe_concurrency, total_chunks) if total_chunks > 0 else 1
             
             results = []
-            with Pool(processes=num_processes_embed, initializer=init_embed_worker, initargs=(self.embedding_model_name,)) as pool:
-                print(f"  - Starting embedding generation with {num_processes_embed} worker process(es)...")
+            # Use maxtasksperchild=1 to ensure a clean worker process for each task.
+            # This can prevent hangs related to worker state or resource leaks.
+            with Pool(processes=num_processes_embed, initializer=init_embed_worker, initargs=(self.embedding_model_name,), maxtasksperchild=1) as pool:
+                print(f"  - Starting embedding generation with {num_processes_embed} worker process(es) (maxtasksperchild=1)...")
                 for i, result in enumerate(pool.imap(embed_chunk_worker, worker_args)):
-                    if result is None:
-                        raise ValueError(f"Chunk {i} failed to embed. Check console for details.")
+                    if isinstance(result, Exception):
+                        raise ValueError(f"Embedding chunk {i+1} failed in worker. Error: {result}")
                     results.append(result)
                     if (i + 1) % 10 == 0 or (i + 1) == total_chunks:
                         print(f"  - Embedded chunk {i+1}/{total_chunks}")
