@@ -479,6 +479,8 @@ class ResearchApp(tk.Tk):
             token_batch.append(token)
             tts_buffer += token
             token_count += 1
+            if token_count % 25 == 0:
+                print(f"  [Stream] Received token {token_count}...")
 
             if time.time() - last_update_time > update_interval:
                 self.after(0, self.append_to_chat, "".join(token_batch)); token_batch.clear(); last_update_time = time.time()
@@ -504,44 +506,57 @@ class ResearchApp(tk.Tk):
         self.after(0, self.finalize_response)
 
     def find_relevant_chunks(self, query_vector, doc_id, top_k=5):
+        print(f"Finding top {top_k} relevant chunks for document '{doc_id}'...")
         if doc_id not in self.pdf_text_db:
+            print(f"  - Error: Document ID '{doc_id}' not found in text database.")
             return []
 
         mmap_path = os.path.join(self.vector_cache_dir, f"{doc_id}.mmap")
         if not os.path.exists(mmap_path):
+            print(f"  - Error: Vector cache file not found at {mmap_path}")
             return []
 
         num_chunks = len(self.pdf_text_db[doc_id])
         if num_chunks == 0:
+            print("  - Warning: Document has no chunks to search.")
             return []
+        print(f"  - Found {num_chunks} chunks for document '{doc_id}'.")
         
         try:
             # Vectors are pre-normalized, so we can load them directly.
             mmap_vectors = np.memmap(mmap_path, dtype=np.float16, mode='r', shape=(num_chunks, len(query_vector)))
+            print(f"  - Successfully loaded vector cache from {mmap_path}")
         except ValueError:
-            print(f"Warning: Could not load mmap for {doc_id} with expected shape. Re-processing might be needed.")
+            print(f"  - Warning: Could not load mmap for {doc_id} with expected shape. Re-processing might be needed.")
             return []
 
         # Normalize the query vector. Use float32 for precision.
         query_vector = np.array(query_vector, dtype=np.float32)
         query_norm = np.linalg.norm(query_vector)
         if query_norm == 0:
+            print("  - Error: Query vector is zero, cannot compute similarity.")
             return [] # Cannot compare with a zero vector.
         
         query_vector_norm = query_vector / query_norm
+        print("  - Query vector normalized.")
 
         # The dot product of two normalized vectors is the cosine similarity.
         # Cast query vector to the same dtype as mmap_vectors for dot product.
         similarities = np.dot(mmap_vectors, query_vector_norm.astype(mmap_vectors.dtype))
+        print("  - Calculated similarities for all chunks.")
 
         # Get the indices of the top k similarities, sorted from highest to lowest.
         top_k_indices = np.argsort(similarities)[-top_k:][::-1]
+        print(f"  - Identified top {len(top_k_indices)} indices: {top_k_indices}")
 
         relevant_chunks = []
         for i in top_k_indices:
             chunk_info = self.pdf_text_db[doc_id][i]
-            relevant_chunks.append((chunk_info['text'], similarities[i], chunk_info['page']))
+            similarity_score = similarities[i]
+            relevant_chunks.append((chunk_info['text'], similarity_score, chunk_info['page']))
+            print(f"    - Retrieved chunk from Page {chunk_info['page']} with similarity: {similarity_score:.4f}")
         
+        print("Finished finding relevant chunks.")
         return relevant_chunks
 
     def rag_chat_thread(self, prompt):
@@ -858,15 +873,17 @@ class ResearchApp(tk.Tk):
 
     def process_and_embed_pdf(self, pdf_path, pdf_id):
         try:
-            print(f"Processing and embedding '{pdf_id}'...")
+            print(f"--- Starting PDF Processing for '{pdf_id}' ---")
             self.after(0, lambda: self.load_pdf_button.config(state=tk.DISABLED))
             
             # --- Stage 1: Parallel Text Extraction and Chunking ---
+            print(f"[Stage 1/3] Parsing text from '{os.path.basename(pdf_path)}'...")
             self.after(0, lambda: self.status_label.config(text=f"Parsing '{pdf_id}'...", foreground=Style.ACCENT))
             try:
                 doc = fitz.open(pdf_path)
                 page_count = doc.page_count
                 doc.close()
+                print(f"  - PDF has {page_count} pages.")
             except Exception as e:
                 raise ValueError(f"Could not open or read PDF: {e}")
 
@@ -874,18 +891,19 @@ class ResearchApp(tk.Tk):
                 raise ValueError("PDF is empty.")
 
             num_processes_parse = min(cpu_count(), page_count) if page_count > 0 else 1
-            # Split page numbers into batches for each worker to reduce file I/O
             page_batches = np.array_split(range(page_count), num_processes_parse)
             parse_args = [(pdf_path, batch.tolist()) for batch in page_batches if batch.size > 0]
             
             chunks = []
             with Pool(processes=num_processes_parse) as pool:
                 processed_pages = 0
-                # Use imap to get results as they are ready and update UI
+                print(f"  - Starting text extraction with {len(parse_args)} worker process(es)...")
                 for i, page_chunks in enumerate(pool.imap(parse_pages_worker, parse_args)):
                     chunks.extend(page_chunks)
-                    processed_pages += len(parse_args[i][1]) # Add number of pages from the processed batch
+                    processed_pages += len(parse_args[i][1])
+                    print(f"  - Processed batch {i+1}/{len(parse_args)}, pages done: {processed_pages}/{page_count}")
                     self.after(0, lambda p=processed_pages: self.status_label.config(text=f"Parsing page: {p}/{page_count}"))
+            print(f"  - Text extraction complete. Found {len(chunks)} text chunks.")
 
             if not chunks:
                 raise ValueError("Could not extract any text from PDF.")
@@ -894,23 +912,26 @@ class ResearchApp(tk.Tk):
             total_chunks = len(chunks)
 
             # --- Stage 2: Parallel Embedding Generation ---
+            print(f"[Stage 2/3] Generating embeddings for {total_chunks} chunks...")
             self.after(0, lambda: self.status_label.config(text=f"Embedding 0/{total_chunks}", foreground=Style.ACCENT))
 
             worker_args = [chunk['text'] for chunk in chunks]
             num_processes_embed = min(cpu_count(), total_chunks) if total_chunks > 0 else 1
             
             results = []
-            # Initialize each worker process with a single Ollama client
             with Pool(processes=num_processes_embed, initializer=init_embed_worker, initargs=(self.embedding_model_name,)) as pool:
+                print(f"  - Starting embedding generation with {num_processes_embed} worker process(es)...")
                 for i, result in enumerate(pool.imap(embed_chunk_worker, worker_args)):
                     if result is None:
                         raise ValueError(f"Chunk {i} failed to embed. Check console for details.")
                     results.append(result)
-                    # Update UI periodically from the processing thread
-                    if (i + 1) % 5 == 0 or (i + 1) == total_chunks:
+                    if (i + 1) % 10 == 0 or (i + 1) == total_chunks:
+                        print(f"  - Embedded chunk {i+1}/{total_chunks}")
                         self.after(0, lambda p=i+1: self.status_label.config(text=f"Embedding: {p}/{total_chunks}"))
-            
+            print("  - Embedding generation complete.")
+
             # --- Stage 3: Vector Saving ---
+            print(f"[Stage 3/3] Saving {len(results)} vectors to disk...")
             self.after(0, lambda: self.status_label.config(text=f"Saving 0/{total_chunks}", foreground=Style.ACCENT))
             
             if not results:
@@ -918,21 +939,24 @@ class ResearchApp(tk.Tk):
 
             first_vector = results[0]
             mmap_shape = (total_chunks, len(first_vector))
-            mmap_vectors = np.memmap(os.path.join(self.vector_cache_dir, f"{pdf_id}.mmap"), dtype=np.float16, mode='w+', shape=mmap_shape)
+            mmap_path = os.path.join(self.vector_cache_dir, f"{pdf_id}.mmap")
+            mmap_vectors = np.memmap(mmap_path, dtype=np.float16, mode='w+', shape=mmap_shape)
+            print(f"  - Created memory-mapped file at '{mmap_path}' with shape {mmap_shape}.")
 
             for i, vector in enumerate(results):
                 mmap_vectors[i] = vector
-                if (i + 1) % 20 == 0 or (i + 1) == total_chunks:
+                if (i + 1) % 50 == 0 or (i + 1) == total_chunks:
+                     print(f"  - Serialized vector {i+1}/{total_chunks}")
                      self.after(0, lambda p=i+1: self.status_label.config(text=f"Saving: {p}/{total_chunks}"))
             
             mmap_vectors.flush()
+            print("  - Flushed all vectors to disk.")
 
-            print(f"Successfully embedded '{pdf_id}'.")
+            print(f"--- Successfully processed and embedded '{pdf_id}' ---")
             self.after(0, lambda: self.append_to_chat(f"Ready to chat with '{pdf_id}'.\n\n", "thinking_tag"))
 
         except Exception as e:
-            # Use sys.stderr for better logging from threads
-            print(f"Error processing PDF '{pdf_id}': {e}", file=sys.stderr)
+            print(f"--- Error processing PDF '{pdf_id}': {e} ---", file=sys.stderr)
             self.after(0, lambda: messagebox.showerror("Processing Error", f"Failed to process '{pdf_id}'.\n\nDetails: {e}"))
             self.remove_document_data(pdf_id)
         finally:
@@ -1340,23 +1364,49 @@ class ResearchApp(tk.Tk):
             json.dump(relative_config, f, indent=4)
 
 class ConsoleRedirector:
-
     def __init__(self, text_widget, tag=None):
-
         self.text_widget = text_widget
         self.tag = tag
+        self.at_line_start = True
 
     def write(self, text):
-
+        if not text:
+            return
+        
         self.text_widget.config(state=tk.NORMAL)
-
-        self.text_widget.insert(tk.END, text, self.tag)
+        
+        # To prevent multiple timestamps on a single line from rapid prints,
+        # we process the text line by line.
+        lines = text.split('\n')
+        
+        # First line
+        if lines[0]:
+            if self.at_line_start:
+                timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                self.text_widget.insert(tk.END, f"[{timestamp}] {lines[0]}", self.tag)
+            else:
+                self.text_widget.insert(tk.END, lines[0], self.tag)
+        
+        # Subsequent lines
+        for line in lines[1:]:
+            self.text_widget.insert(tk.END, '\n')
+            if line:
+                timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                self.text_widget.insert(tk.END, f"[{timestamp}] {line}", self.tag)
+        
+        # If the original text ended with a newline, the next write should start with a timestamp.
+        if text.endswith('\n'):
+            self.at_line_start = True
+        else:
+            self.at_line_start = False
 
         self.text_widget.see(tk.END)
-
         self.text_widget.config(state=tk.DISABLED)
 
-    def flush(self): pass
+    def flush(self):
+        # This can be called by the system, but we don't need to do anything
+        # special since we write to the widget immediately.
+        pass
 
 
 class SettingsWindow(tk.Toplevel):
