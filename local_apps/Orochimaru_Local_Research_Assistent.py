@@ -16,8 +16,19 @@ import httpx
 from multiprocessing import Pool, cpu_count
 
 # --- PROJECT ROOT ---
-# Assumes the script is in a subdirectory of the project root (e.g., 'local_apps')
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+# Get project root for both dev and bundled (PyInstaller) environments
+def get_project_root():
+    if getattr(sys, 'frozen', False):
+        # Running as a bundled executable (e.g., via PyInstaller).
+        # For a one-dir bundle, sys.executable is the path to the executable,
+        # so its directory is our root.
+        return os.path.dirname(sys.executable)
+    else:
+        # Running as a script from the 'local_apps' subdirectory.
+        # We need to go up one level to find the project root.
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+PROJECT_ROOT = get_project_root()
 
 # --- RAG & File Processing Imports ---
 try:
@@ -1632,6 +1643,9 @@ class SettingsWindow(tk.Toplevel):
 
 
 if __name__ == "__main__":
+    # Required for multiprocessing to work when bundled by PyInstaller
+    import multiprocessing
+    multiprocessing.freeze_support()
 
     app = ResearchApp()
 
