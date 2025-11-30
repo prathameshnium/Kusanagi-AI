@@ -179,7 +179,6 @@ class ResearchApp(tk.Tk):
         self.grid_columnconfigure(1, weight=1)
 
         self.setup_styles()
-        self.embedding_model_name = self.app_config.get("embedding_model_name", "mxbai-embed-large")
         self.reviewer_var = tk.StringVar()
         self.create_widgets()
 
@@ -286,8 +285,11 @@ class ResearchApp(tk.Tk):
         embed_frame = ttk.Frame(self.sidebar, style='Sidebar.TFrame')
         embed_frame.pack(fill=tk.X, padx=15, pady=(0, 10))
         ttk.Label(embed_frame, text="Embedding Model:", style='Sidebar.TLabel').pack(anchor='w')
-        self.embed_status_label = ttk.Label(embed_frame, text=f"{self.embedding_model_name} (Checking...)", style='Sidebar.TLabel', foreground=Style.FG_SECONDARY)
-        self.embed_status_label.pack(anchor='w')
+        
+        self.embed_model_var = tk.StringVar()
+        self.embed_selector = ttk.Combobox(embed_frame, textvariable=self.embed_model_var, state="readonly")
+        self.embed_selector.pack(fill=tk.X, pady=(5,0))
+        self.embed_selector.bind("<<ComboboxSelected>>", self.on_embedding_model_select)
 
         # --- History Tabs ---
         self.history_notebook = ttk.Notebook(self.sidebar, style='TNotebook')
@@ -707,6 +709,34 @@ class ResearchApp(tk.Tk):
             self.stop_loading_event.set()
             self.after(0, lambda: self.entry_box.config(state=tk.NORMAL))
 
+    def on_embedding_model_select(self, event=None):
+        new_model = self.embed_model_var.get()
+        # Use the model name without the tag for logic/comparison
+        new_model_name = new_model.split(':')[0]
+
+        if not new_model or new_model_name == self.embedding_model_name:
+            return
+
+        print(f"User selected new embedding model: {new_model_name}")
+
+        # If a document is already loaded and processed, its vectors are now invalid.
+        if self.pdf_text_db:
+             messagebox.showwarning("Model Changed", 
+                                  "You have changed the embedding model.\n\n"
+                                  "The vector data for all loaded documents is now invalid. "
+                                  "Please remove and reload your documents to use the new model.")
+             # For safety, clear all vector caches and in-memory text databases
+             for doc_id in list(self.pdf_text_db.keys()):
+                 self.remove_vector_cache(doc_id)
+             self.pdf_text_db.clear()
+             self.doc_list_box.delete(0, tk.END)
+             self.start_new_chat()
+        
+        self.embedding_model_name = new_model_name
+        self.app_config["embedding_model_name"] = new_model_name
+        self._save_config(self.app_config)
+        print(f"Saved new embedding model '{new_model_name}' to config.")
+
     def _embed_chunk_task(self, chunk_text):
         """Worker task for thread pool to embed and normalize a text chunk."""
         import numpy as np
@@ -794,38 +824,45 @@ class ResearchApp(tk.Tk):
 
             self.status_light.config(foreground="#3AD900"); self.status_label.config(text="Connected")
             
-            chat_models = [name for name in model_names if "embed" not in name]
-            print(f"4. Filtered chat models (names not containing 'embed'): {chat_models}")
+            # --- Separate Chat and Embedding Models ---
+            chat_models = [name for name in model_names if "embed" not in name and "minilm" not in name]
+            embedding_models = [name for name in model_names if "embed" in name or "minilm" in name]
+            
+            print(f"4a. Filtered chat models: {chat_models}")
+            print(f"4b. Filtered embedding models: {embedding_models}")
 
+            # --- Populate UI ComboBoxes ---
             self.model_selector['values'] = chat_models or ["No models found"]
-            print(f"5. Set model selector values to: {self.model_selector['values']}")
+            self.embed_selector['values'] = embedding_models or ["No models found"]
             
-            # Check for embedding model for offline portability
-            print(f"\n6. Checking for a suitable embedding model (e.g., containing 'mxbai' and 'embed')...")
-            
-            found_embedding_model = None
-            for name in model_names:
-                if "mxbai" in name and "embed" in name:
-                    found_embedding_model = name
-                    break # Found one, use it
+            # --- Select Active Embedding Model ---
+            desired_model = self.app_config.get("embedding_model_name")
+            selected_embedding_model = None
 
-            if found_embedding_model:
-                # Use the actual model name found, without the tag, for embedding calls.
-                self.embedding_model_name = found_embedding_model.split(':')[0]
+            if desired_model and embedding_models:
+                for model in embedding_models:
+                    if desired_model in model:
+                        selected_embedding_model = model
+                        break
+            
+            if not selected_embedding_model and embedding_models:
+                selected_embedding_model = embedding_models[0]
+
+            if selected_embedding_model:
+                self.embed_model_var.set(selected_embedding_model)
+                self.embedding_model_name = selected_embedding_model.split(':')[0]
                 self.embedding_model_available = True
-                self.embed_status_label.config(text=f'{self.embedding_model_name} (Ready)', foreground="#3AD900")
                 self.load_pdf_button.config(state=tk.NORMAL)
-                print(f"   - SUCCESS: Found and selected embedding model: '{self.embedding_model_name}'")
+                print(f"   - SUCCESS: Auto-selected embedding model: '{self.embedding_model_name}'")
             else:
                 self.embedding_model_available = False
-                # Display the name from config as it's what was expected
-                expected_model = self.app_config.get("embedding_model_name", "mxbai-embed-large")
-                self.embed_status_label.config(text=f'{expected_model} (Not Found)', foreground=Style.ERROR)
+                self.embed_model_var.set("No models found")
                 self.load_pdf_button.config(state=tk.DISABLED)
-                print(f"   - WARNING: No embedding model containing 'mxbai' and 'embed' was found. Document features will be disabled.")
+                print(f"   - WARNING: No embedding models were found. Document features will be disabled.")
 
+            # --- Select Active Chat Model ---
             current_selection = self.model_selector.get()
-            if current_selection not in chat_models:
+            if not current_selection or current_selection not in chat_models:
                 new_selection = chat_models[0] if chat_models else ""
                 self.model_var.set(new_selection)
                 print(f"7. Current model selection ('{current_selection}') is invalid. Setting to: '{new_selection}'")
@@ -1189,7 +1226,7 @@ class ResearchApp(tk.Tk):
             # Check if the existing server has a suitable embedding model
             found_on_external = False
             for name in external_model_names:
-                if "mxbai" in name and "embed" in name:
+                if "embed" in name or "minilm" in name:
                     found_on_external = True
                     break
 
@@ -1200,8 +1237,8 @@ class ResearchApp(tk.Tk):
                 self.populate_models()
                 return # Success, we are done.
             else:
-                print("3. WARNING: Existing server found, but it does NOT have a suitable 'mxbai' embedding model.")
-                print(f"   - Required model name should contain: 'mxbai' and 'embed'")
+                print("3. WARNING: Existing server found, but it does NOT have a suitable embedding model.")
+                print(f"   - Could not find a suitable embedding model (e.g. 'all-minilm', 'mxbai-embed-large').")
                 print("   - The application will now attempt to start its own managed Ollama server.")
                 # Attempt to shut down our own previously managed server if it's still running,
                 # as it might be the one without the model.
@@ -1308,7 +1345,7 @@ class ResearchApp(tk.Tk):
             # located within this single 'model_folder' directory.
             "model_folder": os.path.join("Portable_AI_Assets", "models"),
             "vector_cache_dir": os.path.join("Portable_AI_Assets", "vector_cache"),
-            "embedding_model_name": "mxbai-embed-large"
+            "embedding_model_name": "all-minilm"
         }
         print(f"3. Default config loaded: {json.dumps(default_config, indent=2)}")
 
