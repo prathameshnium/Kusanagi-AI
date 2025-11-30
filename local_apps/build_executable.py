@@ -20,6 +20,7 @@
 
 import PyInstaller.__main__
 import os
+import shutil
 
 # Get the absolute path to the project's root directory
 # This ensures that paths are correct regardless of where the script is run from.
@@ -49,8 +50,9 @@ upx_dir = os.path.join(project_root, 'build', 'upx') # Example path, adjust if n
 # Construct the PyInstaller command
 pyinstaller_args = [
     '--name=%s' % exe_name,
-    '--onedir',         # Create a directory bundle instead of a single file
+    '--onedir',         # Create a directory bundle. Best for large projects.
     '--clean',          # Clean PyInstaller cache and remove temporary files before building
+    '--noconfirm',      # Do not ask for confirmation if output files already exist
 ]
 
 # Add data files to the command
@@ -77,7 +79,22 @@ if __name__ == '__main__':
     try:
         PyInstaller.__main__.run(pyinstaller_args)
         print("\nBuild complete!")
-        print(f"The executable can be found in: {os.path.join(project_root, 'dist')}")
+        
+        dist_dir = os.path.join(project_root, 'dist')
+        bundle_dir = os.path.join(dist_dir, exe_name)
+        
+        print(f"The application bundle can be found in: {bundle_dir}")
+
+        # --- Create Zip Archive ---
+        print("\nCreating zip archive...")
+        zip_path_base = os.path.join(dist_dir, exe_name)
+        
+        if os.path.isdir(bundle_dir):
+            shutil.make_archive(zip_path_base, 'zip', bundle_dir)
+            print(f"Successfully created zip file: {zip_path_base}.zip")
+        else:
+            print(f"Error: Could not find bundle directory at {bundle_dir} to zip.")
+
     except Exception as e:
         print("\nAn error occurred during the build process.")
         print(e)

@@ -348,6 +348,7 @@ class ResearchApp(tk.Tk):
         ttk.Button(right_buttons_frame, text=Style.ICON_SAVE, style='TopBar.TButton', command=lambda: self.save_chat()).pack(side=tk.RIGHT, padx=5)
         self.mute_button = ttk.Button(right_buttons_frame, text=Style.ICON_UNMUTE, style='TopBar.TButton', command=lambda: self.toggle_mute())
         self.mute_button.pack(side=tk.RIGHT, padx=5)
+        ttk.Button(right_buttons_frame, text="Speak Last", style='TopBar.TButton', command=self.speak_last_response).pack(side=tk.RIGHT, padx=5)
         if not pyttsx3: self.mute_button.config(state=tk.DISABLED, text=Style.ICON_MUTE) # Disable if TTS not available
 
         self.chat_box = scrolledtext.ScrolledText(main_area, wrap=tk.WORD, state=tk.DISABLED, bg=Style.BG_PRIMARY, fg=Style.FG_PRIMARY, font=Style.CHAT_FONT, relief=tk.FLAT, borderwidth=0, highlightthickness=0, padx=10, pady=10)
@@ -400,6 +401,23 @@ class ResearchApp(tk.Tk):
     def on_entry_focus_out(self, event):
         if not self.entry_box.get(): self.add_placeholder()
 
+    def speak_last_response(self):
+        if not self.current_chat_id or not self.chat_sessions.get(self.current_chat_id):
+            return
+
+        message_history = self.chat_sessions[self.current_chat_id]
+        if not message_history:
+            return
+
+        last_bot_response = None
+        for msg in reversed(message_history):
+            if msg['role'] == 'assistant':
+                last_bot_response = msg['content']
+                break
+        
+        if last_bot_response:
+            self.speak_text(last_bot_response)
+
     def add_placeholder(self):
         self.entry_box.delete(0, tk.END); self.entry_box.config(foreground=Style.FG_SECONDARY); self.entry_box.insert(0, ENTRY_PLACEHOLDER)
 
@@ -449,11 +467,9 @@ class ResearchApp(tk.Tk):
 
     def stream_response_to_chat(self, response_stream):
         print("Streaming response to chat window...")
-        full_response, tts_buffer, token_batch = "", "", []
+        full_response, token_batch = "", []
         token_count, start_time, last_update_time, update_interval = 0, time.time(), time.time(), 0.05
         first_token_received = False
-
-        sentence_enders = re.compile(r'[.!?\n]') # Find sentence endings
 
         for chunk in response_stream:
             if not first_token_received:
@@ -462,7 +478,6 @@ class ResearchApp(tk.Tk):
             token = chunk['message']['content']
             full_response += token
             token_batch.append(token)
-            tts_buffer += token
             token_count += 1
             if token_count % 25 == 0:
                 print(f"  [Stream] Received token {token_count}...")
@@ -470,20 +485,7 @@ class ResearchApp(tk.Tk):
             if time.time() - last_update_time > update_interval:
                 self.after(0, self.append_to_chat, "".join(token_batch)); token_batch.clear(); last_update_time = time.time()
 
-            # More efficient TTS processing: find sentences and speak them
-            while True:
-                match = sentence_enders.search(tts_buffer)
-                if match:
-                    end_pos = match.end()
-                    sentence = tts_buffer[:end_pos]
-                    tts_buffer = tts_buffer[end_pos:]
-                    self.speak_text(sentence.strip())
-                else:
-                    break # No more complete sentences in buffer
-
         if token_batch: self.after(0, self.append_to_chat, "".join(token_batch))
-        if tts_buffer.strip(): # Speak any remaining text in the buffer
-            self.speak_text(tts_buffer.strip())
 
         self.last_tok_per_sec = f"Tok/s: {token_count / (time.time() - start_time):.2f}" if time.time() > start_time else "Tok/s: --"
         if self.current_chat_id: self.chat_sessions[self.current_chat_id].append({'role': 'assistant', 'content': full_response})
