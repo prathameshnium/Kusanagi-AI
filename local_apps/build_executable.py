@@ -28,20 +28,16 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # --- PyInstaller Configuration ---
 
 # The name for the final executable file
-exe_name = 'Kusanagi_Suite'
+exe_name = 'Orochimaru_Local'
 
 # The main entry point for the application
-entry_script = os.path.join(project_root, 'local_apps', 'launcher.py')
+entry_script = os.path.join(project_root, 'local_apps', 'Orochimaru_Local_Research_Assistent.py')
 
 # List of data files and directories to be included in the executable.
 # The format is a list of tuples: ('source_path', 'destination_in_bundle')
 # On Windows, the path separator for the source must be ';'.
 # The destination is relative to the bundle's root.
 data_to_add = [
-    # Add the main application scripts
-    (os.path.join(project_root, 'local_apps', 'Kusanagi_Local.py'), '.'),
-    (os.path.join(project_root, 'local_apps', 'Orochimaru_Local_Research_Assistent.py'), '.'),
-    
     # Add the entire Portable_AI_Assets directory
     (os.path.join(project_root, 'Portable_AI_Assets'), 'Portable_AI_Assets')
 ]
@@ -53,8 +49,7 @@ upx_dir = os.path.join(project_root, 'build', 'upx') # Example path, adjust if n
 # Construct the PyInstaller command
 pyinstaller_args = [
     '--name=%s' % exe_name,
-    '--onefile',        # Create a single executable file
-    '--windowed',       # Prevents a console window from appearing for the main launcher
+    '--onedir',         # Create a directory bundle instead of a single file
     '--clean',          # Clean PyInstaller cache and remove temporary files before building
 ]
 
