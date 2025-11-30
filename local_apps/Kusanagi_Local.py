@@ -4,10 +4,21 @@ import subprocess
 import os
 import sys
 import webbrowser
+import json
 try:
     import ollama
 except ImportError:
     ollama = None
+
+# --- PROJECT ROOT ---
+def get_project_root():
+    """Get the project root directory."""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    else:
+        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+PROJECT_ROOT = get_project_root()
 
 class Style:
     UI_FONT = ("Segoe UI", 11)
@@ -19,6 +30,7 @@ class Style:
     ACCENT = "#ffab40"
     ACCENT_FG = "#0f172a"
     LINK_FG = "#64b5f6"
+    ERROR = "#FF628C"
 
 class ConsoleRedirector:
     def __init__(self, text_widget):
@@ -40,6 +52,7 @@ class KusanagiApp(tk.Tk):
         self.geometry("1000x750") # Increased width for new column
         self.configure(bg=Style.BG_PRIMARY)
         
+        self.app_config = self._load_config()
         self.setup_styles()
         self.create_widgets()
 
@@ -48,7 +61,29 @@ class KusanagiApp(tk.Tk):
         sys.stderr = ConsoleRedirector(self.console)
 
         print("--- Kusanagi Console Initialized ---")
+        self.check_ollama_status()
         self.populate_models()
+
+    def _load_config(self):
+        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
+        default_config = {
+            "ollama_path": os.path.join("Portable_AI_Assets", "ollama_main", "ollama.exe"),
+        }
+        
+        config = default_config.copy()
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r') as f:
+                    config.update(json.load(f))
+            except (json.JSONDecodeError, IOError):
+                print(f"Warning: Could not read or parse '{config_path}'. Using default settings.")
+        
+        # Resolve ollama_path to be absolute
+        ollama_path = config["ollama_path"]
+        if not os.path.isabs(ollama_path):
+            config["ollama_path"] = os.path.normpath(os.path.join(PROJECT_ROOT, ollama_path))
+
+        return config
 
     def setup_styles(self):
         s = ttk.Style(self)
@@ -59,6 +94,7 @@ class KusanagiApp(tk.Tk):
         s.configure('Accent.TButton', background=Style.ACCENT, foreground=Style.ACCENT_FG)
         s.map('Accent.TButton', background=[('active', '#ffc371')])
         s.configure('Link.TLabel', foreground=Style.LINK_FG, cursor="hand2", background=Style.BG_PRIMARY)
+        s.configure('Status.TLabel', background=Style.BG_PRIMARY)
 
     def create_widgets(self):
         # A root frame to hold content and footer
@@ -81,13 +117,25 @@ class KusanagiApp(tk.Tk):
         main_frame.pack(expand=True, fill=tk.BOTH)
 
         # Header
+        header_frame = ttk.Frame(main_frame)
+        header_frame.pack(fill=tk.X, pady=(0, 30))
+
         header_label = ttk.Label(
-            main_frame,
+            header_frame,
             text="Kusanagi Local Suite",
             font=Style.TITLE_FONT,
             foreground=Style.ACCENT,
         )
-        header_label.pack(anchor='w', pady=(0, 30))
+        header_label.pack(side=tk.LEFT, anchor='w')
+
+        # Ollama Status
+        status_frame = ttk.Frame(header_frame, style='TFrame')
+        status_frame.pack(side=tk.RIGHT, padx=20)
+        self.ollama_status_label = ttk.Label(status_frame, text="Checking...", style='Status.TLabel')
+        self.ollama_status_label.pack(side=tk.RIGHT, padx=5)
+        self.ollama_status_light = ttk.Label(status_frame, text="●", font=("Segoe UI", 12), style='Status.TLabel')
+        self.ollama_status_light.pack(side=tk.RIGHT)
+
 
         # --- Main Content Frame (holds apps and models) ---
         content_frame = ttk.Frame(main_frame)
@@ -172,8 +220,20 @@ class KusanagiApp(tk.Tk):
         
         return button_frame
 
+    def check_ollama_status(self):
+        ollama_path = self.app_config.get("ollama_path")
+        if ollama_path and os.path.exists(ollama_path):
+            self.ollama_status_label.config(text="Ollama OK", foreground="#3AD900")
+            self.ollama_status_light.config(foreground="#3AD900")
+        else:
+            self.ollama_status_label.config(text="Ollama Not Found", foreground=Style.ERROR)
+            self.ollama_status_light.config(foreground=Style.ERROR)
+            print(f"Ollama executable not found at expected path: {ollama_path}")
+
     def populate_models(self):
         if ollama is None:
+            self.model_list.delete(0, tk.END)
+            self.model_list.insert(tk.END, "Ollama library not installed.")
             messagebox.showerror("Ollama Error", "The 'ollama' library is not installed. Please install it using 'pip install ollama'.")
             return
 
