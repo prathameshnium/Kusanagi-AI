@@ -11,12 +11,20 @@ try {
 }
 
 
-# Navigate up two levels to get to the project root
-$projectRoot = Resolve-Path -Path (Join-Path $scriptDir "..\..")
+# Define path to the MODELS folder (Relative)
+$ModelDirRel = "..\models"
+$modelsDir = Join-Path -Path $scriptDir -ChildPath $ModelDirRel
 
-# Define the paths for the models directory and the Ollama executable
-$modelsDir = Join-Path $projectRoot "Portable_AI_Assets\models"
-$ollamaExe = Join-Path $projectRoot "Portable_AI_Assets\ollama_main\ollama.exe"
+# Ensure model directory exists
+if (-not (Test-Path $modelsDir)) {
+    New-Item -ItemType Directory -Force -Path $modelsDir | Out-Null
+}
+$modelsDir = (Resolve-Path -Path $modelsDir).Path
+
+# Define path to the OLLAMA EXECUTABLE (Relative)
+$OllamaExeRel = "..\ollama_main\ollama.exe"
+$ollamaExe = Join-Path -Path $scriptDir -ChildPath $OllamaExeRel
+$ollamaExe = (Resolve-Path -Path $ollamaExe).Path
 
 # Verify that the Ollama executable exists
 if (-not (Test-Path $ollamaExe)) {
