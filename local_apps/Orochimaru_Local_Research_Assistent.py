@@ -13,6 +13,7 @@ import json
 import signal
 import shutil
 import httpx
+from multiprocessing import Pool, cpu_count
 
 # --- PROJECT ROOT ---
 # Assumes the script is in a subdirectory of the project root (e.g., 'local_apps')
@@ -105,6 +106,55 @@ def tts_worker():
             engine.say(text)
             engine.runAndWait()
         tts_queue.task_done()
+
+def embed_chunk_worker(args):
+    """Worker function for multiprocessing pool to embed and normalize a text chunk."""
+    # Imports must be here for the process fork
+    import ollama
+    import numpy as np
+    import sys
+    
+    chunk_text, embedding_model_name = args
+    try:
+        # Each process gets its own ollama client.
+        client = ollama.Client(host='127.0.0.1', timeout=120)
+        response = client.embeddings(model=embedding_model_name, prompt=chunk_text)
+        
+        # Normalize vector inside the worker. Use float32 for precision.
+        vector = np.array(response['embedding'], dtype=np.float32)
+        norm = np.linalg.norm(vector)
+        if norm > 0:
+            vector /= norm
+            
+        # Return as float16 to save memory during transfer
+        return vector.astype(np.float16)
+    except Exception as e:
+        # Cannot use UI elements here, just print to console.
+        print(f"Error in embedding worker: {e}", file=sys.stderr)
+        return None
+
+def parse_page_worker(args):
+    """Worker function to extract text and create chunks from a single PDF page."""
+    import fitz
+    import sys
+    
+    pdf_path, page_num = args
+    try:
+        doc = fitz.open(pdf_path)
+        page = doc.load_page(page_num)
+        text = page.get_text("text")
+        doc.close()
+        
+        page_chunks = []
+        if text:
+            for i in range(0, len(text), 800):
+                page_chunks.append({"text": text[i:i+1000], "page": page_num + 1})
+        return page_chunks
+    except Exception as e:
+        print(f"Error parsing page {page_num} of {pdf_path}: {e}", file=sys.stderr)
+        return [] # Return empty list on failure for this page
+
+
 
 class ResearchApp(tk.Tk):
     def __init__(self):
@@ -801,7 +851,9 @@ class ResearchApp(tk.Tk):
         try:
             print(f"Processing and embedding '{pdf_id}'...")
             self.after(0, lambda: self.load_pdf_button.config(state=tk.DISABLED))
-            self.after(0, lambda: self.status_label.config(text=f"Embedding '{pdf_id}'...", foreground=Style.ACCENT))
+            self.after(0, lambda: self.status_label.config(text=f"Parsing '{pdf_id}'...", foreground=Style.ACCENT))
+            
+            # --- Text Extraction and Chunking ---
             doc = fitz.open(pdf_path)
             chunks = []
             for page in doc:
@@ -811,41 +863,49 @@ class ResearchApp(tk.Tk):
                         chunks.append({"text": text[i:i+1000], "page": page.number + 1})
             doc.close()
 
-            if not chunks: raise ValueError("Could not extract text from PDF.")
+            if not chunks:
+                raise ValueError("Could not extract text from PDF.")
             
             self.pdf_text_db[pdf_id] = chunks
             total_chunks = len(chunks)
-            last_update = time.time()
-            mmap_vectors = None
 
-            for i, chunk in enumerate(chunks):
-                if time.time() - last_update > 0.1:
-                    self.after(0, lambda i=i: self.status_label.config(text=f"Embedding: {i+1}/{total_chunks}"))
-                    last_update = time.time()
-                
-                response = self.ollama_client.embeddings(model=self.embedding_model_name, prompt=chunk["text"])
-                # Use float32 for precision during normalization
-                vector = np.array(response['embedding'], dtype=np.float32)
+            # --- Embedding Generation with Multiprocessing ---
+            self.after(0, lambda: self.status_label.config(text=f"Embedding 0/{total_chunks}"))
 
-                # Normalize the vector
-                norm = np.linalg.norm(vector)
-                if norm > 0:
-                    vector /= norm
-
-                if mmap_vectors is None:
-                    mmap_shape = (total_chunks, len(vector))
-                    # Store as float16 to save space and for faster dot products
-                    mmap_vectors = np.memmap(os.path.join(self.vector_cache_dir, f"{pdf_id}.mmap"), dtype=np.float16, mode='w+', shape=mmap_shape)
-                
-                mmap_vectors[i] = vector.astype(np.float16)
+            worker_args = [(chunk['text'], self.embedding_model_name) for chunk in chunks]
             
-            if mmap_vectors is not None:
-                mmap_vectors.flush()
+            num_processes = min(cpu_count(), total_chunks) if total_chunks > 0 else 1
+            
+            results = []
+            with Pool(processes=num_processes) as pool:
+                for i, result in enumerate(pool.imap(embed_chunk_worker, worker_args)):
+                    if result is None:
+                        raise ValueError(f"Chunk {i} failed to embed. Check console for details.")
+                    results.append(result)
+                    # Update UI periodically from the processing thread
+                    if (i + 1) % 5 == 0 or (i + 1) == total_chunks:
+                        self.after(0, lambda p=i+1: self.status_label.config(text=f"Embedding: {p}/{total_chunks}"))
+            
+            # --- Vector Saving ---
+            self.after(0, lambda: self.status_label.config(text=f"Saving 0/{total_chunks}"))
+            
+            first_vector = results[0]
+            mmap_shape = (total_chunks, len(first_vector))
+            mmap_vectors = np.memmap(os.path.join(self.vector_cache_dir, f"{pdf_id}.mmap"), dtype=np.float16, mode='w+', shape=mmap_shape)
+
+            for i, vector in enumerate(results):
+                mmap_vectors[i] = vector
+                if (i + 1) % 20 == 0 or (i + 1) == total_chunks:
+                     self.after(0, lambda p=i+1: self.status_label.config(text=f"Saving: {p}/{total_chunks}"))
+            
+            mmap_vectors.flush()
+
             print(f"Successfully embedded '{pdf_id}'.")
             self.after(0, lambda: self.append_to_chat(f"Ready to chat with '{pdf_id}'.\n\n", "thinking_tag"))
 
         except Exception as e:
-            print(f"Error processing PDF '{pdf_id}': {e}")
+            # Use sys.stderr for better logging from threads
+            print(f"Error processing PDF '{pdf_id}': {e}", file=sys.stderr)
             self.after(0, lambda: messagebox.showerror("Processing Error", f"Failed to process '{pdf_id}'.\n\nDetails: {e}"))
             self.remove_document_data(pdf_id)
         finally:
