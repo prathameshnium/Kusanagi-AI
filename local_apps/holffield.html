@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Visual Hopfield Network: Live Tuning</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --panel-color: #1e1e1e;
+            --border-color: #333;
+            --text-color: #e0e0e0;
+            --title-color: #ffffff;
+            --accent-color: #2a9d8f;
+            --btn-learn-bg: #2a9d8f;
+            --btn-noise-bg: #e9c46a;
+            --btn-run-bg: #3a7ca5;
+            --btn-clear-bg: #e76f51;
+            --btn-text-color: #000;
+            --dot-excite: #2ecc71;
+            --dot-inhibit: #e74c3c;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 2rem;
+        }
+        h1 { margin-bottom: 5px; color: var(--text); text-shadow: 0 0 10px rgba(233, 69, 96, 0.5); }
+        .subtitle { font-size: 0.9em; color: #888; margin-bottom: 20px; }
+        
+        .main-container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+            justify-content: center;
+            width: 100%;
+            max-width: 1000px; /* Constrain max width for large screens */
+        }
+
+        .panel {
+            background: var(--panel-color);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        canvas {
+            background: #000;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            min-width: 200px;
+        }
+
+        button {
+            padding: 12px;
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+        }
+        button:hover { filter: brightness(1.2); transform: translateY(-1px); }
+        button:active { transform: translateY(1px); }
+
+        .btn-learn { background: var(--btn-learn-bg); color: var(--btn-text-color); }
+        .btn-noise { background: var(--btn-noise-bg); color: var(--btn-text-color); }
+        .btn-run { background: var(--btn-run-bg); color: var(--text-color); }
+        .btn-clear { background: var(--btn-clear-bg); color: var(--text-color); }
+
+        .stats {
+            margin-top: 15px;
+            text-align: left;
+            font-size: 12px;
+            color: #aaa;
+        }
+        .stat-val { float: right; color: var(--title-color); }
+
+        /* Legend for the graph */
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            font-size: 10px;
+            margin-top: 5px;
+        }
+        .legend span { display: flex; align-items: center; gap: 5px; }
+        .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    </style>
+</head>
+<body>
+
+    <h1>VISUAL HOPFIELD NET</h1>
+    <div class="subtitle">5x5 Grid (25 Neurons) | Fully Connected Graph</div>
+
+    <div class="main-container">
+        
+        <div class="panel">
+            <h3>INPUT GRID</h3>
+            <canvas id="gridCanvas" width="200" height="200"></canvas>
+            <div style="margin-top:10px; font-size:12px; color:#666">Click to toggle pixels</div>
+        </div>
+
+        <div class="panel">
+            <h3>NEURAL NETWORK VIEW</h3>
+            <canvas id="netCanvas" width="400" height="400"></canvas>
+            <div class="legend">
+                <span><span class="dot" style="background:var(--dot-excite)"></span> Excitation (+)</span>
+                <span><span class="dot" style="background:var(--dot-inhibit)"></span> Inhibition (-)</span>
+            </div>
+        </div>
+
+        <div class="panel controls">
+            <button class="btn-learn" onclick="learn()">1. Learn Pattern</button>
+            <button class="btn-clear" onclick="clearGrid()">2. Clear Grid</button>
+            <hr style="border-color:#333; width:100%">
+            <button class="btn-noise" onclick="addNoise()">3. Add Noise</button>
+            <button class="btn-run" onclick="recover()">4. Run Live</button>
+            
+            <div class="stats">
+                <div>Energy: <span id="energy" class="stat-val">0.0</span></div>
+                <div>Stable: <span id="stable" class="stat-val">Yes</span></div>
+                <div>Patterns: <span id="pCount" class="stat-val">0</span></div>
+            </div>
+        </div>
+    </div>
+
+<script>
+    // --- CONFIG ---
+    const N_SIDE = 5; // 5x5 grid
+    const N = N_SIDE * N_SIDE; // 25 Neurons
+    const CANVAS_GRID_SIZE = 200;
+    const CANVAS_NET_SIZE = 400;
+    
+    // --- STATE ---
+    // Neurons: -1 (Off) or 1 (On)
+    let neurons = new Array(N).fill(-1);
+    // Weights: N x N matrix
+    let weights = Array.from({ length: N }, () => new Array(N).fill(0));
+    let storedPatterns = 0;
+
+    // --- DOM ---
+    const gridCtx = document.getElementById('gridCanvas').getContext('2d');
+    const netCtx = document.getElementById('netCanvas').getContext('2d');
+    const energyEl = document.getElementById('energy');
+    const stableEl = document.getElementById('stable');
+    const countEl = document.getElementById('pCount');
+
+    // --- PRE-CALCULATE NETWORK LAYOUT (Circular) ---
+    const nodePositions = [];
+    const centerX = CANVAS_NET_SIZE / 2;
+    const centerY = CANVAS_NET_SIZE / 2;
+    const radius = 160;
+
+    for (let i = 0; i < N; i++) {
+        const angle = (i / N) * 2 * Math.PI - Math.PI/2; // Start at top
+        nodePositions.push({
+            x: centerX + radius * Math.cos(angle),
+            y: centerY + radius * Math.sin(angle)
+        });
+    }
+
+    // --- DRAWING FUNCTIONS ---
+
+    function drawGrid() {
+        const cellSize = CANVAS_GRID_SIZE / N_SIDE;
+        gridCtx.clearRect(0, 0, CANVAS_GRID_SIZE, CANVAS_GRID_SIZE);
+        
+        for (let i = 0; i < N; i++) {
+            const x = (i % N_SIDE) * cellSize;
+            const y = Math.floor(i / N_SIDE) * cellSize;
+            
+            gridCtx.fillStyle = neurons[i] === 1 ? '#fff' : '#000';
+            gridCtx.fillRect(x, y, cellSize - 0.5, cellSize - 0.5); // Add tiny gap
+            gridCtx.strokeStyle = '#333';
+            gridCtx.strokeRect(x, y, cellSize, cellSize);
+        }
+    }
+
+    function drawNetwork() {
+        netCtx.clearRect(0, 0, CANVAS_NET_SIZE, CANVAS_NET_SIZE);
+        
+        // 1. Draw Connections (Weights)
+        // Optimization: Only draw weights with magnitude > 0
+        for (let i = 0; i < N; i++) {
+            for (let j = i + 1; j < N; j++) { // Undirected graph, draw once
+                const w = weights[i][j];
+                if (Math.abs(w) > 0.1) {
+                    const pos1 = nodePositions[i];
+                    const pos2 = nodePositions[j];
+                    
+                    netCtx.beginPath();
+                    netCtx.moveTo(pos1.x, pos1.y);
+                    netCtx.lineTo(pos2.x, pos2.y);
+                    
+                    // Color: Green for positive (same state), Red for negative (diff state)
+                    netCtx.strokeStyle = w > 0 ? 'rgba(46, 204, 113, ' + Math.min(Math.abs(w)/N*4, 0.7) + ')' 
+                                               : 'rgba(231, 76, 60, ' + Math.min(Math.abs(w)/N*4, 0.7) + ')';
+                    
+                    netCtx.lineWidth = Math.min(Math.abs(w)/2, 3);
+                    netCtx.stroke();
+                }
+            }
+        }
+
+        // 2. Draw Nodes
+        for (let i = 0; i < N; i++) {
+            const pos = nodePositions[i];
+            netCtx.beginPath();
+            netCtx.arc(pos.x, pos.y, 8, 0, 2 * Math.PI);
+            // Node color matches state: White (On) or Dark Gray (Off)
+            netCtx.fillStyle = neurons[i] === 1 ? '#fff' : '#333';
+            netCtx.fill(); 
+            netCtx.strokeStyle = '#fff';
+            netCtx.lineWidth = 1;
+            netCtx.stroke();
+            
+            // Highlight node index (optional)
+            // netCtx.fillStyle = 'red';
+            // netCtx.fillText(i, pos.x, pos.y);
+        }
+        
+        calculateEnergy();
+    }
+
+    function calculateEnergy() {
+        let E = 0;
+        for (let i = 0; i < N; i++) {
+            for (let j = 0; j < N; j++) {
+                E += weights[i][j] * neurons[i] * neurons[j];
+            }
+        }
+        E = -0.5 * E;
+        energyEl.innerText = E.toFixed(1);
+    }
+
+    // --- INTERACTION ---
+
+    document.getElementById('gridCanvas').addEventListener('mousedown', (e) => {
+        const rect = e.target.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const cellSize = CANVAS_GRID_SIZE / N_SIDE;
+        
+        const col = Math.floor(x / cellSize);
+        const row = Math.floor(y / cellSize);
+        const idx = row * N_SIDE + col;
+        
+        if (idx >= 0 && idx < N) {
+            neurons[idx] *= -1;
+            drawGrid();
+            drawNetwork();
+            stableEl.innerText = "No";
+        }
+    });
+
+    // --- LOGIC ---
+
+    function learn() {
+        // Hebbian Learning: w_ij += s_i * s_j
+        // Animate the "tuning" process
+        let i = 0;
+        const btn = document.querySelector('.btn-learn');
+        btn.disabled = true;
+        btn.innerText = "Tuning...";
+
+        function stepLearn() {
+            // Process one row at a time for animation speed
+            for (let j = 0; j < N; j++) {
+                if (i === j) continue;
+                weights[i][j] += neurons[i] * neurons[j];
+                // Keep weights symmetric
+                weights[j][i] = weights[i][j]; 
+                
+                // Zero diagonal
+                if (i==j) weights[i][j] = 0;
+            }
+            
+            drawNetwork();
+            i++;
+            
+            if (i < N) {
+                requestAnimationFrame(stepLearn);
+            } else {
+                storedPatterns++;
+                countEl.innerText = storedPatterns;
+                btn.disabled = false;
+                btn.innerText = "1. Learn Pattern";
+                stableEl.innerText = "Yes (Learned)";
+            }
+        }
+        stepLearn();
+    }
+
+    function addNoise() {
+        // Flip 20% of bits
+        for (let i = 0; i < N; i++) {
+            if (Math.random() < 0.2) {
+                neurons[i] *= -1;
+            }
+        }
+        drawGrid();
+        drawNetwork();
+        stableEl.innerText = "Unstable";
+    }
+
+    function clearGrid() {
+        neurons.fill(-1);
+        drawGrid();
+        drawNetwork();
+        stableEl.innerText = "-";
+    }
+
+    async function recover() {
+        const btn = document.querySelector('.btn-run');
+        btn.disabled = true;
+        btn.innerText = "Running...";
+        
+        let stable = false;
+        let iter = 0;
+        
+        // We run for a max number of steps to prevent infinite loops if spurious states
+        const MAX_STEPS = 50; 
+        
+        while (!stable && iter < MAX_STEPS) {
+            stable = true;
+            // Create a random order to update neurons (Asynchronous update)
+            const indices = Array.from({length: N}, (_, i) => i);
+            indices.sort(() => Math.random() - 0.5);
+            
+            for (let k = 0; k < N; k++) {
+                const idx = indices[k];
+                let sum = 0;
+                for (let j = 0; j < N; j++) {
+                    sum += weights[idx][j] * neurons[j];
+                }
+                
+                const newState = sum >= 0 ? 1 : -1;
+                
+                if (newState !== neurons[idx]) {
+                    neurons[idx] = newState;
+                    stable = false;
+                    
+                    // Animate every flip
+                    drawGrid();
+                    drawNetwork();
+                    await new Promise(r => setTimeout(r, 20)); // Delay for visual effect
+                }
+            }
+            iter++;
+        }
+        
+        btn.disabled = false;
+        btn.innerText = "4. Run Live";
+        stableEl.innerText = stable ? "Converged" : "Stopped";
+    }
+
+    // Init
+    drawGrid();
+    drawNetwork();
+
+</script>
+</body>
+</html>
