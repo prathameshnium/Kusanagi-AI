@@ -37,7 +37,7 @@ class KusanagiApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("Kusanagi AI - Local Application Launcher")
-        self.geometry("800x750") # Increased height for console
+        self.geometry("1000x750") # Increased width for new column
         self.configure(bg=Style.BG_PRIMARY)
         
         self.setup_styles()
@@ -48,6 +48,7 @@ class KusanagiApp(tk.Tk):
         sys.stderr = ConsoleRedirector(self.console)
 
         print("--- Kusanagi Console Initialized ---")
+        self.populate_models()
 
     def setup_styles(self):
         s = ttk.Style(self)
@@ -57,36 +58,47 @@ class KusanagiApp(tk.Tk):
         s.configure('AppButton.TButton', font=Style.BUTTON_FONT, padding=(20, 15))
         s.configure('Accent.TButton', background=Style.ACCENT, foreground=Style.ACCENT_FG)
         s.map('Accent.TButton', background=[('active', '#ffc371')])
-        s.configure('Link.TLabel', foreground=Style.LINK_FG, cursor="hand2")
+        s.configure('Link.TLabel', foreground=Style.LINK_FG, cursor="hand2", background=Style.BG_PRIMARY)
 
     def create_widgets(self):
-        main_frame = ttk.Frame(self, padding=40)
+        # A root frame to hold content and footer
+        root_frame = ttk.Frame(self)
+        root_frame.pack(expand=True, fill=tk.BOTH)
+
+        # --- Footer ---
+        footer_frame = ttk.Frame(root_frame, style='TFrame')
+        footer_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=10, padx=40)
+
+        dev_label = ttk.Label(footer_frame, text="Developer: Prathamesh Deshmukh", style='TLabel')
+        dev_label.pack(side=tk.LEFT)
+        
+        license_label = ttk.Label(footer_frame, text="License: MIT", style="Link.TLabel")
+        license_label.pack(side=tk.RIGHT)
+        license_label.bind("<Button-1>", lambda e: self.open_license())
+        
+        # main_frame now goes inside root_frame and holds everything else
+        main_frame = ttk.Frame(root_frame, padding=(40, 40, 40, 0))
         main_frame.pack(expand=True, fill=tk.BOTH)
 
         # Header
-        header_frame = ttk.Frame(main_frame)
-        header_frame.pack(fill=tk.X, pady=(0, 30))
-
         header_label = ttk.Label(
-            header_frame,
+            main_frame,
             text="Kusanagi Local Suite",
             font=Style.TITLE_FONT,
             foreground=Style.ACCENT,
-            background=Style.BG_PRIMARY
         )
-        header_label.pack(side=tk.LEFT, expand=True)
+        header_label.pack(anchor='w', pady=(0, 30))
 
-        settings_button = ttk.Button(
-            header_frame,
-            text="⚙️ Settings",
-            command=self.open_settings,
-            style='AppButton.TButton'
-        )
-        settings_button.pack(side=tk.RIGHT, padx=10)
+        # --- Main Content Frame (holds apps and models) ---
+        content_frame = ttk.Frame(main_frame)
+        content_frame.pack(fill=tk.BOTH, expand=True)
+        content_frame.columnconfigure(0, weight=1)
+        content_frame.columnconfigure(1, weight=1)
+        content_frame.rowconfigure(0, weight=1)
 
-        # App Grid
-        app_grid = ttk.Frame(main_frame)
-        app_grid.pack(expand=True, fill='x')
+        # --- Column 0: App Grid ---
+        app_grid_frame = ttk.Frame(content_frame)
+        app_grid_frame.grid(row=0, column=0, sticky='nsew', padx=(0, 20))
         
         apps = [
             ("OneTail Local Chatapp", "OneTail_Local_Chatapp.py", "A lightweight, local chat interface."),
@@ -95,7 +107,32 @@ class KusanagiApp(tk.Tk):
         ]
 
         for i, (name, script, desc) in enumerate(apps):
-            self.create_app_button(app_grid, name, script, desc).grid(row=i, column=0, pady=15, sticky="ew")
+            self.create_app_button(app_grid_frame, name, script, desc).grid(row=i, column=0, pady=15, sticky="ew")
+        
+        # --- Column 1: Model Lists ---
+        models_container = ttk.Frame(content_frame)
+        models_container.grid(row=0, column=1, sticky='nsew', padx=(20, 0))
+        models_container.rowconfigure(1, weight=1) # Make listbox expand
+
+        # Models Header
+        models_header_frame = ttk.Frame(models_container)
+        models_header_frame.grid(row=0, column=0, sticky='ew', pady=(0, 15))
+        ttk.Label(models_header_frame, text="Available Models", font=("Segoe UI", 16, "bold")).pack(side=tk.LEFT)
+        ttk.Button(models_header_frame, text="Refresh", command=self.populate_models, style='Accent.TButton').pack(side=tk.RIGHT)
+
+        # All Models List
+        all_models_frame = ttk.LabelFrame(models_container, text="All Portable Models Available", padding=5)
+        all_models_frame.grid(row=1, column=0, sticky='nsew')
+        all_models_frame.rowconfigure(0, weight=1)
+        all_models_frame.columnconfigure(0, weight=1)
+
+        self.model_list = tk.Listbox(all_models_frame, bg=Style.BG_SECONDARY, fg=Style.FG_PRIMARY, selectbackground=Style.ACCENT, selectforeground=Style.ACCENT_FG, highlightthickness=0, borderwidth=0)
+        self.model_list.grid(row=0, column=0, sticky='nsew')
+        
+        model_scrollbar = ttk.Scrollbar(all_models_frame, orient=tk.VERTICAL, command=self.model_list.yview)
+        model_scrollbar.grid(row=0, column=1, sticky='ns')
+        self.model_list['yscrollcommand'] = model_scrollbar.set
+
 
         # --- Console Output ---
         console_frame = ttk.LabelFrame(main_frame, text="Console Output", padding=10)
@@ -107,7 +144,7 @@ class KusanagiApp(tk.Tk):
             bg=Style.BG_SECONDARY,
             fg=Style.FG_PRIMARY,
             font=("Consolas", 10),
-            height=10,
+            height=8,
             state='disabled'
         )
         self.console.pack(fill=tk.BOTH, expand=True)
@@ -135,90 +172,33 @@ class KusanagiApp(tk.Tk):
         
         return button_frame
 
-    def open_settings(self):
-        settings_win = tk.Toplevel(self)
-        settings_win.title("Configuration Settings")
-        settings_win.geometry("600x550")
-        settings_win.configure(bg=Style.BG_SECONDARY)
-        settings_win.transient(self)
-        settings_win.grab_set()
+    def populate_models(self):
+        if ollama is None:
+            messagebox.showerror("Ollama Error", "The 'ollama' library is not installed. Please install it using 'pip install ollama'.")
+            return
 
-        # --- Title ---
-        title_label = ttk.Label(settings_win, text="Kusanagi Settings", font=Style.TITLE_FONT, foreground=Style.ACCENT, background=Style.BG_SECONDARY)
-        title_label.pack(pady=20)
-        
-        # --- Models Frame ---
-        models_frame = ttk.Frame(settings_win, style='TFrame', padding=10)
-        models_frame.pack(fill=tk.BOTH, expand=True, padx=20)
-        models_frame.column_configure(0, weight=1)
-        models_frame.column_configure(1, weight=1)
-
-        # LLM Models
-        llm_frame = ttk.LabelFrame(models_frame, text="Available LLM Models", padding=10)
-        llm_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 5))
-        llm_list = tk.Listbox(llm_frame, bg=Style.BG_PRIMARY, fg=Style.FG_PRIMARY, selectbackground=Style.ACCENT, selectforeground=Style.ACCENT_FG, highlightthickness=0, borderwidth=0)
-        llm_list.pack(fill=tk.BOTH, expand=True)
-
-        # Embedding Models
-        embed_frame = ttk.LabelFrame(models_frame, text="Available Embedding Models", padding=10)
-        embed_frame.grid(row=0, column=1, sticky="nsew", padx=(5, 0))
-        embed_list = tk.Listbox(embed_frame, bg=Style.BG_PRIMARY, fg=Style.FG_PRIMARY, selectbackground=Style.ACCENT, selectforeground=Style.ACCENT_FG, highlightthickness=0, borderwidth=0)
-        embed_list.pack(fill=tk.BOTH, expand=True)
-
-        def populate_models():
-            if ollama is None:
-                messagebox.showerror("Ollama Error", "The 'ollama' library is not installed. Please install it using 'pip install ollama'.", parent=settings_win)
+        try:
+            print("Fetching models from Ollama...")
+            self.model_list.delete(0, tk.END)
+            models = ollama.list().get('models', [])
+            
+            if not models:
+                self.model_list.insert(tk.END, "No models found.")
+                print("No Ollama models found.")
                 return
 
-            try:
-                print("Fetching models from Ollama...")
-                models = ollama.list().get('models', [])
-                llm_list.delete(0, tk.END)
-                embed_list.delete(0, tk.END)
-                
-                if not models:
-                    llm_list.insert(tk.END, "No models found.")
-                    embed_list.insert(tk.END, "No models found.")
-                    print("No Ollama models found.")
-                    return
+            all_model_names = sorted([m['model'] for m in models])
 
-                chat_models = sorted([m['model'] for m in models if "embed" not in m.get('name', '').lower() and "minilm" not in m.get('name', '').lower()])
-                embedding_models = sorted([m['model'] for m in models if "embed" in m.get('name', '').lower() or "minilm" in m.get('name', '').lower()])
+            for model_name in all_model_names:
+                self.model_list.insert(tk.END, model_name)
+            
+            print("Successfully populated model list.")
 
-                if chat_models:
-                    for model in chat_models:
-                        llm_list.insert(tk.END, model)
-                else:
-                    llm_list.insert(tk.END, "No chat models found.")
-                
-                if embedding_models:
-                    for model in embedding_models:
-                        embed_list.insert(tk.END, model)
-                else:
-                    embed_list.insert(tk.END, "No embedding models found.")
-                print("Successfully populated model lists.")
-
-            except Exception as e:
-                print(f"Error fetching Ollama models: {e}")
-                messagebox.showerror("Ollama Error", f"Could not connect to Ollama server.\nEnsure Ollama is running.\n\nError: {e}", parent=settings_win)
-
-        # --- Info & Actions Frame ---
-        info_frame = ttk.Frame(settings_win, style='TFrame')
-        info_frame.pack(fill=tk.X, padx=20, pady=10)
-
-        dev_label = ttk.Label(info_frame, text="Developer: Prathamesh Deshmukh", background=Style.BG_SECONDARY)
-        dev_label.pack(side=tk.LEFT, anchor='w')
-
-        license_label = ttk.Label(info_frame, text="License: MIT", style="Link.TLabel", background=Style.BG_SECONDARY)
-        license_label.pack(side=tk.LEFT, anchor='w', padx=20)
-        license_label.bind("<Button-1>", lambda e: self.open_license())
-
-        refresh_button = ttk.Button(info_frame, text="Refresh Models", command=populate_models, style='Accent.TButton')
-        refresh_button.pack(side=tk.RIGHT, anchor='e')
-        
-        # --- Initial Population ---
-        populate_models()
-
+        except Exception as e:
+            self.model_list.delete(0, tk.END)
+            self.model_list.insert(tk.END, "Connection Error.")
+            print(f"Error fetching Ollama models: {e}")
+            messagebox.showerror("Ollama Error", f"Could not connect to Ollama server.\nEnsure Ollama is running.\n\nError: {e}")
 
     def open_license(self):
         try:
