@@ -43,6 +43,7 @@
             flex-wrap: wrap; /* Allow wrapping on smaller screens */
             justify-content: center;
             width: 100%;
+            margin-bottom: 20px; /* Space for the console */
             max-width: 1000px; /* Constrain max width for large screens */
         }
 
@@ -58,7 +59,9 @@
             background: #000;
             border: 1px solid var(--border-color);
             border-radius: 4px;
-            cursor: pointer; 
+            cursor: pointer;
+            image-rendering: pixelated; /* Ensures crisp pixels */
+            image-rendering: crisp-edges;
         }
 
         .controls {
@@ -86,7 +89,6 @@
         .btn-learn { background: var(--accent); color: var(--accent-fg); }
         .btn-noise { background: var(--fg-secondary); color: var(--accent-fg); }
         .btn-run { background: var(--bg-tertiary); color: var(--fg-primary); }
-        .btn-run-slow { background: var(--bg-tertiary); color: var(--fg-primary); filter: brightness(0.8); }
         .btn-clear { background: var(--error); color: var(--fg-primary); }
         .btn-forget { background: var(--accent); color: var(--accent-fg); filter: brightness(0.7); }
 
@@ -110,6 +112,36 @@
         }
         .legend span { display: flex; align-items: center; gap: 5px; }
         .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+    </style>
+    <style>
+        /* Console Styles */
+        .console-panel {
+            width: 100%;
+            max-width: 1000px;
+            height: 180px;
+            background: var(--bg-primary);
+            border-radius: 12px;
+            border: 1px solid var(--bg-tertiary);
+            display: flex;
+            flex-direction: column;
+        }
+        .console-header {
+            background: var(--bg-tertiary);
+            padding: 5px 15px;
+            font-weight: bold;
+            color: var(--accent);
+            border-top-left-radius: 11px;
+            border-top-right-radius: 11px;
+            font-size: 12px;
+        }
+        .console-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 10px;
+            font-family: "Consolas", "Monaco", monospace;
+            font-size: 11px;
+            color: var(--log-color);
+        }
     </style>
     <script>
         // Developer: Prathamesh Deshmukh
@@ -145,14 +177,20 @@
             <button class="btn-clear" onclick="clearGrid()">3. Clear Grid</button>
             <hr style="border-color:var(--bg-tertiary); width:100%">
             <button class="btn-noise" onclick="addNoise()">4. Add Noise</button>
-            <button class="btn-run" onclick="recover(20)">5. Run Live</button>
-            <button class="btn-run-slow" onclick="recover(250)">6. Run Slowly</button>
+            <button class="btn-run" onclick="recover(250)">5. Run</button>
             
             <div class="stats">
                 <div>Energy: <span id="energy" class="stat-val">0.0</span></div>
                 <div>Stable: <span id="stable" class="stat-val">Yes</span></div>
                 <div>Patterns: <span id="pCount" class="stat-val">0</span></div>
             </div>
+        </div>
+    </div>
+
+    <!-- CONSOLE LOG -->
+    <div class="console-panel">
+        <div class="console-header">EVENT LOG</div>
+        <div id="console-log" class="console-content">
         </div>
     </div>
 
@@ -176,6 +214,7 @@
     const energyEl = document.getElementById('energy');
     const stableEl = document.getElementById('stable');
     const countEl = document.getElementById('pCount');
+    const consoleLogEl = document.getElementById('console-log');
 
     // --- PRE-CALCULATE NETWORK LAYOUT (Circular) ---
     const nodePositions = [];
@@ -191,20 +230,49 @@
         });
     }
 
+    // --- LOGGING ---
+    function logMessage(message) {
+        const time = new Date().toLocaleTimeString();
+        const msgDiv = document.createElement('div');
+        msgDiv.innerHTML = `<span style="color:var(--fg-secondary)">[${time}]</span> ${message}`;
+        consoleLogEl.appendChild(msgDiv);
+        // Auto-scroll to the bottom
+        consoleLogEl.scrollTop = consoleLogEl.scrollHeight;
+    }
+
+
     // --- DRAWING FUNCTIONS ---
 
     function drawGrid() {
         const cellSize = CANVAS_GRID_SIZE / N_SIDE;
-        gridCtx.clearRect(0, 0, CANVAS_GRID_SIZE, CANVAS_GRID_SIZE);
+        // Set the black background explicitly
+        gridCtx.fillStyle = '#000';
+        gridCtx.fillRect(0, 0, CANVAS_GRID_SIZE, CANVAS_GRID_SIZE);
         
+        // 1. Draw the neuron states first
         for (let i = 0; i < N; i++) {
             const x = (i % N_SIDE) * cellSize;
             const y = Math.floor(i / N_SIDE) * cellSize;
             
-            gridCtx.fillStyle = neurons[i] === 1 ? '#fff' : '#000';
-            gridCtx.fillRect(x, y, cellSize - 0.5, cellSize - 0.5); // Add tiny gap
-            gridCtx.strokeStyle = 'var(--bg-tertiary)';
-            gridCtx.strokeRect(x, y, cellSize, cellSize);
+            // "Off" pixels are black, "On" pixels are white
+            gridCtx.fillStyle = neurons[i] === 1 ? 'white' : 'black';
+            gridCtx.fillRect(x, y, cellSize, cellSize);
+        }
+
+        // 2. Draw white grid lines on top
+        gridCtx.strokeStyle = 'white';
+        gridCtx.lineWidth = 1;
+        for (let i = 1; i < N_SIDE; i++) {
+            // Vertical lines
+            gridCtx.beginPath();
+            gridCtx.moveTo(i * cellSize, 0);
+            gridCtx.lineTo(i * cellSize, CANVAS_GRID_SIZE);
+            gridCtx.stroke();
+            // Horizontal lines
+            gridCtx.beginPath();
+            gridCtx.moveTo(0, i * cellSize);
+            gridCtx.lineTo(CANVAS_GRID_SIZE, i * cellSize);
+            gridCtx.stroke();
         }
     }
 
@@ -281,6 +349,7 @@
             neurons[idx] *= -1;
             drawGrid();
             drawNetwork();
+            logMessage(`User toggled neuron ${idx} to state ${neurons[idx] > 0 ? 'ON' : 'OFF'}.`);
             stableEl.innerText = "No";
         }
     });
@@ -294,6 +363,7 @@
         const btn = document.querySelector('.btn-learn');
         btn.disabled = true;
         btn.innerText = "Tuning...";
+        logMessage("Starting Hebbian learning for current pattern...");
 
         function stepLearn() {
             // Process one row at a time for animation speed
@@ -317,6 +387,7 @@
                 countEl.innerText = storedPatterns;
                 btn.disabled = false;
                 btn.innerText = "1. Learn Pattern";
+                logMessage(`Pattern learned. Total patterns stored: ${storedPatterns}.`);
                 stableEl.innerText = "Yes (Learned)";
             }
         }
@@ -326,6 +397,7 @@
     function forget() {
         // Hebbian Anti-Learning: w_ij -= s_i * s_j
         if (storedPatterns <= 0) {
+            logMessage("Forget failed: No patterns stored.");
             countEl.innerText = "0";
             return; // Nothing to forget
         }
@@ -334,6 +406,7 @@
         const btn = document.querySelector('.btn-forget');
         btn.disabled = true;
         btn.innerText = "Forgetting...";
+        logMessage("Starting anti-learning to forget current pattern...");
 
         function stepForget() {
             for (let j = 0; j < N; j++) {
@@ -352,6 +425,7 @@
                 countEl.innerText = storedPatterns;
                 btn.disabled = false;
                 btn.innerText = "2. Forget Pattern";
+                logMessage(`Pattern forgotten. Total patterns remaining: ${storedPatterns}.`);
             }
         }
         stepForget();
@@ -359,13 +433,16 @@
 
     function addNoise() {
         // Flip 20% of bits
+        let flippedCount = 0;
         for (let i = 0; i < N; i++) {
             if (Math.random() < 0.2) {
                 neurons[i] *= -1;
+                flippedCount++;
             }
         }
         drawGrid();
         drawNetwork();
+        logMessage(`Added noise: ${flippedCount} neuron(s) flipped.`);
         stableEl.innerText = "Unstable";
     }
 
@@ -373,15 +450,15 @@
         neurons.fill(-1);
         drawGrid();
         drawNetwork();
+        logMessage("Grid cleared to all OFF state.");
         stableEl.innerText = "-";
     }
 
     async function recover(delay) {
         const btn = document.querySelector('.btn-run');
-        const slowBtn = document.querySelector('.btn-run-slow');
         btn.disabled = true;
-        slowBtn.disabled = true;
-        document.querySelector(delay > 100 ? '.btn-run-slow' : '.btn-run').innerText = "Running...";
+        btn.innerText = "Running...";
+        logMessage(`Starting recovery process with ${delay}ms delay...`);
         
         let stable = false;
         let iter = 0;
@@ -390,6 +467,7 @@
         const MAX_STEPS = 50; 
         
         while (!stable && iter < MAX_STEPS) {
+            logMessage(`--- Iteration ${iter + 1} ---`);
             stable = true;
             // Create a random order to update neurons (Asynchronous update)
             const indices = Array.from({length: N}, (_, i) => i);
@@ -407,6 +485,7 @@
                 if (newState !== neurons[idx]) {
                     neurons[idx] = newState;
                     stable = false;
+                    logMessage(`Neuron ${idx} flipped to ${newState > 0 ? 'ON' : 'OFF'}.`);
                     
                     // Animate every flip
                     drawGrid();
@@ -418,15 +497,20 @@
         }
         
         btn.disabled = false;
-        slowBtn.disabled = false;
-        btn.innerText = "5. Run Live";
-        slowBtn.innerText = "6. Run Slowly";
-        stableEl.innerText = stable ? "Converged" : "Stopped";
+        btn.innerText = "5. Run";
+        const endState = stable ? "Converged" : "Stopped";
+        stableEl.innerText = endState;
+        if (stable) {
+            logMessage(`Recovery complete: Network converged to a stable state.`);
+        } else {
+            logMessage(`Recovery stopped: Reached max iterations (${MAX_STEPS}).`);
+        }
     }
 
     // Init
     drawGrid();
     drawNetwork();
+    logMessage("Hopfield network initialized.");
 
 </script>
 </body>
