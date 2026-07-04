@@ -6,13 +6,15 @@
     <title>Kusanagi AI / Kakashi Search</title>
     <link rel="icon" href="https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/logo/Kusanagi-AI.png">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../static/theme.js"></script>
+    <script src="../static/providers.js"></script>
+    <script src="../static/settings-modal.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-    
-
+    <meta name="description" content="Kakashi Search — an agentic search engine that breaks queries into sub-tasks and searches Wikipedia, papers, and the web in parallel.">
 
     <link rel="stylesheet" href="../static/style.css">
 </head>
@@ -20,42 +22,6 @@
     <a href="../index.html" class="home-button">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
     </a>
-
-    <!-- SETTINGS MODAL -->
-    <div id="settings-modal" class="hidden absolute inset-0 settings-modal z-50 flex items-center justify-center backdrop-blur-sm transition-opacity duration-200">
-        <div class="settings-modal-content p-6 rounded-xl shadow-2xl max-w-md w-full border transform transition-all scale-100">
-            <div class="flex justify-between items-start mb-6">
-                <h2 class="text-xl font-bold text-accent flex items-center gap-2">System Config</h2>
-                <button onclick="toggleSettings()" class="text-fg-secondary hover:text-fg-primary transition">✕</button>
-            </div>
-
-            <div class="bg-success/10 border border-success/30 p-3 rounded mb-5 text-xs text-success">
-                <strong>🔒 Privacy Active:</strong> Keys stored locally. History wiped on refresh. Direct API connection.
-            </div>
-
-            <div class="mb-5">
-                <label class="block text-xs font-bold text-fg-secondary uppercase tracking-wide mb-2">AI Provider</label>
-                <select id="provider-select" class="w-full text-fg-primary p-3 rounded-lg border border-tertiary focus:border-accent outline-none transition" onchange="updateKeyInput()">
-                    <option value="gemini">Google Gemini (Recommended)</option>
-                    <option value="groq">Groq (Fastest)</option>
-                    <option value="hf">Hugging Face</option>
-                </select>
-            </div>
-
-            <div class="mb-6">
-                <label class="block text-xs font-bold text-fg-secondary uppercase tracking-wide mb-2">API Key</label>
-                <input type="password" id="api-key-input" autocomplete="off" class="w-full text-fg-primary p-3 rounded-lg border border-tertiary focus:border-accent outline-none transition" placeholder="Enter secret key...">
-            </div>
-
-            <div class="flex justify-between items-center pt-4 border-t border-tertiary">
-                <button onclick="purgeData()" class="text-danger text-xs hover:text-red-400 font-bold transition flex items-center gap-1">🔥 WIPE DATA</button>
-                <div class="flex gap-3">
-                    <button onclick="toggleSettings()" class="btn btn-secondary">Cancel</button>
-                    <button onclick="saveSettings()" class="btn btn-accent">Save</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- HEADER -->
     <header class="flex-shrink-0 h-14 border-b border-tertiary flex items-center justify-between px-4 bg-secondary/95 backdrop-blur z-20">
@@ -89,8 +55,8 @@
                  <div><span class="text-accent">Spd:</span> <span id="header-speed">--</span></div>
              </div>
 
-             <button onclick="purgeData()" class="text-lg hover:scale-110 transition duration-200" title="Delete All Data">🔥</button>
-             <button onclick="toggleSettings()" class="text-sm bg-tertiary hover:bg-primary text-fg-primary px-3 py-1.5 rounded border border-accent/30 transition font-medium">⚙️</button>
+             <button onclick="Kusanagi.purgeAll()" class="text-lg hover:scale-110 transition duration-200" title="Delete All Data">🔥</button>
+             <button onclick="settingsApi.open()" class="text-sm bg-tertiary hover:bg-primary text-fg-primary px-3 py-1.5 rounded border border-accent/30 transition font-medium">⚙️</button>
         </div>
     </header>
 
@@ -189,30 +155,14 @@
 
     <script>
         // --- CONFIG ---
-        let config = {
-            provider: localStorage.getItem('kks_provider') || 'gemini',
-            apiKey: localStorage.getItem('kks_key') || ''
+        const config = {
+            get provider() { return Kusanagi.keys.provider(); },
+            get apiKey() { return Kusanagi.keys.get(Kusanagi.keys.provider()); },
         };
-        
-        let sessionTokens = 0;
 
-        const MODELS = {
-            gemini: [
-                {id: "gemini-2.5-flash", name: "Gemini 2.5 Flash"},
-                {id: "gemini-2.0-flash", name: "Gemini 2.0 Flash"},
-                {id: "gemini-1.5-pro", name: "Gemini 1.5 Pro"}
-            ],
-            groq: [
-                {id: "llama3-8b-8192", name: "Llama 3 8B"},
-                {id: "mixtral-8x7b-32768", name: "Mixtral 8x7B"},
-                {id: "gemma-7b-it", name: "Gemma 7B"}
-            ],
-            hf: [
-                {id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B"},
-                {id: "microsoft/Phi-3-mini-4k-instruct", name: "Phi-3 Mini"}
-            ]
-        };
-        
+        let sessionTokens = 0;
+        let settingsApi;
+
         // Warn user on close (Privacy Feature)
         window.onbeforeunload = function() {
             return "Data is RAM-only. Closing this tab will wipe your session.";
@@ -220,39 +170,22 @@
 
         // --- INIT ---
         document.addEventListener('DOMContentLoaded', () => {
+            settingsApi = Kusanagi.mountSettings({
+                providers: ['gemini', 'groq', 'hf'],
+                onSave: populateModels,
+            });
             initUI();
             setInterval(updateRAM, 2000);
         });
 
         function initUI() {
-            document.getElementById('provider-select').value = config.provider;
-            document.getElementById('api-key-input').value = config.apiKey;
             populateModels();
 
             const slider = document.getElementById('temp-slider');
             const display = document.getElementById('temp-display');
             slider.addEventListener('input', (e) => display.textContent = e.target.value);
-            
+
             document.getElementById('home-input').focus();
-        }
-
-        // --- METRICS ---
-        function updateMetrics(tokens, speed) {
-            sessionTokens += tokens;
-            const headerTokens = document.getElementById('header-tokens');
-            if(headerTokens) headerTokens.textContent = sessionTokens.toLocaleString();
-
-            const headerSpeed = document.getElementById('header-speed');
-            if(headerSpeed && speed) headerSpeed.textContent = speed.toFixed(1) + " t/s";
-        }
-
-        function updateRAM() {
-            const headerRam = document.getElementById('header-ram');
-            if (performance.memory) {
-                headerRam.textContent = `${Math.round(performance.memory.usedJSHeapSize / 1024 / 1024)} MB`;
-            } else {
-                headerRam.textContent = "--";
-            }
         }
 
         // --- SEARCH LOGIC ---
@@ -262,7 +195,7 @@
             if (!query) return;
 
             if (!config.apiKey) {
-                toggleSettings();
+                settingsApi.open();
                 alert("Please enter an API Key to activate Kakashi.");
                 return;
             }
@@ -531,7 +464,7 @@
             }
         }
 
-        // --- SETTINGS & METRICS ---
+        // --- METRICS ---
         function updateMetrics(tokens, speed) {
             sessionTokens += tokens;
             const headerTokens = document.getElementById('header-tokens');
@@ -540,7 +473,7 @@
             const headerSpeed = document.getElementById('header-speed');
             if(headerSpeed && speed) headerSpeed.textContent = speed.toFixed(1) + " t/s";
         }
-        
+
         function updateRAM() {
             const headerRam = document.getElementById('header-ram');
             if (performance.memory) {
@@ -551,25 +484,13 @@
         }
 
         function populateModels() {
-            const provider = document.getElementById('provider-select').value;
             const select = document.getElementById('model-select');
             select.innerHTML = "";
-            (MODELS[provider] || []).forEach(m => {
+            (Kusanagi.MODELS[config.provider] || []).forEach(m => {
                 let opt = document.createElement('option');
                 opt.value = m.id; opt.textContent = m.name;
                 select.appendChild(opt);
             });
-        }
-
-        function toggleSettings() { document.getElementById('settings-modal').classList.toggle('hidden'); }
-        function updateKeyInput() { populateModels(); }
-        
-        function saveSettings() {
-            config.provider = document.getElementById('provider-select').value;
-            config.apiKey = document.getElementById('api-key-input').value.trim();
-            localStorage.setItem('kks_provider', config.provider);
-            localStorage.setItem('kks_key', config.apiKey);
-            toggleSettings();
         }
 
         function resetSearch() {
@@ -580,34 +501,11 @@
             document.getElementById('home-input').focus();
         }
 
-        function purgeData() { if(confirm("Wipe all data?")) { localStorage.clear(); location.reload(); } }
-
         // --- API CALLER ---
         async function callAI(prompt, temp) {
             const model = document.getElementById('model-select').value;
-            const headers = { 'Content-Type': 'application/json' };
-            let url, body;
-            
-            if (config.provider === 'gemini') {
-                url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${config.apiKey}`;
-                body = JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: temp } });
-            } else if (config.provider === 'groq') {
-                url = 'https://api.groq.com/openai/v1/chat/completions';
-                headers['Authorization'] = `Bearer ${config.apiKey}`;
-                body = JSON.stringify({ model: model, messages: [{role: 'user', content: prompt}], temperature: temp });
-            } else {
-                url = `https://api-inference.huggingface.co/models/${model}`;
-                headers['Authorization'] = `Bearer ${config.apiKey}`;
-                body = JSON.stringify({ inputs: prompt, parameters: { temperature: temp, return_full_text: false } });
-            }
-
-            const resp = await fetch(url, { method: 'POST', headers, body });
-            if(!resp.ok) throw new Error(resp.statusText);
-            const data = await resp.json();
-            
-            if(config.provider === 'gemini') return data.candidates[0].content.parts[0].text;
-            if(config.provider === 'groq') return data.choices[0].message.content;
-            if(config.provider === 'hf') return Array.isArray(data) ? data[0].generated_text : data.generated_text;
+            const result = await Kusanagi.call(config.provider, { apiKey: config.apiKey, model, temperature: temp, prompt });
+            return result.text;
         }
     </script>
 </body>

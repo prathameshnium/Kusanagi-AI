@@ -57,7 +57,7 @@
 
         canvas {
             background: #000;
-            border: 1px solid var(--border-color);
+            border: 1px solid var(--bg-tertiary);
             border-radius: 4px;
             cursor: pointer;
             image-rendering: pixelated; /* Ensures crisp pixels */
@@ -112,8 +112,7 @@
         }
         .legend span { display: flex; align-items: center; gap: 5px; }
         .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
-    </style>
-    <style>
+
         /* Console Styles */
         .console-panel {
             width: 100%;
@@ -143,9 +142,6 @@
             color: var(--log-color);
         }
     </style>
-    <script>
-        // Developer: Prathamesh Deshmukh
-    </script>
 </head>
 <body>
 
@@ -371,10 +367,7 @@
                 if (i === j) continue;
                 weights[i][j] += neurons[i] * neurons[j];
                 // Keep weights symmetric
-                weights[j][i] = weights[i][j]; 
-                
-                // Zero diagonal
-                if (i==j) weights[i][j] = 0;
+                weights[j][i] = weights[i][j];
             }
             
             drawNetwork();

@@ -6,14 +6,16 @@
     <title>Orochimaru - Secure Local RAG</title>
     <link rel="icon" href="https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/logo/Kusanagi-AI.png">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../static/theme.js"></script>
+    <script src="../static/providers.js"></script>
+    <script src="../static/settings-modal.js"></script>
     <!-- PDF.js for local parsing (CDN) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <!-- Marked for Markdown (CDN) -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <!-- DOMPurify for XSS Protection (CDN) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
-    
-
+    <meta name="description" content="Orochimaru — a secure document analyst that loads PDFs directly into browser RAM for private Q&A and summarization.">
 
     <link rel="stylesheet" href="../static/style.css">
     <script>
@@ -22,53 +24,9 @@
     </script>
 </head>
 <body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden">
-    <a href="https://prathameshnium.github.io/Kusanagi-AI" class="home-button">
+    <a href="../index.html" class="home-button">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
     </a>
-
-    <!-- SETTINGS MODAL -->
-    <div id="settings-modal" class="hidden absolute inset-0 settings-modal z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="settings-modal-content p-6 rounded-lg shadow-2xl max-w-md w-full border relative">
-            <div class="flex justify-between items-start mb-4">
-                <h2 class="text-xl font-bold text-accent">Secure Configuration</h2>
-                <button onclick="toggleSettings()" class="text-fg-secondary hover:text-fg-primary">✕</button>
-            </div>
-
-            <div class="bg-green-900/20 border border-green-900 p-3 rounded mb-6 text-xs text-green-200">
-                <strong>🛡️ Architecture Audit:</strong> 
-                <ul class="list-disc ml-4 mt-2 space-y-1">
-                    <li><strong>PDF Processing:</strong> 100% Client-Side (RAM). No server uploads.</li>
-                    <li><strong>Data Persistence:</strong> Volatile. Wiped on page refresh.</li>
-                    <li><strong>Network:</strong> Direct connection to AI API only. No proxies.</li>
-                </ul>
-            </div>
-            
-            <div class="mb-4">
-                <label class="block text-sm text-fg-secondary mb-2">AI Provider</label>
-                <select id="provider-select" class="w-full text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none" onchange="updateKeyInput()">
-                    <option value="gemini">Google Gemini (Recommended)</option>
-                    <option value="groq">Groq (Fastest)</option>
-                    <option value="hf">Hugging Face</option>
-                    <option value="ollama">Local Ollama (localhost:11434)</option>
-                </select>
-            </div>
-
-            <div class="mb-6" id="api-key-container">
-                <label class="block text-sm text-fg-secondary mb-2">API Key / Endpoint</label>
-                <!-- autocomplete="off" prevents browser saving keys -->
-                <input type="password" id="api-key-input" autocomplete="off" class="w-full text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none" placeholder="Enter key...">
-                <p id="ollama-hint" class="hidden text-[10px] text-fg-secondary mt-1">Default: http://localhost:11434 (Leave empty for default)</p>
-            </div>
-
-            <div class="flex justify-between items-center pt-4 border-t border-tertiary">
-                <button onclick="purgeData()" class="btn btn-danger text-xs" title="Wipe local storage and reload">Purge All Data</button>
-                <div class="flex gap-2">
-                    <button onclick="toggleSettings()" class="btn btn-secondary">Cancel</button>
-                    <button onclick="saveSettings()" class="btn btn-accent">Save Configuration</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <div class="flex h-full max-h-screen">
         
@@ -77,7 +35,7 @@
             <!-- Header -->
             <div class="px-1 mb-6">
                 <h1 class="text-2xl font-bold flex items-center gap-2">
-                    <a href="https://prathameshnium.github.io/Kusanagi-AI" class="hover:underline text-fg-primary">Kusanagi AI</a>
+                    <a href="../index.html" class="hover:underline text-fg-primary">Kusanagi AI</a>
                     <span class="text-fg-secondary font-normal mx-1">/</span>
                     <span class="text-accent">Orochimaru</span>
                     <span class="text-[10px] bg-tertiary text-fg-secondary px-2 py-0.5 rounded border border-tertiary">Local</span>
@@ -176,7 +134,7 @@
             </div>
 
             <div class="mt-auto pt-4 border-t border-tertiary">
-                 <button onclick="toggleSettings()" class="flex items-center gap-2 text-sm text-fg-secondary hover:text-accent transition w-full">
+                 <button onclick="settingsApi.open()" class="flex items-center gap-2 text-sm text-fg-secondary hover:text-accent transition w-full">
                     <span>⚙️</span> Configure API
                  </button>
             </div>
@@ -251,38 +209,17 @@
 
     <script>
         // --- STATE MANAGEMENT ---
-        let config = {
-            provider: localStorage.getItem('orc_provider') || 'gemini',
-            apiKey: localStorage.getItem('orc_key') || ''
+        const config = {
+            get provider() { return Kusanagi.keys.provider(); },
+            get apiKey() { return Kusanagi.keys.get(Kusanagi.keys.provider()); },
         };
-        
+
         // MEMORY-ONLY STORAGE
         let loadedDocuments = {};
-        let lastAIResponse = ""; 
+        let lastAIResponse = "";
         let sessionTotalTokens = 0;
         let isSpeaking = false; // Track TTS state
-
-        const MODELS = {
-            gemini: [
-                {id: "gemini-2.5-flash", name: "Gemini 2.5 Flash"},
-                {id: "gemini-2.0-flash", name: "Gemini 2.0 Flash"},
-                {id: "gemini-1.5-flash", name: "Gemini 1.5 Flash"},
-                {id: "gemini-1.5-pro", name: "Gemini 1.5 Pro"}
-            ],
-            groq: [
-                {id: "llama3-8b-8192", name: "Llama 3 8B"},
-                {id: "mixtral-8x7b-32768", name: "Mixtral 8x7B"},
-                {id: "gemma-7b-it", name: "Gemma 7B"}
-            ],
-            hf: [
-                {id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B"},
-                {id: "microsoft/Phi-3-mini-4k-instruct", name: "Phi-3 Mini"}
-            ],
-            ollama: [
-                {id: "qwen2:1.5b", name: "Qwen 1.5B"},
-                {id: "llama3", name: "Llama 3 (Local)"}
-            ]
-        };
+        let settingsApi;
 
         const REVIEW_PERSONAS = {
             "Physicist": "You are a reviewer with expertise in Physics. Focus on the underlying physical principles and models.",
@@ -299,10 +236,12 @@
 
         // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {
+            settingsApi = Kusanagi.mountSettings({
+                providers: ['gemini', 'groq', 'hf', 'ollama'],
+                title: 'Secure Configuration',
+                onSave: () => { checkStatus(); populateModelSelect(config.provider); },
+            });
             checkStatus();
-            document.getElementById('provider-select').value = config.provider;
-            document.getElementById('api-key-input').value = config.apiKey;
-            updateKeyInput();
             populateModelSelect(config.provider); // Init model list
 
             // Slider Listener
@@ -346,62 +285,16 @@
         }
 
         // --- SETTINGS & CONFIG ---
-        function toggleSettings() {
-            document.getElementById('settings-modal').classList.toggle('hidden');
-        }
-
-        function updateKeyInput() {
-            const provider = document.getElementById('provider-select').value;
-            const hint = document.getElementById('ollama-hint');
-            const input = document.getElementById('api-key-input');
-            
-            populateModelSelect(provider); // Update sidebar models when provider changes
-
-            if (provider === 'ollama') {
-                input.placeholder = "http://localhost:11434";
-                hint.classList.remove('hidden');
-            } else {
-                input.placeholder = "Enter API Key...";
-                hint.classList.add('hidden');
-            }
-        }
-
         function populateModelSelect(provider) {
             const select = document.getElementById('model-select');
             select.innerHTML = "";
-            const options = MODELS[provider] || [];
+            const options = Kusanagi.MODELS[provider] || [];
             options.forEach(m => {
                 const opt = document.createElement('option');
                 opt.value = m.id;
                 opt.textContent = m.name;
                 select.appendChild(opt);
             });
-        }
-
-        function saveSettings() {
-            const provider = document.getElementById('provider-select').value;
-            let key = document.getElementById('api-key-input').value.trim();
-            
-            if (provider === 'ollama' && !key) key = "http://localhost:11434";
-            
-            if(key) {
-                config.provider = provider;
-                config.apiKey = key;
-                localStorage.setItem('orc_provider', provider);
-                localStorage.setItem('orc_key', key);
-                checkStatus();
-                toggleSettings();
-            } else {
-                alert("API Key cannot be empty");
-            }
-        }
-
-        function purgeData() {
-            if(confirm("CRITICAL: Wipe all local storage keys and reload? Documents in RAM will be lost.")) {
-                localStorage.removeItem('orc_provider');
-                localStorage.removeItem('orc_key');
-                location.reload();
-            }
         }
 
         function checkStatus() {
@@ -568,7 +461,7 @@
             
             if (!config.apiKey) {
                 alert("Please configure your API Key/Endpoint in Settings.");
-                toggleSettings();
+                settingsApi.open();
                 return;
             }
 
@@ -599,14 +492,12 @@
                 // Track Start Time
                 const startTime = performance.now();
 
-                let result = { text: "", usage: null };
-                if (config.provider === 'gemini') result = await callGemini(fullPrompt, selectedModel, temperature);
-                else if (config.provider === 'groq') result = await callGroq(fullPrompt, selectedModel, temperature);
-                else if (config.provider === 'hf') result = await callHF(fullPrompt, selectedModel, temperature);
-                else if (config.provider === 'ollama') result = await callOllama(fullPrompt, selectedModel, temperature);
+                const result = await Kusanagi.call(config.provider, {
+                    apiKey: config.apiKey, model: selectedModel, temperature, prompt: fullPrompt,
+                });
 
                 const endTime = performance.now();
-                
+
                 // Calculate Stats
                 const durationSec = (endTime - startTime) / 1000;
                 // Fallback token estimation if API doesn't provide usage
@@ -643,26 +534,13 @@
         }
 
         async function runQuickAction(type) {
-            if (Object.keys(loadedDocuments).length === 0 && type !== 'paraphrase') return;
-            
-            let prompt = "";
-            let displayMsg = "";
+            if (Object.keys(loadedDocuments).length === 0) return;
 
             if (type === 'summarize') {
                 const chunks = retrieveRelevantChunks("abstract summary conclusion introduction", 6);
-                prompt = "Summarize the following text:\n" + chunks.join("\n");
-                displayMsg = "Generating Summary...";
-            } else if (type === 'key_points') {
-                const chunks = retrieveRelevantChunks("important key points results", 6);
-                prompt = "Extract bullet points from:\n" + chunks.join("\n");
-                displayMsg = "Extracting Key Points...";
-            } else if (type === 'paraphrase') {
-                if(!lastAIResponse) return alert("No response to paraphrase.");
-                prompt = "Paraphrase this text in a different style:\n" + lastAIResponse;
-                displayMsg = "Paraphrasing...";
+                const prompt = "Summarize the following text:\n" + chunks.join("\n");
+                callCustomPrompt(prompt, "Generating Summary...");
             }
-
-            callCustomPrompt(prompt, displayMsg);
         }
 
         async function callCustomPrompt(fullPrompt, userFacingText) {
@@ -674,11 +552,9 @@
             const startTime = performance.now();
 
             try {
-                let result = { text: "", usage: null };
-                if (config.provider === 'gemini') result = await callGemini(fullPrompt, selectedModel, temperature);
-                else if (config.provider === 'groq') result = await callGroq(fullPrompt, selectedModel, temperature);
-                else if (config.provider === 'hf') result = await callHF(fullPrompt, selectedModel, temperature);
-                else if (config.provider === 'ollama') result = await callOllama(fullPrompt, selectedModel, temperature);
+                const result = await Kusanagi.call(config.provider, {
+                    apiKey: config.apiKey, model: selectedModel, temperature, prompt: fullPrompt,
+                });
 
                 const endTime = performance.now();
                 const durationSec = (endTime - startTime) / 1000;
@@ -739,11 +615,6 @@
             btn.title = "Read Aloud";
             btn.classList.remove("text-accent", "animate-pulse");
         }
-        
-        // Old function alias for backward compatibility if needed, redirected
-        function speakLastResponse() {
-            toggleTTS();
-        }
 
         // --- UI HELPERS ---
         function appendUserMessage(text) {
@@ -792,88 +663,6 @@
             sessionTotalTokens = 0; // Reset stats on clear
             updatePerfStats(0, 0); // Reset UI
             appendSystemMessage("Chat history cleared from RAM.");
-        }
-
-        // --- API CALLS ---
-        async function callGemini(prompt, modelId, temp) {
-            try {
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${config.apiKey}`;
-                const resp = await fetch(url, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ 
-                        contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: { temperature: temp }
-                    })
-                });
-                if (resp.ok) {
-                    const data = await resp.json();
-                    const usage = data.usageMetadata || null;
-                    return { 
-                        text: data.candidates[0].content.parts[0].text,
-                        usage: usage
-                    };
-                } else { 
-                    const err = await resp.json();
-                    throw new Error(err.error?.message || "Gemini Error");
-                }
-            } catch(e) { throw e; }
-        }
-
-        async function callGroq(prompt, modelId, temp) {
-            const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    messages: [{ role: "user", content: prompt }], 
-                    model: modelId,
-                    temperature: temp
-                })
-            });
-            if (!resp.ok) throw new Error("Groq Error");
-            const data = await resp.json();
-            return {
-                text: data.choices[0].message.content,
-                usage: data.usage // Groq returns usage object
-            };
-        }
-
-        async function callHF(prompt, modelId, temp) {
-            const resp = await fetch(`https://api-inference.huggingface.co/models/${modelId}`, {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    inputs: prompt, 
-                    parameters: { temperature: temp, return_full_text: false, do_sample: true } 
-                })
-            });
-            if (!resp.ok) throw new Error("Hugging Face Error");
-            const data = await resp.json();
-            const text = Array.isArray(data) ? data[0].generated_text : data.generated_text;
-            // HF doesn't return usage, so we return null and let estimate handle it
-            return { text: text, usage: null };
-        }
-
-        async function callOllama(prompt, modelId, temp) {
-            const resp = await fetch(`${config.apiKey}/api/generate`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ 
-                    model: modelId, 
-                    prompt: prompt, 
-                    stream: false,
-                    options: { temperature: temp }
-                })
-            });
-            if (!resp.ok) throw new Error("Ollama Error. Check CORS.");
-            const data = await resp.json();
-            // Ollama returns eval_count (output) and prompt_eval_count (input)
-            const usage = {
-                prompt_tokens: data.prompt_eval_count || 0,
-                completion_tokens: data.eval_count || 0,
-                total_tokens: (data.prompt_eval_count || 0) + (data.eval_count || 0)
-            };
-            return { text: data.response, usage: usage };
         }
 
     </script>

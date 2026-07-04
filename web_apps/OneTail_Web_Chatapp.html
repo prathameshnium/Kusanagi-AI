@@ -6,79 +6,22 @@
     <title>OneTail - Web Chat</title>
     <link rel="icon" href="https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/logo/Kusanagi-AI.png">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="../static/theme.js"></script>
+    <script src="../static/providers.js"></script>
+    <script src="../static/settings-modal.js"></script>
     <!-- Added Marked.js for Markdown rendering -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
-
+    <meta name="description" content="OneTail Chat — a lightweight, multi-provider chat interface for quick code snippets, translation, or drafting.">
 
     <link rel="stylesheet" href="../static/style.css">
 </head>
 <body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden">
-    <a href="https://prathameshnium.github.io/Kusanagi-AI" class="home-button">
-        <style>
-            body { font-family: 'Inter', sans-serif; }
-        </style>
+    <a href="../index.html" class="home-button">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
         </svg>
     </a>
-
-    <!-- SETTINGS MODAL (Hidden by default) -->
-    <div id="settings-modal" class="hidden absolute inset-0 settings-modal z-50 flex items-center justify-center backdrop-blur-sm">
-        <div class="settings-modal-content p-6 rounded-lg shadow-2xl max-w-md w-full border">
-            <div class="flex justify-between items-start mb-4">
-                <h2 class="text-xl font-bold text-accent">Configuration</h2>
-                <button onclick="toggleSettings()" class="text-fg-secondary hover:text-fg-primary">✕</button>
-            </div>
-
-            <div class="bg-blue-900/20 border border-blue-900 p-3 rounded mb-4 text-xs text-blue-200">
-                <strong>🔒 Security Assurance:</strong> API Keys are stored locally in your browser. Chats are stored in RAM only and vanish on refresh.
-            </div>
-            
-            <!-- Tabs -->
-            <div class="flex space-x-2 mb-4 border-b border-tertiary pb-2">
-                <button onclick="switchTab('hf')" id="tab-hf" class="text-sm font-medium text-fg-secondary hover:text-fg-primary pb-1">HuggingFace</button>
-                <button onclick="switchTab('gemini')" id="tab-gemini" class="text-sm font-bold text-accent border-b-2 border-accent pb-1">Google Gemini</button>
-                <button onclick="switchTab('groq')" id="tab-groq" class="text-sm font-medium text-fg-secondary hover:text-fg-primary pb-1">Groq</button>
-            </div>
-
-            <!-- HF Inputs -->
-            <div id="panel-hf" class="provider-panel hidden">
-                <label class="block text-sm text-fg-secondary mb-2">Hugging Face Token</label>
-                <input type="password" id="hf-token-input" class="w-full text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none mb-4" placeholder="hf_...">
-            </div>
-
-            <!-- Gemini Inputs -->
-            <div id="panel-gemini" class="provider-panel">
-                <label class="block text-sm text-fg-secondary mb-2">Gemini API Key</label>
-                <input type="password" id="gemini-key-input" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none mb-4" placeholder="AIza...">
-            </div>
-
-            <!-- Groq Inputs -->
-            <div id="panel-groq" class="provider-panel hidden">
-                <label class="block text-sm text-fg-secondary mb-2">Groq API Key</label>
-                <input type="password" id="groq-key-input" class="w-full bg-tertiary text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none mb-4" placeholder="gsk_...">
-            </div>
-            
-            <div class="border-t border-tertiary mt-2 pt-4">
-                <label class="block text-sm text-fg-secondary mb-2">Active Provider</label>
-                <select id="active-provider-select" class="w-full text-fg-primary p-2 rounded border border-tertiary focus:border-accent outline-none mb-4">
-                    <option value="hf">Hugging Face</option>
-                    <option value="gemini">Google Gemini</option>
-                    <option value="groq">Groq</option>
-                </select>
-
-                <div class="flex justify-between items-center">
-                    <button onclick="purgeData()" class="btn btn-danger text-xs">Purge All Data</button>
-                    <div class="flex gap-2">
-                        <button onclick="toggleSettings()" class="btn btn-secondary">Cancel</button>
-                        <button onclick="saveSettings()" class="btn btn-accent">Save</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <div class="flex h-full max-h-screen">
         
@@ -86,7 +29,7 @@
         <aside class="w-64 flex-shrink-0 bg-secondary flex flex-col p-4 border-r border-tertiary">
             <!-- Header -->
             <div class="px-1">
-                <h1 class="text-2xl font-bold"><a href="https://prathameshnium.github.io/Kusanagi-AI" class="hover:underline text-fg-primary">Kusanagi AI</a><span class="text-fg-secondary font-normal mx-1"> / </span><span class="text-accent">OneTail Chat</span></h1>
+                <h1 class="text-2xl font-bold"><a href="../index.html" class="hover:underline text-fg-primary">Kusanagi AI</a><span class="text-fg-secondary font-normal mx-1"> / </span><span class="text-accent">OneTail Chat</span></h1>
                 <p class="text-sm font-bold text-accent">Private & Secure</p>
                 <p class="text-xs text-fg-secondary mt-1">Local Session Storage Only</p>
             </div>
@@ -161,9 +104,9 @@
                 </div>
 
                 <div class="flex items-center space-x-3">
-                    <button onclick="purgeData()" class="text-lg hover:scale-110 transition duration-200" title="Delete All Data (Keys & History)">🔥</button>
+                    <button onclick="Kusanagi.purgeAll()" class="text-lg hover:scale-110 transition duration-200" title="Delete All Data (Keys & History)">🔥</button>
                     <div class="w-[1px] h-6 bg-tertiary"></div>
-                    <button onclick="toggleSettings()" class="text-sm bg-tertiary hover:bg-secondary text-fg-primary px-3 py-1 rounded border border-accent/30 transition" title="Configure API Keys">⚙️ Settings</button>
+                    <button onclick="settingsApi.open()" class="text-sm bg-tertiary hover:bg-secondary text-fg-primary px-3 py-1 rounded border border-accent/30 transition" title="Configure API Keys">⚙️ Settings</button>
                 </div>
             </header>
 
@@ -207,54 +150,29 @@
         const tempValue = document.getElementById('temp-value');
         const statusLight = document.getElementById('status-light');
         const statusLabel = document.getElementById('status-label');
-        const settingsModal = document.getElementById('settings-modal');
-        const activeProviderSelect = document.getElementById('active-provider-select');
         const newChatBtn = document.getElementById('new-chat-btn');
         const tokenDisplay = document.getElementById('token-display');
         const speedDisplay = document.getElementById('speed-display');
-        
-        // Inputs
-        const hfTokenInput = document.getElementById('hf-token-input');
-        const geminiKeyInput = document.getElementById('gemini-key-input');
-        const groqKeyInput = document.getElementById('groq-key-input');
 
         // --- STATE ---
-        let config = {
-            provider: localStorage.getItem('provider') || 'gemini',
-            hfToken: localStorage.getItem('hf_token') || '',
-            geminiKey: localStorage.getItem('gemini_key') || '',
-            groqKey: localStorage.getItem('groq_key') || ''
+        const config = {
+            get provider() { return Kusanagi.keys.provider(); },
+            get hfToken() { return Kusanagi.keys.get('hf'); },
+            get geminiKey() { return Kusanagi.keys.get('gemini'); },
+            get groqKey() { return Kusanagi.keys.get('groq'); },
         };
-        
+
         // RAM-only stats
         let sessionTokens = 0;
-
-        const models = {
-            hf: [
-                { id: "microsoft/Phi-3-mini-4k-instruct", name: "Phi-3 Mini" },
-                { id: "mistralai/Mistral-7B-Instruct-v0.3", name: "Mistral 7B" }
-            ],
-            gemini: [
-                { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash (New)" },
-                { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash" },
-                { id: "gemini-1.5-flash-002", name: "Gemini 1.5 Flash-002" },
-                { id: "gemini-1.5-flash-latest", name: "Gemini 1.5 Flash Latest" }
-            ],
-            groq: [
-                { id: "llama3-8b-8192", name: "Llama 3 8B" },
-                { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B" },
-                { id: "gemma-7b-it", name: "Gemma 7B" }
-            ]
-        };
+        let settingsApi;
 
         // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {
-            // Load saved values
-            hfTokenInput.value = config.hfToken;
-            geminiKeyInput.value = config.geminiKey;
-            groqKeyInput.value = config.groqKey;
-            activeProviderSelect.value = config.provider;
-            
+            settingsApi = Kusanagi.mountSettings({
+                providers: ['hf', 'gemini', 'groq'],
+                onSave: () => { updateModelList(); checkStatus(); },
+            });
+
             updateModelList();
             checkStatus();
 
@@ -266,7 +184,7 @@
             // Event Listeners
             sendButton.addEventListener('click', handleSend);
             newChatBtn.addEventListener('click', startNewChat);
-            
+
             chatInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') handleSend();
             });
@@ -292,72 +210,9 @@
             chatInput.focus();
         }
 
-        // --- PURGE LOGIC ---
-        function purgeData() {
-            if(confirm("Delete all API keys, chat history, and local data? This cannot be undone.")) {
-                // 1. Wipe Storage
-                localStorage.clear();
-                sessionStorage.clear();
-                
-                // 2. Wipe Memory State
-                config = { provider: 'gemini', hfToken: '', geminiKey: '', groqKey: '' };
-                
-                // 3. Wipe UI Inputs
-                hfTokenInput.value = "";
-                geminiKeyInput.value = "";
-                groqKeyInput.value = "";
-                
-                // 4. Wipe Chat
-                chatHistory.innerHTML = "";
-                
-                // 5. Reload to ensure fresh state
-                location.reload();
-            }
-        }
-
-        // --- SETTINGS LOGIC ---
-        function toggleSettings() {
-            settingsModal.classList.toggle('hidden');
-            if (!settingsModal.classList.contains('hidden')) {
-                switchTab(activeProviderSelect.value);
-            }
-        }
-
-        function switchTab(provider) {
-            document.querySelectorAll('.provider-panel').forEach(el => el.classList.add('hidden'));
-            document.getElementById(`panel-${provider}`).classList.remove('hidden');
-            
-            ['hf', 'gemini', 'groq'].forEach(p => {
-                const btn = document.getElementById(`tab-${p}`);
-                if (p === provider) {
-                    btn.className = "text-sm font-bold text-accent border-b-2 border-accent pb-1";
-                } else {
-                    btn.className = "text-sm font-medium text-fg-secondary hover:text-fg-primary pb-1";
-                }
-            });
-        }
-
-        function saveSettings() {
-            config.provider = activeProviderSelect.value;
-            config.hfToken = hfTokenInput.value.trim();
-            config.geminiKey = geminiKeyInput.value.trim();
-            config.groqKey = groqKeyInput.value.trim();
-            
-            localStorage.setItem('provider', config.provider);
-            localStorage.setItem('hf_token', config.hfToken);
-            localStorage.setItem('gemini_key', config.geminiKey);
-            localStorage.setItem('groq_key', config.groqKey);
-            
-            updateModelList();
-            checkStatus();
-            toggleSettings();
-        }
-
         function updateModelList() {
-            const provider = activeProviderSelect.value;
-            const providerModels = models[provider] || [];
-            
-            modelSelector.innerHTML = providerModels.map(m => 
+            const providerModels = Kusanagi.MODELS[config.provider] || [];
+            modelSelector.innerHTML = providerModels.map(m =>
                 `<option value="${m.id}">${m.name}</option>`
             ).join('');
         }
@@ -387,7 +242,7 @@
             
             if (!checkStatus()) {
                 alert(`Please set up your ${config.provider.toUpperCase()} API key in Settings.`);
-                toggleSettings();
+                settingsApi.open();
                 return;
             }
 
@@ -405,16 +260,10 @@
             const startTime = performance.now();
 
             try {
-                let response = null; // Object containing { text, usage }
-
-                // Route to API
-                if (config.provider === 'gemini') {
-                    response = await callGemini(prompt, modelId, config.geminiKey, temperature);
-                } else if (config.provider === 'groq') {
-                    response = await callGroq(prompt, modelId, config.groqKey, temperature);
-                } else if (config.provider === 'hf') {
-                    response = await callHuggingFace(prompt, modelId, config.hfToken, temperature);
-                }
+                const apiKey = config.provider === 'hf' ? config.hfToken
+                    : config.provider === 'groq' ? config.groqKey
+                    : config.geminiKey;
+                const response = await Kusanagi.call(config.provider, { apiKey, model: modelId, temperature, prompt });
 
                 const endTime = performance.now();
                 const durationSec = (endTime - startTime) / 1000;
@@ -503,74 +352,6 @@
             return id;
         }
 
-        // --- API CALLS (Returning { text, usage }) ---
-        async function callGemini(prompt, model, key, temp) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-            const resp = await fetch(url, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: temp }
-                })
-            });
-            if (!resp.ok) {
-                const err = await resp.json().catch(() => ({}));
-                throw new Error(`Gemini Error ${resp.status}: ${err.error?.message || resp.statusText}`);
-            }
-            const data = await resp.json();
-            // Extract Gemini Usage Metadata if available
-            const usage = data.usageMetadata ? {
-                prompt_tokens: data.usageMetadata.promptTokenCount,
-                completion_tokens: data.usageMetadata.candidatesTokenCount,
-                total_tokens: data.usageMetadata.totalTokenCount
-            } : null;
-            
-            return { text: data.candidates[0].content.parts[0].text, usage: usage };
-        }
-
-        async function callGroq(prompt, model, key, temp) {
-            const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${key}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    messages: [{ role: "user", content: prompt }],
-                    model: model,
-                    temperature: temp
-                })
-            });
-            if (!resp.ok) {
-                const err = await resp.json().catch(() => ({}));
-                throw new Error(`Groq Error: ${err.error?.message || resp.statusText}`);
-            }
-            const data = await resp.json();
-            return { 
-                text: data.choices[0].message.content, 
-                usage: data.usage // Groq provides standard usage object
-            };
-        }
-
-        async function callHuggingFace(prompt, model, token, temp) {
-            const resp = await fetch(`https://api-inference.huggingface.co/models/${model}`, {
-                method: "POST",
-                headers: {
-                    "Authorization": `Bearer ${token}`,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    inputs: prompt,
-                    parameters: { temperature: temp, return_full_text: false, do_sample: true } // Added do_sample: true
-                })
-            });
-            if (!resp.ok) throw new Error(`HF Error: ${resp.status} ${resp.statusText}`);
-            const data = await resp.json();
-            const text = Array.isArray(data) ? data[0].generated_text : data.generated_text;
-            // HF doesn't send usage, return null to trigger estimation
-            return { text: text, usage: null };
-        }
     </script>
 </body>
 </html>

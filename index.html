@@ -4,26 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kusanagi AI - Research Suite</title>
+    <link rel="icon" href="https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/logo/Kusanagi-AI.png">
+    <meta name="description" content="Kusanagi AI — a free, open-source research toolkit: agentic search, PDF RAG chat, and AI visualizers, usable in the browser or fully offline.">
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="static/theme.js"></script>
+    <script src="static/providers.js"></script>
+    <link rel="stylesheet" href="static/style.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0f172a; /* Deep Slate */
-            color: #f8fafc;
-            background-image: radial-gradient(circle at 50% 0%, #1e293b 0%, #0f172a 70%);
-            background-attachment: fixed;
-        }
-
-        /* Theme Configuration */
-        :root {
-            --accent: #ffab40;
-            --accent-hover: #ffc371;
-            --card-bg: #1e293b;
-            --border: #334155;
-        }
-
         /* Custom Classes */
         .glass {
             background: rgba(30, 41, 59, 0.7);
@@ -89,7 +76,7 @@
             display: inline-block;
             width: 4px;
             height: 1em;
-            background-color: #ffab40;
+            background-color: var(--accent);
             margin-left: 5px;
             vertical-align: bottom;
             animation: blink 1s infinite;
@@ -115,29 +102,7 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        
-        ::-webkit-scrollbar { width: 8px; }
-        ::-webkit-scrollbar-track { background: #0f172a; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #475569; }
     </style>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        accent: '#ffab40',
-                        secondary: '#1e293b',
-                        tertiary: '#334155',
-                        success: '#3AD900'
-                    },
-                    fontFamily: {
-                        mono: ['"JetBrains Mono"', 'monospace'],
-                    }
-                }
-            }
-        }
-    </script>
 </head>
 <body class="min-h-screen flex flex-col">
 
@@ -489,31 +454,21 @@
             const groqKey = document.getElementById('groq-key-input').value.trim();
             const hfToken = document.getElementById('hf-token-input').value.trim();
 
-            // Save to localStorage for other apps to use
-            if(geminiKey) localStorage.setItem('gemini_key', geminiKey);
-            if(groqKey) localStorage.setItem('groq_key', groqKey);
-            if(hfToken) localStorage.setItem('hf_token', hfToken);
+            // Shared store: every web app reads keys from here, so this single save reaches all of them.
+            if (geminiKey) Kusanagi.keys.set('gemini', geminiKey);
+            if (groqKey) Kusanagi.keys.set('groq', groqKey);
+            if (hfToken) Kusanagi.keys.set('hf', hfToken);
 
-            // Also save to the keys used by individual apps for consistency
-            localStorage.setItem('kks_key', geminiKey); // Kakashi default
-            localStorage.setItem('orc_key', geminiKey); // Orochimaru default
-            
-            alert("Keys saved in browser localStorage.");
+            alert("Keys saved. All web apps will now use them.");
             toggleSettings();
         }
-        
+
         function purgeData() {
             if (confirm("Are you sure you want to purge all API keys from localStorage?")) {
-                localStorage.removeItem('gemini_key');
-                localStorage.removeItem('groq_key');
-                localStorage.removeItem('hf_token');
-                localStorage.removeItem('kks_provider');
-                localStorage.removeItem('kks_key');
-                localStorage.removeItem('orc_provider');
-                localStorage.removeItem('orc_key');
-                localStorage.removeItem('vis_provider');
-                localStorage.removeItem('vis_key');
-                localStorage.removeItem('provider');
+                Kusanagi.keys.purge();
+                document.getElementById('gemini-key-input').value = '';
+                document.getElementById('groq-key-input').value = '';
+                document.getElementById('hf-token-input').value = '';
                 alert("All keys have been purged.");
             }
         }
@@ -593,14 +548,12 @@
         document.addEventListener('DOMContentLoaded', () => {
             typeMainTitle();
             // Load keys into modal on open
-            document.getElementById('gemini-key-input').value = localStorage.getItem('gemini_key') || '';
-            document.getElementById('groq-key-input').value = localStorage.getItem('groq_key') || '';
-            document.getElementById('hf-token-input').value = localStorage.getItem('hf_token') || '';
+            document.getElementById('gemini-key-input').value = Kusanagi.keys.get('gemini');
+            document.getElementById('groq-key-input').value = Kusanagi.keys.get('groq');
+            document.getElementById('hf-token-input').value = Kusanagi.keys.get('hf');
         });
 
         function switchTab(tab) {
-            const webBtn = document.getElementById('tab-web');
-            const localBtn = document.getElementById('tab-local');
             const webContent = document.getElementById('content-web');
             const localContent = document.getElementById('content-local');
 
@@ -609,16 +562,12 @@
             const stepLine = document.getElementById('step-line');
 
             if(tab === 'web') {
-                if (webBtn) webBtn.className = "px-8 py-2.5 rounded-lg text-sm font-bold transition-all bg-accent text-secondary shadow-lg";
-                if (localBtn) localBtn.className = "px-8 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-all flex items-center gap-2";
                 webContent.classList.remove('hidden');
                 localContent.classList.add('hidden');
                 step2.style.opacity = '1';
                 step3.style.opacity = '1';
                 stepLine.style.display = 'block';
             } else {
-                if (localBtn) localBtn.className = "px-8 py-2.5 rounded-lg text-sm font-bold transition-all bg-accent text-secondary shadow-lg flex items-center gap-2";
-                if (webBtn) webBtn.className = "px-8 py-2.5 rounded-lg text-sm font-bold text-slate-400 hover:text-white transition-all";
                 localContent.classList.remove('hidden');
                 webContent.classList.add('hidden');
                 step2.style.opacity = '0';
@@ -628,7 +577,7 @@
         }
 
         function copyStandard() {
-            const text = "git clone https://github.com/prathameshnium/Kusanagi-AI.git\ncd Kusanagi-AI\npip install -r requirements.txt\npython local_apps/Kakashi_Local_RAG_App.py";
+            const text = "git clone https://github.com/prathameshnium/Kusanagi-AI.git\ncd Kusanagi-AI\npip install -r requirements.txt\npython local_apps/launcher.py";
             navigator.clipboard.writeText(text);
             alert("Git commands copied to clipboard!");
         }
