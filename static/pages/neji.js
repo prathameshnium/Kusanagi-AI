@@ -84,9 +84,7 @@
 
     /** Ask the model for sub-queries. Never called in incognito mode. */
     function generateStrategies(query) {
-        var prompt = 'You are a senior research librarian. The user wants papers on: "'
-            + query + '".\nGenerate exactly 5 distinct, high-quality academic search '
-            + 'queries.\nReturn ONLY a JSON array of strings.';
+        var prompt = K.prompts.searchStrategies(query, 5, 'academic');
 
         return K.callJson(provider(), {
             apiKey: apiKey(),

@@ -66,15 +66,6 @@
 
     /* -------------------------------------------------------------------- data */
 
-    function buildPrompt(context, topK) {
-        return 'You are a token probability engine.\n'
-            + 'Given this text, list the ' + topK + ' most likely single tokens to follow.\n'
-            + 'Assign each a probability between 0 and 1.\n'
-            + 'Reply with ONLY a JSON array, like '
-            + '[{"token": "word", "prob": 0.85}].\n\n'
-            + 'TEXT:\n' + context;
-    }
-
     /** Coerce whatever the model returned into [{token, prob}]. */
     function normalise(raw) {
         var list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.tokens) ? raw.tokens : []);
@@ -105,7 +96,7 @@
             apiKey: apiKey(),
             model: (K.models(provider())[0] || {}).id,
             temperature: 0.1,
-            prompt: buildPrompt(text, topK),
+            prompt: K.prompts.tokenProbabilities(text, topK),
         }).then(function (raw) {
             renderPredictions(normalise(raw).slice(0, Number(topK)));
         }).catch(function (err) {

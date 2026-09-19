@@ -3,11 +3,12 @@ from tkinter import scrolledtext, ttk, Listbox, filedialog, messagebox
 import re
 import time
 import threading
-import queue
 import sys
 import os
 
-from kusanagi_core import PROJECT_ROOT, Style, load_config, OllamaServer
+from kusanagi_core import (Style, load_config, OllamaServer, ConsoleRedirector,
+                           Speaker, apply_theme, SettingsWindow)
+
 
 # --- Standard App Imports ---
 try:
@@ -27,15 +28,6 @@ except ImportError:
 
 # --- GLOBAL STATE & PROMPTS ---
 ENTRY_PLACEHOLDER = "Ask a question or type a command..."
-tts_queue = queue.Queue()
-def tts_worker():
-    engine = pyttsx3.init()
-    while True:
-        is_muted, text = tts_queue.get()
-        if not is_muted:
-            engine.say(text)
-            engine.runAndWait()
-        tts_queue.task_done()
 
 class ResearchApp(tk.Tk):
     def __init__(self):
@@ -51,40 +43,17 @@ class ResearchApp(tk.Tk):
         self.configure(bg=Style.BG_PRIMARY)
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
         
-        self.setup_styles()
+        apply_theme(self)
         self.create_widgets()
         self._initialize_ollama()
         
         self.start_services()
-        self.is_muted = False
+        self.speaker = Speaker()
         self.last_tok_per_sec = ""
         self.chat_sessions = {}
         self.current_chat_id = None
         self.chat_counter = 0
 
-
-    def setup_styles(self):
-        s = ttk.Style(self)
-        s.theme_use('clam')
-        s.configure('.', background=Style.BG_PRIMARY, foreground=Style.FG_PRIMARY, font=Style.UI_FONT, borderwidth=0)
-        s.configure('TFrame', background=Style.BG_PRIMARY)
-        s.configure('Sidebar.TFrame', background=Style.BG_SECONDARY)
-        s.configure('Sidebar.TLabel', background=Style.BG_SECONDARY, foreground=Style.FG_PRIMARY)
-        s.configure('Accent.Sidebar.TButton', background=Style.ACCENT, foreground=Style.ACCENT_FG, font=(Style.UI_FONT[0], Style.UI_FONT[1], 'bold'))
-        s.map('Accent.Sidebar.TButton', background=[('active', "#e69a38")])
-        s.configure('TEntry', fieldbackground=Style.BG_TERTIARY, foreground=Style.FG_PRIMARY, insertcolor=Style.ACCENT, borderwidth=0, padding=10)
-        s.configure('TCombobox', fieldbackground=Style.BG_TERTIARY, background=Style.BG_TERTIARY, foreground=Style.FG_PRIMARY)
-        s.map('TCombobox', fieldbackground=[('readonly', Style.BG_TERTIARY)], background=[('readonly', Style.BG_TERTIARY)], foreground=[('readonly', Style.FG_PRIMARY)])
-        s.map('TCombobox', selectbackground=[('readonly', Style.ACCENT)], selectforeground=[('readonly', Style.ACCENT_FG)])
-        s.map('TCombobox', background=[('active', Style.BG_TERTIARY)])
-        s.configure('Send.TButton', background=Style.ACCENT, foreground=Style.ACCENT_FG, font=(Style.UI_FONT[0], 14, "bold"))
-        s.map('Send.TButton', background=[('active', "#D9A800")])
-        s.configure('Tool.TButton', background=Style.BG_TERTIARY, foreground=Style.FG_PRIMARY, font=(Style.UI_FONT[0], 10))
-        s.map('Tool.TButton', background=[('active', Style.BG_PRIMARY)])
-        s.configure('Tool.TCheckbutton', background=Style.BG_SECONDARY, foreground=Style.FG_PRIMARY, font=(Style.UI_FONT[0], 10))
-        s.map('Tool.TCheckbutton', background=[('active', Style.BG_SECONDARY)], indicatorcolor=[('selected', Style.ACCENT)])
-        s.configure('TopBar.TButton', background=Style.BG_PRIMARY, foreground=Style.FG_SECONDARY, font=(Style.UI_FONT[0], 12))
-        s.map('TopBar.TButton', foreground=[('active', Style.FG_PRIMARY)])
 
     def create_widgets(self):
         self.grid_rowconfigure(0, weight=1)
@@ -193,9 +162,6 @@ class ResearchApp(tk.Tk):
 
     def start_services(self):
         print("--- Starting Application Services (TTS, Model Polling, UI Updates) ---")
-        if pyttsx3: 
-            print("Starting TTS worker thread...")
-            threading.Thread(target=tts_worker, daemon=True).start()
         self.after(100, self.populate_models)
         self.add_placeholder()
 
@@ -219,14 +185,6 @@ class ResearchApp(tk.Tk):
     def finalize_response(self):
         self.append_to_chat("\n\n"); self.chat_box.see(tk.END)
 
-    def speak_text(self, text):
-        if text and pyttsx3: tts_queue.put((self.is_muted, text))
-
-    def toggle_mute(self):
-        self.is_muted = not self.is_muted
-        self.mute_button.config(text=Style.ICON_MUTE if self.is_muted else Style.ICON_UNMUTE)
-        if self.is_muted:
-            with tts_queue.mutex: tts_queue.queue.clear()
 
     def on_send_click(self):
         prompt = self.entry_box.get()
@@ -388,14 +346,10 @@ class ResearchApp(tk.Tk):
             with open(file_path, "w", encoding="utf-8") as f: f.write(content)
             
     def open_settings_window(self):
-        settings_dialog = SettingsWindow(self, self.app_config, self._save_and_update_config)
+        settings_dialog = SettingsWindow(self, self.app_config, self._on_settings_saved)
         self.wait_window(settings_dialog)
 
     
-    def _save_and_update_config(self, new_config):
-        self.app_config = new_config
-        self._save_config(self.app_config)
-        messagebox.showinfo("Settings Saved", "Settings have been saved. Restart the application for some changes to take full effect.")
 
     def _initialize_ollama(self):
         print("--- Initializing Ollama Connection ---")
@@ -462,123 +416,17 @@ class ResearchApp(tk.Tk):
         self.app_config = load_config()
         print("Info: using configuration: %s" % self.app_config)
 
+    def speak_text(self, text):
+        """Queue text for the shared Speaker (no-op when muted or unavailable)."""
+        self.speaker.say(text)
 
-class SettingsWindow(tk.Toplevel):
-    def __init__(self, master, current_config, save_callback):
-        super().__init__(master)
-        self.title("Settings")
-        self.geometry("500x350")
-        self.current_config = current_config
-        self.save_callback = save_callback
+    def toggle_mute(self):
+        muted = self.speaker.toggle_mute()
+        self.mute_button.config(text=Style.ICON_MUTE if muted else Style.ICON_UNMUTE)
 
-        self.configure(bg=Style.BG_PRIMARY)
-        self.grab_set()
-        self.transient(master)
-
-        self.create_widgets()
-        self.load_settings()
-
-    def create_widgets(self):
-        main_frame = ttk.Frame(self, style='TFrame', padding=10)
-        main_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Ollama Path
-        ollama_frame = ttk.Frame(main_frame, style='TFrame')
-        ollama_frame.pack(fill=tk.X, pady=5)
-        ttk.Label(ollama_frame, text="Ollama Executable Path:").pack(side=tk.LEFT, anchor='w', padx=(0, 10))
-        self.ollama_path_entry = ttk.Entry(ollama_frame)
-        self.ollama_path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(ollama_frame, text="Browse", command=self.browse_ollama_path, style='Tool.TButton').pack(side=tk.RIGHT, padx=(5,0))
-
-        # Model Folder
-        model_frame = ttk.Frame(main_frame, style='TFrame')
-        model_frame.pack(fill=tk.X, pady=5)
-        ttk.Label(model_frame, text="Model Folder Path:").pack(side=tk.LEFT, anchor='w', padx=(0, 10))
-        self.model_folder_entry = ttk.Entry(model_frame)
-        self.model_folder_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(model_frame, text="Browse", command=self.browse_model_folder, style='Tool.TButton').pack(side=tk.RIGHT, padx=(5,0))
-
-        # Vector Cache Directory
-        vector_cache_frame = ttk.Frame(main_frame, style='TFrame')
-        vector_cache_frame.pack(fill=tk.X, pady=5)
-        ttk.Label(vector_cache_frame, text="Vector Cache Directory:").pack(side=tk.LEFT, anchor='w', padx=(0, 10))
-        self.vector_cache_entry = ttk.Entry(vector_cache_frame)
-        self.vector_cache_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(vector_cache_frame, text="Browse", command=self.browse_vector_cache_dir, style='Tool.TButton').pack(side=tk.RIGHT, padx=(5,0))
-
-        # Embedding Model Name
-        embed_model_frame = ttk.Frame(main_frame, style='TFrame')
-        embed_model_frame.pack(fill=tk.X, pady=5)
-        ttk.Label(embed_model_frame, text="Embedding Model Name:").pack(side=tk.LEFT, anchor='w', padx=(0, 10))
-        self.embed_model_entry = ttk.Entry(embed_model_frame)
-        self.embed_model_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        # Buttons
-        button_frame = ttk.Frame(main_frame, style='TFrame')
-        button_frame.pack(fill=tk.X, pady=15, side=tk.BOTTOM)
-        ttk.Button(button_frame, text="Open Config File", command=self.open_config_file, style='Tool.TButton').pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Save", command=self.save_settings, style='Accent.Sidebar.TButton').pack(side=tk.RIGHT, padx=5)
-        ttk.Button(button_frame, text="Cancel", command=self.destroy, style='Tool.TButton').pack(side=tk.RIGHT)
-
-    def open_config_file(self):
-        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
-        if os.path.exists(config_path):
-            os.startfile(config_path)
-        else:
-            messagebox.showerror("Error", "System_Config.json not found.")
-
-    def load_settings(self):
-        self.ollama_path_entry.insert(0, self.current_config.get("ollama_path", ""))
-        self.model_folder_entry.insert(0, self.current_config.get("model_folder", ""))
-        self.vector_cache_entry.insert(0, self.current_config.get("vector_cache_dir", ""))
-        self.embed_model_entry.insert(0, self.current_config.get("embedding_model_name", ""))
-
-    def browse_ollama_path(self):
-        path = filedialog.askopenfilename(title="Select Ollama Executable", filetypes=[("Executables", "*.exe"), ("All Files", "*.*")])
-        if path:
-            self.ollama_path_entry.delete(0, tk.END)
-            self.ollama_path_entry.insert(0, path)
-
-    def browse_model_folder(self):
-        path = filedialog.askdirectory(title="Select Model Folder")
-        if path:
-            self.model_folder_entry.delete(0, tk.END)
-            self.model_folder_entry.insert(0, path)
-
-    def browse_vector_cache_dir(self):
-        path = filedialog.askdirectory(title="Select Vector Cache Directory")
-        if path:
-            self.vector_cache_entry.delete(0, tk.END)
-            self.vector_cache_entry.insert(0, path)
-
-    def save_settings(self):
-        new_config = {
-            "ollama_path": self.ollama_path_entry.get(),
-            "model_folder": self.model_folder_entry.get(),
-            "vector_cache_dir": self.vector_cache_entry.get(),
-            "embedding_model_name": self.embed_model_entry.get()
-        }
-        self.save_callback(new_config)
-        self.destroy()
-
-class ConsoleRedirector:
-
-    def __init__(self, text_widget, tag=None):
-
-        self.text_widget = text_widget
-        self.tag = tag
-
-    def write(self, text):
-
-        self.text_widget.config(state=tk.NORMAL)
-
-        self.text_widget.insert(tk.END, text, self.tag)
-
-        self.text_widget.see(tk.END)
-
-        self.text_widget.config(state=tk.DISABLED)
-
-    def flush(self): pass
+    def _on_settings_saved(self, new_config):
+        """SettingsWindow has already written the file; reload what we cached."""
+        self.app_config = load_config()
 
 
 if __name__ == "__main__":

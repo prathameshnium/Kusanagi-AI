@@ -2,16 +2,16 @@ import tkinter as tk
 from tkinter import scrolledtext, ttk, Listbox, filedialog, messagebox
 import time
 import threading
-import queue
 import sys
 import os
-import datetime
 import shutil
 import httpx
 from multiprocessing import Pool, cpu_count
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from kusanagi_core import PROJECT_ROOT, Style, load_config, OllamaServer
+from kusanagi_core import (Style, load_config, save_config, OllamaServer, Speaker,
+                           apply_theme, SettingsWindow, ConsoleRedirector)
+
 
 # --- RAG & File Processing Imports ---
 try:
@@ -60,7 +60,6 @@ Strictly adhere to the following rules:
 """
 SUMMARIZE_SYSTEM_PROMPT = "You are a helpful AI assistant. Your user wants you to summarize a research paper. Provide a concise summary of the document provided."
 REVIEW_SYSTEM_PROMPT = "You are a helpful AI assistant with expertise in research papers. Your user wants you to provide a peer review of a research paper. Provide a critical review of the document, focusing on its strengths and weaknesses."
-tts_queue = queue.Queue()
 ALL_REVIEWERS = {
     "Physicist": "You are a reviewer with expertise in Physics. Focus on the underlying physical principles, theoretical models, and the validity of any physical measurements presented.",
     "Chemist": "You are a reviewer with expertise in Chemistry. Focus on the chemical compositions, reactions, and material properties from a chemical standpoint.",
@@ -68,15 +67,6 @@ ALL_REVIEWERS = {
     "Editor": "You are an editor. Review the paper for clarity, grammar, style, and overall structure. Ensure the arguments are presented logically and the paper is easy to understand.",
     "Chief Editor": "You are the Chief Editor. Your job is to read the user's request and all the reviews from the experts. Synthesize their points into a single, cohesive, and balanced final review. Address the user's prompt directly."
 }
-def tts_worker():
-    engine = pyttsx3.init()
-    while True:
-        is_muted, text = tts_queue.get()
-        if not is_muted:
-            print(f"  [TTS] Speaking: '{text[:40].strip()}...'")
-            engine.say(text)
-            engine.runAndWait()
-        tts_queue.task_done()
 
 def parse_pages_worker(args):
     """Worker function to extract text from a range of PDF pages."""
@@ -101,7 +91,6 @@ def parse_pages_worker(args):
         return e
 
 
-
 class ResearchApp(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -114,7 +103,7 @@ class ResearchApp(tk.Tk):
         self.ollama_client = None
         self.ollama_server = None  # OllamaServer, when we manage one ourselves
         self.stop_loading_event = threading.Event()
-        self.is_muted = False
+        self.speaker = Speaker()
         self.embedding_model_available = False
         self.last_tok_per_sec = ""
         self.pdf_text_db = {}
@@ -136,7 +125,7 @@ class ResearchApp(tk.Tk):
         self.grid_rowconfigure(1, weight=0)  # Console row
         self.grid_columnconfigure(1, weight=1)
 
-        self.setup_styles()
+        apply_theme(self)
         self.reviewer_var = tk.StringVar()
         self.create_widgets()
 
@@ -147,31 +136,49 @@ class ResearchApp(tk.Tk):
         self.start_services()
 
 
-    def setup_styles(self):
-        s = ttk.Style(self)
-        s.theme_use('clam')
-        s.configure('.', background=Style.BG_PRIMARY, foreground=Style.FG_PRIMARY, font=Style.UI_FONT, borderwidth=0)
-        s.configure('TFrame', background=Style.BG_PRIMARY)
-        s.configure('Sidebar.TFrame', background=Style.BG_SECONDARY)
-        s.configure('Sidebar.TLabel', background=Style.BG_SECONDARY, foreground=Style.FG_PRIMARY)
-        s.configure('Accent.Sidebar.TButton', background=Style.ACCENT, foreground=Style.ACCENT_FG, font=(Style.UI_FONT[0], Style.UI_FONT[1], 'bold'))
-        s.map('Accent.Sidebar.TButton', background=[('active', "#e69a38")])
-        s.configure('TNotebook', background=Style.BG_SECONDARY, borderwidth=0)
-        s.configure('TNotebook.Tab', background=Style.BG_TERTIARY, foreground=Style.FG_SECONDARY, padding=[5, 2], font=Style.UI_FONT)
-        s.map('TNotebook.Tab', background=[('selected', Style.BG_PRIMARY)], foreground=[('selected', Style.FG_PRIMARY)])
-        s.configure('TEntry', fieldbackground=Style.BG_TERTIARY, foreground=Style.FG_PRIMARY, insertcolor=Style.ACCENT, borderwidth=0, padding=10)
-        s.configure('TCombobox', fieldbackground=Style.BG_TERTIARY, background=Style.BG_TERTIARY, foreground=Style.FG_PRIMARY)
-        s.map('TCombobox', fieldbackground=[('readonly', Style.BG_TERTIARY)], background=[('readonly', Style.BG_TERTIARY)], foreground=[('readonly', Style.FG_PRIMARY)])
-        s.map('TCombobox', selectbackground=[('readonly', Style.ACCENT)], selectforeground=[('readonly', Style.ACCENT_FG)])
-        s.map('TCombobox', background=[('active', Style.BG_TERTIARY)])
-        s.configure('Send.TButton', background=Style.ACCENT, foreground=Style.ACCENT_FG, font=(Style.UI_FONT[0], 14, "bold"))
-        s.map('Send.TButton', background=[('active', "#D9A800")])
-        s.configure('Tool.TButton', background=Style.BG_TERTIARY, foreground=Style.FG_PRIMARY, font=(Style.UI_FONT[0], 10))
-        s.map('Tool.TButton', background=[('active', Style.BG_PRIMARY)])
-        s.configure('Tool.TCheckbutton', background=Style.BG_SECONDARY, foreground=Style.FG_PRIMARY, font=(Style.UI_FONT[0], 10))
-        s.map('Tool.TCheckbutton', background=[('active', Style.BG_SECONDARY)], indicatorcolor=[('selected', Style.ACCENT)])
-        s.configure('TopBar.TButton', background=Style.BG_PRIMARY, foreground=Style.FG_SECONDARY, font=(Style.UI_FONT[0], 12))
-        s.map('TopBar.TButton', foreground=[('active', Style.FG_PRIMARY)])
+    def _create_and_redirect_console(self):
+        """Build the log pane in grid row 1 and send stdout/stderr to it.
+
+        __init__ has always called this, but the method was never defined, so
+        launching the app raised AttributeError before the window appeared. The
+        grid row was reserved for it (`grid_rowconfigure(1, ...)`) and the class
+        carried an unused ConsoleRedirector, so this restores what was intended.
+        """
+        frame = ttk.Frame(self, style='TFrame')
+        frame.grid(row=1, column=0, columnspan=2, sticky="ew", padx=5, pady=(0, 5))
+        frame.grid_columnconfigure(0, weight=1)
+
+        header = ttk.Frame(frame, style='TFrame')
+        header.grid(row=0, column=0, sticky="ew")
+        ttk.Label(header, text="Console", style='TLabel',
+                  font=(Style.UI_FONT[0], 9, "bold")).pack(side=tk.LEFT)
+        self.console_toggle = ttk.Button(header, text="Hide", style='Tool.TButton',
+                                         command=self._toggle_console)
+        self.console_toggle.pack(side=tk.RIGHT)
+
+        self.console = tk.Text(frame, height=7, wrap=tk.WORD, state=tk.DISABLED,
+                               bg=Style.BG_SECONDARY, fg=Style.LOG_COLOR,
+                               insertbackground=Style.ACCENT, borderwidth=0,
+                               highlightthickness=0, font=Style.LOG_FONT)
+        self.console.grid(row=1, column=0, sticky="ew", pady=(4, 0))
+        self.console.tag_configure("log", foreground=Style.LOG_COLOR)
+        self.console.tag_configure("error", foreground=Style.ERROR)
+
+        sys.stdout = ConsoleRedirector(self.console, "log", timestamps=True)
+        sys.stderr = ConsoleRedirector(self.console, "error", timestamps=True)
+        print("Console ready.")
+
+    def _toggle_console(self):
+        if self.console.winfo_viewable():
+            self.console.grid_remove()
+            self.console_toggle.config(text="Show")
+        else:
+            self.console.grid()
+            self.console_toggle.config(text="Hide")
+
+    def _save_config(self, config):
+        """Persist the config. Was called in three places but never defined."""
+        return save_config(config)
 
     def _show_reviewer_menu(self):
         menu = tk.Menu(self, tearoff=0)
@@ -233,7 +240,6 @@ class ResearchApp(tk.Tk):
         self.temperature_slider.pack(fill=tk.X, pady=(5,0))
         self.temp_label = ttk.Label(model_controls_frame, text=f"Value: {self.temperature_var.get():.2f}", style='Sidebar.TLabel')
         self.temp_label.pack(anchor='w')
-
 
 
         ttk.Separator(self.sidebar, orient='horizontal').pack(fill='x', padx=15, pady=15)
@@ -340,9 +346,6 @@ class ResearchApp(tk.Tk):
 
     def start_services(self):
         print("--- Starting Application Services (TTS, Model Polling, UI Updates) ---")
-        if pyttsx3: 
-            print("Starting TTS worker thread...")
-            threading.Thread(target=tts_worker, daemon=True).start()
         self.after(1000, lambda: self.update_system_stats())
         self.add_placeholder()
         
@@ -384,14 +387,6 @@ class ResearchApp(tk.Tk):
     def finalize_response(self):
         self.append_to_chat("\n\n"); self.chat_box.see(tk.END)
 
-    def speak_text(self, text):
-        if text and pyttsx3: tts_queue.put((self.is_muted, text))
-
-    def toggle_mute(self):
-        self.is_muted = not self.is_muted
-        self.mute_button.config(text=Style.ICON_MUTE if self.is_muted else Style.ICON_UNMUTE)
-        if self.is_muted:
-            with tts_queue.mutex: tts_queue.queue.clear()
 
     def run_loading_animation(self):
         animation_chars = ['Thinking... o', 'Thinking... oO', 'Thinking... oOo', 'Thinking... oOoO', 'Thinking... oOoOo', 'Thinking... oOoOoO', 'Thinking... oOoOoOo', 'Thinking... oOoOoOoO']
@@ -625,7 +620,6 @@ class ResearchApp(tk.Tk):
         finally:
             self.stop_loading_event.set()
             self.after(0, lambda: self.entry_box.config(state=tk.NORMAL))
-
 
 
     def on_paraphrase_button_click(self):
@@ -1096,13 +1090,9 @@ class ResearchApp(tk.Tk):
                 print(f"Error removing vector cache for {pdf_id}: {e}")
 
     def open_settings_window(self):
-        settings_dialog = SettingsWindow(self, self.app_config, self._save_and_update_config)
+        settings_dialog = SettingsWindow(self, self.app_config, self._on_settings_saved)
         self.wait_window(settings_dialog)
 
-    def _save_and_update_config(self, new_config):
-        self.app_config = new_config
-        self._save_config(self.app_config)
-        messagebox.showinfo("Settings Saved", "Settings have been saved. Restart the application for some changes to take full effect.")
 
     def _consolidate_models(self, model_folder_path, nested_model_folders):
         print("--- Consolidating Models ---")
@@ -1168,7 +1158,6 @@ class ResearchApp(tk.Tk):
                 print(f"Could not remove {text_embedding_dir}: {e}")
         
         print("--- Consolidation Complete ---")
-
 
 
     def _initialize_ollama(self):
@@ -1267,270 +1256,17 @@ class ResearchApp(tk.Tk):
         self.app_config = load_config()
         print("Info: using configuration: %s" % self.app_config)
 
-
-class ConsoleRedirector:
-    def __init__(self, text_widget, tag=None):
-        self.text_widget = text_widget
-        self.tag = tag
-        self.at_line_start = True
-
-    def write(self, text):
-        if not text:
-            return
-        
-        self.text_widget.config(state=tk.NORMAL)
-        
-        # To prevent multiple timestamps on a single line from rapid prints,
-        # we process the text line by line.
-        lines = text.split('\n')
-        
-        # First line
-        if lines[0]:
-            if self.at_line_start:
-                timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-                self.text_widget.insert(tk.END, f"[{timestamp}] {lines[0]}", self.tag)
-            else:
-                self.text_widget.insert(tk.END, lines[0], self.tag)
-        
-        # Subsequent lines
-        for line in lines[1:]:
-            self.text_widget.insert(tk.END, '\n')
-            if line:
-                timestamp = datetime.datetime.now().strftime("%H:%M:%S.%f")[:-3]
-                self.text_widget.insert(tk.END, f"[{timestamp}] {line}", self.tag)
-        
-        # If the original text ended with a newline, the next write should start with a timestamp.
-        if text.endswith('\n'):
-            self.at_line_start = True
-        else:
-            self.at_line_start = False
-
-        self.text_widget.see(tk.END)
-        self.text_widget.config(state=tk.DISABLED)
-
-    def flush(self):
-        # This can be called by the system, but we don't need to do anything
-        # special since we write to the widget immediately.
-        pass
-
-
-class SettingsWindow(tk.Toplevel):
-
-
-    def __init__(self, master, current_config, save_callback):
-
-        super().__init__(master)
-
-
-        self.title("Settings")
-
-
-        self.geometry("500x350") # Increased height for new field
-
-
-        self.current_config = current_config
-
-
-        self.save_callback = save_callback
-
-
-
-
-
-        self.configure(bg=Style.BG_PRIMARY)
-
-
-        self.grab_set() # Make it a modal window
-
-
-        self.transient(master) # Set to be on top of the main window
-
-
-
-
-
-        self.create_widgets()
-
-
-        self.load_settings()
-
-
-
-
-    def create_widgets(self):
-
-        main_frame = ttk.Frame(self, style='TFrame')
-
-
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
-
-        # Ollama Path
-
-        ollama_frame = ttk.Frame(main_frame, style='TFrame')
-
-
-        ollama_frame.pack(fill=tk.X, pady=5)
-
-
-        ttk.Label(ollama_frame, text="Ollama Executable Path:", style='TLabel').pack(side=tk.LEFT, anchor='w', padx=(0, 10))
-
-
-        self.ollama_path_entry = ttk.Entry(ollama_frame, style='TEntry')
-
-
-        self.ollama_path_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-
-        ttk.Button(ollama_frame, text="Browse", command=self.browse_ollama_path, style='Tool.TButton').pack(side=tk.RIGHT, padx=(5,0))
-
-        # Model Folder
-
-        model_frame = ttk.Frame(main_frame, style='TFrame')
-
-
-        model_frame.pack(fill=tk.X, pady=5)
-
-
-        ttk.Label(model_frame, text="Model Folder Path:", style='TLabel').pack(side=tk.LEFT, anchor='w', padx=(0, 10))
-
-
-        self.model_folder_entry = ttk.Entry(model_frame, style='TEntry')
-        self.model_folder_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(model_frame, text="Browse", command=self.browse_model_folder, style='Tool.TButton').pack(side=tk.RIGHT, padx=(5,0))
-
-        # Vector Cache Directory
-
-        vector_cache_frame = ttk.Frame(main_frame, style='TFrame')
-        vector_cache_frame.pack(fill=tk.X, pady=5)
-        ttk.Label(vector_cache_frame, text="Vector Cache Directory:", style='TLabel').pack(side=tk.LEFT, anchor='w', padx=(0, 10))
-        self.vector_cache_entry = ttk.Entry(vector_cache_frame, style='TEntry')
-        self.vector_cache_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(vector_cache_frame, text="Browse", command=self.browse_vector_cache_dir, style='Tool.TButton').pack(side=tk.RIGHT, padx=(5,0))
-
-        # Embedding Model Name
-
-        embed_model_frame = ttk.Frame(main_frame, style='TFrame')
-        embed_model_frame.pack(fill=tk.X, pady=5)
-        ttk.Label(embed_model_frame, text="Embedding Model Name:", style='TLabel').pack(side=tk.LEFT, anchor='w', padx=(0, 10))
-        self.embed_model_entry = ttk.Entry(embed_model_frame, style='TEntry')
-        self.embed_model_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        # Buttons
-
-        button_frame = ttk.Frame(main_frame, style='TFrame')
-        button_frame.pack(fill=tk.X, pady=15)
-        ttk.Button(button_frame, text="Open Config File", command=self.open_config_file, style='Tool.TButton').pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Save", command=self.save_settings, style='Accent.Sidebar.TButton').pack(side=tk.RIGHT, padx=5)
-        ttk.Button(button_frame, text="Cancel", command=self.destroy, style='Tool.TButton').pack(side=tk.RIGHT)
-
-    def open_config_file(self):
-        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
-        if os.path.exists(config_path):
-            os.startfile(config_path)
-        else:
-            messagebox.showerror("Error", "System_Config.json not found.")
-
-
-
-
-
-    def load_settings(self):
-
-
-        self.ollama_path_entry.insert(0, self.current_config.get("ollama_path", ""))
-
-
-        self.model_folder_entry.insert(0, self.current_config.get("model_folder", ""))
-
-
-        self.vector_cache_entry.insert(0, self.current_config.get("vector_cache_dir", ""))
-
-
-        self.embed_model_entry.insert(0, self.current_config.get("embedding_model_name", "mxbai-embed-large"))
-
-
-
-
-
-    def browse_ollama_path(self):
-
-
-        file_path = filedialog.askopenfilename(title="Select Ollama Executable", filetypes=[("Executables", "*.exe"), ("All Files", "*.*")] )
-
-
-        if file_path:
-
-
-            self.ollama_path_entry.delete(0, tk.END)
-
-
-            self.ollama_path_entry.insert(0, file_path)
-
-
-
-
-
-    def browse_model_folder(self):
-
-
-        folder_path = filedialog.askdirectory(title="Select Model Folder")
-
-
-        if folder_path:
-
-
-            self.model_folder_entry.delete(0, tk.END)
-
-
-            self.model_folder_entry.insert(0, folder_path)
-
-
-
-
-
-    def browse_vector_cache_dir(self):
-
-
-        folder_path = filedialog.askdirectory(title="Select Vector Cache Directory")
-
-
-        if folder_path:
-
-
-            self.vector_cache_entry.delete(0, tk.END)
-
-
-            self.vector_cache_entry.insert(0, folder_path)
-
-
-
-
-
-    def save_settings(self):
-
-
-        new_config = {
-
-
-            "ollama_path": self.ollama_path_entry.get(),
-
-
-            "model_folder": self.model_folder_entry.get(),
-
-
-            "vector_cache_dir": self.vector_cache_entry.get(),
-
-
-            "embedding_model_name": self.embed_model_entry.get()
-
-
-        }
-
-
-        self.save_callback(new_config)
-
-
-        self.destroy()
+    def speak_text(self, text):
+        """Queue text for the shared Speaker (no-op when muted or unavailable)."""
+        self.speaker.say(text)
+
+    def toggle_mute(self):
+        muted = self.speaker.toggle_mute()
+        self.mute_button.config(text=Style.ICON_MUTE if muted else Style.ICON_UNMUTE)
+
+    def _on_settings_saved(self, new_config):
+        """SettingsWindow has already written the file; reload what we cached."""
+        self.app_config = load_config()
 
 
 if __name__ == "__main__":

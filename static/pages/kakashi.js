@@ -245,7 +245,7 @@
                 renderStrategy(prompts);
                 return runSearches(prompts);
             })
-            .then(function () { return synthesise(query); })
+            .then(function (results) { return synthesise(query, results); })
             .catch(function (err) {
                 ui.loading.classList.add('hidden');
                 dom.replace(ui.response, el('p', { class: 'text-danger', text: err.message }));
@@ -256,9 +256,7 @@
 
     /** Ask the model for sub-queries; fall back to the raw query if it will not. */
     function expandQuery(query) {
-        var prompt = 'User query: "' + query + '".\n'
-            + 'Generate exactly 5 diverse, high-value search queries that together '
-            + 'cover it well.\nReturn ONLY a JSON array of strings.';
+        var prompt = K.prompts.searchStrategies(query, 5, 'web');
 
         return K.callJson(provider(), {
             apiKey: apiKey(), model: ui.model.value, temperature: 0.5, prompt: prompt,
@@ -297,33 +295,58 @@
             var secs = ((performance.now() - started) / 1000).toFixed(2);
             ui.stats.textContent = unique.length + ' results (' + secs + 's)';
             renderResults(unique);
+            // Returned so the answer can be grounded in them.
+            return unique;
         });
     }
 
-    function synthesise(query) {
-        var prompt = 'You are Kakashi, a research assistant. User query: "' + query + '".\n'
-            + 'Give a deep, comprehensive analysis.\n'
-            + 'Use LaTeX for any maths or chemistry, wrapped in single $ signs '
-            + '(for example $E=mc^2$). Use Markdown elsewhere.\n\n'
-            + 'Structure:\n1. Direct answer.\n2. Key details and mechanisms.\n'
-            + '3. Context, history, open debate.';
+    /**
+     * Ground the answer in the results we just retrieved.
+     *
+     * The previous version asked the model to answer from memory while the
+     * search ran alongside it, so the two had nothing to do with each other and
+     * any "citation" in the answer was unverifiable. Passing the retrieved
+     * sources in means the citations point at links already on the page.
+     */
+    function synthesise(query, results) {
+        // Enough sources to cite, few enough to leave a small model room to answer.
+        var sources = (results || []).slice(0, 10).map(function (r) {
+            return {
+                title: r.title,
+                url: r.url,
+                snippet: r.snippet,
+                meta: r.source + (r.meta ? ', ' + r.meta : ''),
+            };
+        });
 
         var started = performance.now();
 
-        return K.call(provider(), {
+        return K.callWithFallback(provider(), {
             apiKey: apiKey(),
             model: ui.model.value,
             temperature: parseFloat(ui.temp.value),
-            prompt: prompt,
+            fallback: K.prefs.modelFallback(),
+            prompt: K.prompts.deepResearch(query, sources),
         }).then(function (res) {
             var secs = (performance.now() - started) / 1000;
             var tokens = (res.usage && res.usage.total_tokens) || Math.ceil(res.text.length / 4);
             updateMetrics(tokens, secs > 0 ? tokens / secs : 0);
 
             ui.loading.classList.add('hidden');
-            dom.markdown(ui.response, res.text);
+            dom.clear(ui.response);
+            if (res.model !== ui.model.value) {
+                ui.response.appendChild(el('p', {
+                    class: 'text-xs text-fg-secondary border border-tertiary '
+                        + 'rounded px-2 py-1 mb-3',
+                    text: 'Answered by ' + res.model + ': '
+                        + ui.model.value + ' was unavailable.',
+                }));
+            }
+            var body = el('div');
+            dom.markdown(body, res.text);
+            ui.response.appendChild(body);
             ui.response.classList.remove('hidden');
-            renderMath(ui.response);
+            renderMath(body);
         });
     }
 

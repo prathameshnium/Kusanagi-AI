@@ -5,7 +5,8 @@ import threading
 import queue
 import time
 
-from kusanagi_core import Style, load_config, OllamaServer
+from kusanagi_core import Style, load_config, OllamaServer, apply_theme
+
 
 class VisualizeApp(tk.Tk):
     def __init__(self):
@@ -28,30 +29,12 @@ class VisualizeApp(tk.Tk):
 
         # --- Initialization ---
         self._load_config()
-        self.setup_styles()
+        apply_theme(self)
         self.create_widgets()
         self.initialize_ollama()
         
         threading.Thread(target=self.prediction_worker, daemon=True).start()
 
-    def setup_styles(self):
-        style = ttk.Style(self)
-        style.theme_use('clam')
-        style.configure('.', font=Style.UI_FONT, background=Style.BG_PRIMARY, foreground=Style.FG_PRIMARY)
-        style.configure('TFrame', background=Style.BG_PRIMARY)
-        style.configure('TLabel', background=Style.BG_PRIMARY, foreground=Style.FG_PRIMARY)
-        style.map('TScale', background=[('!focus', Style.BG_PRIMARY)])
-        style.configure('TMenubutton', 
-                        background=Style.BG_PRIMARY, foreground=Style.FG_PRIMARY, 
-                        borderwidth=0, arrowcolor=Style.FG_PRIMARY)
-        style.configure('Sidebar.TRadiobutton',
-                        background=Style.BG_PRIMARY,
-                        foreground=Style.FG_PRIMARY,
-                        indicatorcolor=Style.BG_PRIMARY,
-                        bordercolor=Style.BG_PRIMARY)
-        style.map('Sidebar.TRadiobutton',
-                  background=[('active', Style.BG_SECONDARY)],
-                  indicatorcolor=[('selected', Style.ACCENT), ('!selected', Style.FG_PRIMARY)])
 
     def create_widgets(self):
         self.configure(bg=Style.BG_PRIMARY)

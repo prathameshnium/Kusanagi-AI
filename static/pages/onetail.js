@@ -127,13 +127,23 @@
         setBusy(true);
         var started = performance.now();
 
-        K.call(provider(), {
+        // The rigour preamble rides in front of the conversation rather than in
+        // `history`, so it is never trimmed away by MAX_TURNS.
+        var messages = [{ role: 'system', content: K.prompts.chatSystemPrompt() }]
+            .concat(history.slice(-MAX_TURNS));
+
+        K.callWithFallback(provider(), {
             apiKey: apiKey(),
             model: ui.model.value,
             temperature: parseFloat(ui.temp.value),
-            messages: history.slice(-MAX_TURNS),
+            fallback: K.prefs.modelFallback(),
+            messages: messages,
         }).then(function (res) {
             thinking.remove();
+            if (res.model !== ui.model.value) {
+                addError('Answered by ' + res.model + ': '
+                    + ui.model.value + ' was unavailable.');
+            }
             addAI(res.text);
             history.push({ role: 'assistant', content: res.text });
             trimHistory();

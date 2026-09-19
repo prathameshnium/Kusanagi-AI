@@ -86,7 +86,9 @@ window.Kusanagi = window.Kusanagi || {};
         return fetch(url, opts)
             .catch(function (err) {
                 if (err && err.name === 'AbortError') {
-                    throw new Error('Request timed out. The provider did not respond.');
+                    var timeout = new Error('Request timed out. The provider did not respond.');
+                    timeout.retryable = true;
+                    throw timeout;
                 }
                 // A failed cross-origin fetch is opaque by design; say something useful.
                 throw new Error('Network error: could not reach the provider. '
@@ -100,23 +102,49 @@ window.Kusanagi = window.Kusanagi || {};
         return resp.json().catch(function () { return {}; });
     }
 
-    /** Pull the most specific message a provider gave us, without leaking the key. */
+    /**
+     * Build an Error from a failed response, without leaking the key.
+     *
+     * `retryable` marks failures that another model might survive: the model is
+     * gone, busy, or overloaded. A rejected key or an exhausted balance is not
+     * retryable -- trying six more models would just produce six more failures
+     * and six more seconds of waiting.
+     */
     function providerError(data, resp, label) {
         var msg = (data && data.error && (data.error.message || data.error))
             || (data && data.message)
             || null;
         if (typeof msg !== 'string') msg = null;
+
+        var text;
+        var retryable = false;
+
         if (resp.status === 401 || resp.status === 403) {
-            return label + ': key rejected (HTTP ' + resp.status + '). '
+            text = label + ': key rejected (HTTP ' + resp.status + '). '
                 + (msg || 'Check the key and that it is enabled for this API.');
+        } else if (resp.status === 402) {
+            text = label + ': out of credit (HTTP 402).';
+        } else if (resp.status === 404) {
+            text = label + ': model not available (HTTP 404)'
+                + (msg ? ': ' + msg : '. It may have been retired.');
+            retryable = true;
+        } else if (resp.status === 429) {
+            text = label + ': rate limited (HTTP 429).';
+            retryable = true;
+        } else if (resp.status >= 500) {
+            text = label + ': provider error ' + resp.status
+                + (msg ? ': ' + msg : '. The service may be overloaded.');
+            retryable = true;
+        } else {
+            text = label + ' error ' + resp.status + (msg ? ': ' + msg : '');
+            // 400 from these APIs usually means an unknown model id.
+            retryable = resp.status === 400 && /model/i.test(msg || '');
         }
-        if (resp.status === 429) {
-            return label + ': rate limited (HTTP 429). Wait a moment and retry.';
-        }
-        if (resp.status === 402) {
-            return label + ': out of credit (HTTP 402).';
-        }
-        return label + ' error ' + resp.status + (msg ? ': ' + msg : '');
+
+        var err = new Error(text);
+        err.status = resp.status;
+        err.retryable = retryable;
+        return err;
     }
 
     /**
@@ -159,7 +187,7 @@ window.Kusanagi = window.Kusanagi || {};
             body: JSON.stringify(body),
         }, opts && opts.timeoutMs).then(function (resp) {
             return readJson(resp).then(function (data) {
-                if (!resp.ok) throw new Error(providerError(data, resp, 'Gemini'));
+                if (!resp.ok) throw providerError(data, resp, 'Gemini');
 
                 var candidate = data.candidates && data.candidates[0];
                 var part = candidate && candidate.content && candidate.content.parts
@@ -169,8 +197,10 @@ window.Kusanagi = window.Kusanagi || {};
                     // than an error -- the old code threw a TypeError here.
                     var reason = (candidate && candidate.finishReason)
                         || (data.promptFeedback && data.promptFeedback.blockReason);
-                    throw new Error('Gemini returned no text'
+                    var empty = new Error('Gemini returned no text'
                         + (reason ? ' (' + reason + ')' : '') + '.');
+                    empty.retryable = true;
+                    throw empty;
                 }
 
                 var u = data.usageMetadata;
@@ -210,11 +240,13 @@ window.Kusanagi = window.Kusanagi || {};
                 body: JSON.stringify(body),
             }, opts && opts.timeoutMs).then(function (resp) {
                 return readJson(resp).then(function (data) {
-                    if (!resp.ok) throw new Error(providerError(data, resp, label));
+                    if (!resp.ok) throw providerError(data, resp, label);
                     var choice = data.choices && data.choices[0];
                     var text = choice && choice.message && choice.message.content;
                     if (typeof text !== 'string') {
-                        throw new Error(label + ' returned no text.');
+                        var blank = new Error(label + ' returned no text.');
+                        blank.retryable = true;
+                        throw blank;
                     }
                     return { text: text, usage: data.usage || null };
                 });
@@ -237,7 +269,7 @@ window.Kusanagi = window.Kusanagi || {};
             }),
         }, opts && opts.timeoutMs).then(function (resp) {
             return readJson(resp).then(function (data) {
-                if (!resp.ok) throw new Error(providerError(data, resp, 'Ollama'));
+                if (!resp.ok) throw providerError(data, resp, 'Ollama');
                 var text = data.message && data.message.content;
                 if (typeof text !== 'string') {
                     throw new Error('Ollama returned no text. Is the model pulled?');
@@ -287,6 +319,64 @@ window.Kusanagi = window.Kusanagi || {};
     }
 
     /**
+     * call(), but move down the provider's model list when a model fails in a
+     * way another model might survive: retired, rate-limited, overloaded, timed
+     * out, or refusing to answer.
+     *
+     * Stays within the chosen provider on purpose. Silently re-sending a
+     * researcher's question -- or their document excerpts -- to a different
+     * company because one model was busy is not a decision this layer should
+     * make quietly.
+     *
+     * Resolves to {text, usage, model, attempts}, where `model` is whichever one
+     * actually answered, so the UI can say when it was not the one selected.
+     */
+    function callWithFallback(provider, params) {
+        var p = params || {};
+        var first = p.model;
+        var chain = [first];
+
+        if (p.fallback !== false) {
+            models(provider).forEach(function (m) {
+                if (m.id !== first) chain.push(m.id);
+            });
+        }
+
+        var attempts = [];
+
+        function attempt(index) {
+            var model = chain[index];
+            return call(provider, Object.assign({}, p, { model: model }))
+                .then(function (result) {
+                    return Object.assign({}, result, {
+                        model: model,
+                        attempts: attempts.slice(),
+                    });
+                })
+                .catch(function (err) {
+                    attempts.push({ model: model, error: err.message });
+                    var last = index >= chain.length - 1;
+                    if (last || !err.retryable) {
+                        // Report the original failure, noting what else was tried.
+                        if (attempts.length > 1) {
+                            err.message += ' (also tried: '
+                                + attempts.slice(1).map(function (a) { return a.model; })
+                                    .join(', ') + ')';
+                        }
+                        err.attempts = attempts.slice();
+                        throw err;
+                    }
+                    return attempt(index + 1);
+                });
+        }
+
+        if (!chain.length || !chain[0]) {
+            return Promise.reject(new Error('No model selected.'));
+        }
+        return attempt(0);
+    }
+
+    /**
      * Ask for JSON and parse it, tolerating the ```json fences models add anyway.
      * Rejects rather than returning half-parsed junk, so callers can fall back.
      */
@@ -314,6 +404,7 @@ window.Kusanagi = window.Kusanagi || {};
         ENDPOINTS: ENDPOINTS,
         OLLAMA_DEFAULT: OLLAMA_DEFAULT,
         call: call,
+        callWithFallback: callWithFallback,
         callJson: callJson,
         models: models,
         providerLabel: label,

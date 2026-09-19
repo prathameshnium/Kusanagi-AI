@@ -15,13 +15,8 @@
     var CHUNK_OVERLAP = 200;
     var MAX_PDF_BYTES = 64 * 1024 * 1024;
 
-    var REVIEW_PERSONAS = {
-        Physicist: 'You are a reviewer with expertise in physics. Focus on the '
-            + 'underlying physical principles and models.',
-        Chemist: 'You are a reviewer with expertise in chemistry. Focus on chemical '
-            + 'compositions, reactions and characterisation.',
-        Editor: 'You are an editor. Review for clarity, grammar, style and structure.',
-    };
+    // Personas live in prompts.js, beside the rigour rules they are combined with.
+    var REVIEW_PERSONAS = K.prompts.REVIEW_PERSONAS;
 
     /* A dynamic import() inside a classic script resolves relative to the *script*,
        not the document, and a wrong guess just 404s with no useful error. Anchor
@@ -341,13 +336,18 @@
         setBusy(true);
         var started = performance.now();
 
-        K.call(provider(), {
+        K.callWithFallback(provider(), {
             apiKey: apiKey(),
             model: ui.model.value,
             temperature: parseFloat(ui.temp.value),
+            fallback: K.prefs.modelFallback(),
             prompt: prompt,
         }).then(function (res) {
             thinking.remove();
+            if (res.model !== ui.model.value) {
+                addSystem('Answered by ' + res.model + ': '
+                    + ui.model.value + ' was unavailable.');
+            }
             addAI(res.text);
             lastAnswer = res.text;
 
@@ -372,36 +372,26 @@
         if (!query) return;
         ui.input.value = '';
 
-        var instruction = 'You are Orochimaru, a research assistant. Answer concisely.';
-        var context = '';
-
+        var chunks = [];
         if (docNames().length) {
             ui.indicator.classList.remove('is-invisible');
-            var chunks = retrieve(query, 5);
-            if (chunks.length) {
-                context = '\n\nCONTEXT FROM THE LOADED DOCUMENTS:\n'
-                    + chunks.join('\n---\n');
-                instruction += ' Use the provided context. If the context does not '
-                    + 'answer the question, say so rather than guessing.';
-            }
+            chunks = retrieve(query, 5);
         }
 
-        ask(instruction + context + '\n\nQUESTION: ' + query, query);
+        ask(K.prompts.documentQa(query, chunks, docNames()), query);
     }
 
     function runReview(role) {
         if (!docNames().length) return;
         var chunks = retrieve('conclusion results methodology abstract', 8);
-        ask(REVIEW_PERSONAS[role] + '\n\nBased on these excerpts:\n'
-            + chunks.join('\n\n') + '\n\nProvide a critical review.',
+        ask(K.prompts.review(role, REVIEW_PERSONAS[role], chunks),
             role + ' review of the loaded documents');
     }
 
     function runSummary() {
         if (!docNames().length) return;
         var chunks = retrieve('abstract summary conclusion introduction', 6);
-        ask('Summarise the following text:\n' + chunks.join('\n'),
-            'Summarise the loaded documents');
+        ask(K.prompts.summarise(chunks), 'Summarise the loaded documents');
     }
 
     /* ------------------------------------------------------------------- TTS */

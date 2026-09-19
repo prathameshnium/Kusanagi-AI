@@ -31,6 +31,7 @@
 - [Portability and Included Assets](#portability-and-included-assets)
 - [Project Stats](#project-stats)
 - [Project Structure](#project-structure)
+- [Answer Quality](#answer-quality)
 - [Security and Privacy](#security-and-privacy)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
@@ -241,6 +242,7 @@ Kusanagi-AI/
 │   ├── keys.js                 API-key store (session-scoped by default)
 │   ├── providers.js            Gemini / HF / OpenRouter / Ollama
 │   ├── dom.js                  Safe DOM construction + Markdown sanitising
+│   ├── prompts.js              Shared system prompts (rigour + citation rules)
 │   ├── ui.js                   Settings dialog, toasts, result cards
 │   ├── pages/                  One script per page
 │   ├── kusanagi.css            Compiled Tailwind (generated)
@@ -299,11 +301,41 @@ python scripts/build_css.py
 No Node required — the script fetches the standalone Tailwind binary on first run
 and caches it outside the repo.
 
+## Answer quality
+
+The prompts in `static/prompts.js` are built from one shared rigour preamble, so
+the standard is the same across the suite and can be raised in one place. It
+targets the specific ways chat models fail on technical questions:
+
+- **No invented citations.** A DOI, author list or year may only appear if it
+  came from the sources supplied in the prompt.
+- **Claims are marked by standing** — established, contested, or the model's own
+  inference — so a guess cannot pass as consensus.
+- **Numbers carry units and measurement conditions.** A permittivity with no
+  temperature, field or sample geometry is not an answer.
+- **Refusing is a valid answer.** "I cannot answer this from the available
+  sources" is explicitly requested over a plausible fabrication.
+
+**Kakashi is grounded.** It searches Wikipedia, OpenAlex, Crossref, DuckDuckGo
+and Hacker News, then passes those results into the prompt and requires inline
+`[n]` citations resolving to a Sources list of real links. Previously the search
+and the answer ran independently — the model answered from memory while results
+appeared beside it — so nothing it cited could be checked against what was found.
+
+**Orochimaru is stricter still**, since grounding is the whole point of a RAG
+tool: it answers from the retrieved excerpts, cites them by number, and is told
+to say so rather than quietly filling gaps from general knowledge.
+
 ## Security and privacy
 
 What the web apps actually guarantee, and what they do not.
 
 **Providers.** Google Gemini, Hugging Face, OpenRouter, or a local Ollama.
+If a model is retired, rate-limited or overloaded, the app falls back to the
+next model from the *same* provider and tells you which one answered. It never
+switches provider on its own — silently re-sending your question, or your
+document excerpts, to a different company is not a decision a retry should
+make. Turn it off in Settings.
 
 **Your keys.** A key you enter is held in `sessionStorage` and disappears when the
 tab closes. Ticking *Remember on this device* moves it to `localStorage`, where it

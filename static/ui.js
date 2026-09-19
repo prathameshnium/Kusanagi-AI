@@ -89,6 +89,12 @@ window.Kusanagi = window.Kusanagi || {};
 
         var hint = el('p', { class: 'text-[10px] text-fg-secondary mt-1 hidden' });
 
+        var fallbackBox = el('input', {
+            type: 'checkbox',
+            id: 'settings-fallback',
+            class: 'mt-0.5 shrink-0',
+        });
+
         var dialog = el('div', {
             class: 'settings-modal-content p-6 rounded-lg shadow-2xl max-w-md w-full border',
             role: 'dialog',
@@ -139,6 +145,20 @@ window.Kusanagi = window.Kusanagi || {};
                     for: 'settings-persist',
                 }, [persistBox, el('span', { text: 'Remember this key on this device' })]),
                 persistNote,
+            ]),
+
+            el('div', { class: 'mb-2 pt-3 border-t border-tertiary/60' }, [
+                el('label', {
+                    class: 'flex items-start gap-2 text-xs text-fg-primary cursor-pointer',
+                    for: 'settings-fallback',
+                }, [fallbackBox, el('span', {
+                    text: 'Fall back to this provider’s other models on failure',
+                })]),
+                el('p', {
+                    class: 'text-[11px] text-fg-secondary mt-1',
+                    text: 'If a model is retired, rate-limited or overloaded, try the '
+                        + 'next one in the list. Never switches provider.',
+                }),
             ]),
 
             el('div', {
@@ -197,6 +217,7 @@ window.Kusanagi = window.Kusanagi || {};
                     + window.Kusanagi.OLLAMA_DEFAULT + '.'
                 : '';
 
+            fallbackBox.checked = window.Kusanagi.prefs.modelFallback();
             persistBox.checked = window.Kusanagi.keys.isPersisted(provider);
             persistNote.textContent = persistBox.checked
                 ? 'Stored on disk until you purge it. Anything that can read this '
@@ -215,6 +236,7 @@ window.Kusanagi = window.Kusanagi || {};
             }
             window.Kusanagi.keys.setProvider(provider);
             window.Kusanagi.keys.set(provider, value, persistBox.checked);
+            window.Kusanagi.prefs.setModelFallback(fallbackBox.checked);
             close();
             toast('Saved ' + window.Kusanagi.providerLabel(provider) + ' key'
                 + (persistBox.checked ? ' (remembered on this device).' : ' for this tab.'),

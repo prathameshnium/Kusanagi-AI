@@ -156,7 +156,22 @@ window.Kusanagi = window.Kusanagi || {};
         },
     };
 
+    /* Non-secret settings. Kept beside the key store because this is the module
+       that owns storage access and its try/catch guards, but deliberately a
+       separate object so nothing confuses a preference with a credential. */
+    var prefs = {
+        /** Try the provider's other models when one fails. Default on. */
+        modelFallback: function () {
+            return local.get(NS + 'model_fallback') !== '0';
+        },
+
+        setModelFallback: function (enabled) {
+            local.set(NS + 'model_fallback', enabled ? '1' : '0');
+        },
+    };
+
     migrateLegacy();
     forgetRetired();
     window.Kusanagi.keys = keys;
+    window.Kusanagi.prefs = prefs;
 })();

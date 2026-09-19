@@ -4,25 +4,14 @@ import subprocess
 import os
 import sys
 import webbrowser
+
+from kusanagi_core import Style, load_config, ConsoleRedirector, apply_theme
 try:
     import ollama
 except ImportError:
     ollama = None
 
-from kusanagi_core import Style, load_config
 
-class ConsoleRedirector:
-    def __init__(self, text_widget):
-        self.text_widget = text_widget
-
-    def write(self, string):
-        self.text_widget.config(state='normal')
-        self.text_widget.insert(tk.END, string)
-        self.text_widget.see(tk.END)
-        self.text_widget.config(state='disabled')
-
-    def flush(self):
-        pass
 
 class KusanagiApp(tk.Tk):
     def __init__(self):
@@ -32,7 +21,7 @@ class KusanagiApp(tk.Tk):
         self.configure(bg=Style.BG_PRIMARY)
         
         self.app_config = self._load_config()
-        self.setup_styles()
+        apply_theme(self)
         self.create_widgets()
 
         # Redirect stdout and stderr to the console widget
@@ -47,16 +36,6 @@ class KusanagiApp(tk.Tk):
         # Shared with every other desktop app -- see local_apps/kusanagi_core.py.
         return load_config()
 
-    def setup_styles(self):
-        s = ttk.Style(self)
-        s.theme_use('clam')
-        s.configure('.', background=Style.BG_PRIMARY, foreground=Style.FG_PRIMARY, font=Style.UI_FONT)
-        s.configure('TFrame', background=Style.BG_PRIMARY)
-        s.configure('AppButton.TButton', font=Style.BUTTON_FONT, padding=(20, 15))
-        s.configure('Accent.TButton', background=Style.ACCENT, foreground=Style.ACCENT_FG)
-        s.map('Accent.TButton', background=[('active', '#ffc371')])
-        s.configure('Link.TLabel', foreground=Style.LINK_FG, cursor="hand2", background=Style.BG_PRIMARY)
-        s.configure('Status.TLabel', background=Style.BG_PRIMARY)
 
     def create_widgets(self):
         # A root frame to hold content and footer
