@@ -10,10 +10,10 @@
     var PROVIDERS = [
         { id: 'gemini', placeholder: 'AIza...', signup: 'https://aistudio.google.com/app/apikey',
           note: 'Generous free tier. Good default.' },
-        { id: 'groq', placeholder: 'gsk_...', signup: 'https://console.groq.com/keys',
-          note: 'Fastest responses of the three.' },
         { id: 'hf', placeholder: 'hf_...', signup: 'https://huggingface.co/settings/tokens',
-          note: 'Open models; cold starts can be slow.' },
+          note: 'Open-weight models through one token. Needs the "Inference Providers" scope.' },
+        { id: 'openrouter', placeholder: 'sk-or-v1-...', signup: 'https://openrouter.ai/keys',
+          note: 'One key, hundreds of models across vendors, including free ones.' },
         { id: 'ollama', placeholder: K.OLLAMA_DEFAULT, signup: 'https://ollama.com/download',
           note: 'Fully local. Enter your server URL, not a key.' },
     ];

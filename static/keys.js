@@ -20,13 +20,12 @@ window.Kusanagi = window.Kusanagi || {};
     'use strict';
 
     var NS = 'k_';
-    var PROVIDERS = ['gemini', 'groq', 'hf', 'ollama'];
+    var PROVIDERS = ['gemini', 'hf', 'openrouter', 'ollama'];
 
     // Two generations of key names predate this file: a global set and three
     // per-app prefixes that in practice only ever held a Gemini key.
     var LEGACY = {
         gemini: ['gemini_key', 'kks_key', 'orc_key', 'vis_key'],
-        groq: ['groq_key'],
         hf: ['hf_token'],
     };
     var LEGACY_PROVIDER = ['provider', 'kks_provider', 'orc_provider', 'vis_provider'];
@@ -52,6 +51,24 @@ window.Kusanagi = window.Kusanagi || {};
     var local = safe(window.localStorage);
 
     function keyName(provider) { return NS + provider + '_key'; }
+
+    /* Providers this app no longer supports. Their keys are still on disk for
+       anyone who used an older build, and dropping them from PROVIDERS would
+       orphan those secrets where nothing ever clears them again. Wipe on load,
+       and again on purge. Add to this list, never remove from it. */
+    var RETIRED = ['groq'];
+    var RETIRED_LEGACY = ['groq_key'];
+
+    function forgetRetired() {
+        RETIRED.forEach(function (provider) {
+            session.del(NS + provider + '_key');
+            local.del(NS + provider + '_key');
+        });
+        RETIRED_LEGACY.forEach(function (name) {
+            local.del(name);
+            session.del(name);
+        });
+    }
 
     /* Keys written under the old scheme are already on disk. Silently dropping them
        would look like the app forgetting the user's key, so they are imported as
@@ -131,6 +148,7 @@ window.Kusanagi = window.Kusanagi || {};
             });
             local.del(NS + 'provider');
             local.del(NS + 'migrated');
+            forgetRetired();
             Object.keys(LEGACY).forEach(function (provider) {
                 LEGACY[provider].forEach(local.del);
             });
@@ -139,5 +157,6 @@ window.Kusanagi = window.Kusanagi || {};
     };
 
     migrateLegacy();
+    forgetRetired();
     window.Kusanagi.keys = keys;
 })();

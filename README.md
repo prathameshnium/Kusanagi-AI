@@ -25,6 +25,7 @@
   - [Application Suite](#application-suite)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
+  - [Tests](#tests)
 - [Advanced Configuration](#advanced-configuration)
 - [Usage](#usage)
 - [Portability and Included Assets](#portability-and-included-assets)
@@ -50,7 +51,7 @@ Kusanagi-AI is built with a focus on local execution, privacy, and ease of use. 
 -   **Python**: The entire frontend and application logic are developed in Python, leveraging its vast ecosystem of libraries for AI development.
 -   **Ollama**: Powers the local large language model inference, allowing Kusanagi-AI to run various models efficiently on your machine without cloud dependencies.
 -   **Tkinter**: Used for creating the native graphical user interfaces for the applications, ensuring they are lightweight and cross-platform.
--   **MXBAI Embeddings**: Utilises the `mxbai-embed-large` model from Mixedbread AI for high-quality document embeddings, crucial for the RAG capabilities.
+-   **Embeddings**: Ships configured for `all-minilm` (small and fast). `mxbai-embed-large` is also recognised if you prefer quality over footprint -- set `embedding_model_name` in `System_Config.json`.
 
 ## Features
 
@@ -100,7 +101,7 @@ All five share `local_apps/kusanagi_core.py`, which owns the project paths, the
 colour palette, `System_Config.json` loading and the Ollama process manager.
 
 **Browser (your own API key, nothing installed).** The pages in `web_apps/` run
-against Gemini, Groq, Hugging Face or a local Ollama. Open
+against Gemini, Hugging Face, OpenRouter or a local Ollama. Open
 [the dashboard](https://prathameshnium.github.io/Kusanagi-AI/index.html), or serve
 them locally:
 
@@ -145,12 +146,12 @@ serves is in this repository.
     *   Open `System_Config.json` located in the project root.
     *   Ensure `ollama_path` accurately points to your Ollama executable (e.g., `F:\Portable_AI_Assets\ollama_main\ollama.exe`).
     *   Set `model_folder` to the directory where your Ollama models are stored.
-    *   **Download Models**: Pull the necessary models using the Ollama CLI. The default embedding model is `mxbai-embed-large`, and you'll need at least one chat model.
+    *   **Download Models**: Pull the necessary models using the Ollama CLI. The default embedding model is `all-minilm`, and you'll need at least one chat model.
     <details>
       <summary>Click to expand</summary>
       
       ```sh
-      ollama pull mxbai-embed-large
+      ollama pull all-minilm
       ollama pull llama3 # or any other preferred chat model
       ```
     </details>
@@ -167,7 +168,7 @@ For more granular control, you can modify the `System_Config.json` file. This al
     "ollama_path": "Portable_AI_Assets/ollama_main/ollama.exe",
     "model_folder": "Portable_AI_Assets/common-ollama-models",
     "vector_cache_dir": "Portable_AI_Assets/vector_cache",
-    "embedding_model_name": "mxbai-embed-large",
+    "embedding_model_name": "all-minilm",
     "default_model": "tinyllama:latest"
 }
 ```
@@ -238,7 +239,7 @@ Kusanagi-AI/
 ├── web_apps/                   The five browser apps
 ├── static/
 │   ├── keys.js                 API-key store (session-scoped by default)
-│   ├── providers.js            Gemini / Groq / Hugging Face / Ollama
+│   ├── providers.js            Gemini / HF / OpenRouter / Ollama
 │   ├── dom.js                  Safe DOM construction + Markdown sanitising
 │   ├── ui.js                   Settings dialog, toasts, result cards
 │   ├── pages/                  One script per page
@@ -259,6 +260,34 @@ Kusanagi-AI/
 ```
 </details>
 
+### Tests
+
+```sh
+pip install pytest
+python -m pytest tests/
+```
+
+No browser and no network needed. Alongside the usual unit tests of
+`kusanagi_core.py`, the suite asserts the security properties the web apps are
+supposed to have, so a regression fails the build rather than shipping:
+
+- every page's CSP is present and actually strict (no `unsafe-inline`/`unsafe-eval`)
+- no inline scripts, styles or `on*=` handlers anywhere
+- no third-party origin is referenced, and every local asset resolves
+- every element id a page script looks up exists in that page's HTML
+- `connect-src` matches the endpoints each page really uses, **in both
+  directions** — a missing entry breaks a fetch, a stale one is usually a data
+  source that quietly died
+- `innerHTML` appears nowhere outside the sanitising helper in `dom.js`
+- no provider is half-removed, and a retired provider's stored key is purged
+
+Model IDs go stale silently, so they are checked separately against the live
+APIs (this needs network, and keys for the providers you want covered):
+
+```sh
+python scripts/check_models.py --gemini-key "$GEMINI_API_KEY"
+```
+
 ### Rebuilding the stylesheet
 
 `static/kusanagi.css` is generated. After changing any CSS or any HTML class:
@@ -274,13 +303,17 @@ and caches it outside the repo.
 
 What the web apps actually guarantee, and what they do not.
 
+**Providers.** Google Gemini, Hugging Face, OpenRouter, or a local Ollama.
+
 **Your keys.** A key you enter is held in `sessionStorage` and disappears when the
 tab closes. Ticking *Remember on this device* moves it to `localStorage`, where it
 persists until purged — convenient on your own machine, and readable by anything
 that can read your browser profile, so the dialog says so. There is no Kusanagi
 server: requests go from your browser straight to the provider. Gemini keys are
 sent in the `x-goog-api-key` header rather than the query string, so they do not
-end up in browser history or in proxy logs. *Purge all keys* clears both stores.
+end up in browser history or in proxy logs; the others use `Authorization:
+Bearer`. OpenRouter's optional `HTTP-Referer`/`X-Title` headers are deliberately
+not sent, since they feed a public leaderboard. *Purge all keys* clears both stores.
 
 **Your documents.** PDFs opened in Orochimaru are parsed in the browser and held
 in memory. They are never uploaded. Excerpts retrieved for a question are sent to

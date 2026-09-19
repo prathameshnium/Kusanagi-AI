@@ -2,6 +2,5 @@
 
 # TEAM
 Developer: Prathamesh Deshmukh
-Contact: 
 GitHub: https://github.com/prathameshnium
 Site: https://prathameshdeshmukh.site

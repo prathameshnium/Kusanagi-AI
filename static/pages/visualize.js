@@ -166,7 +166,7 @@
         };
 
         settings = K.ui.mountSettings({
-            providers: ['gemini', 'groq', 'hf'],
+            providers: ['gemini', 'hf', 'openrouter'],
             onSave: function () { checkStatus(); predict(); },
         });
 

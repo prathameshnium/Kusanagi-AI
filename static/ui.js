@@ -62,7 +62,7 @@ window.Kusanagi = window.Kusanagi || {};
     function mountSettings(options) {
         if (settingsApi) return settingsApi;
         var opts = options || {};
-        var providers = opts.providers || ['gemini', 'groq', 'hf'];
+        var providers = opts.providers || ['gemini', 'hf', 'openrouter'];
         var title = opts.title || 'System Config';
 
         var providerSelect = el('select', { id: 'settings-provider-select' },

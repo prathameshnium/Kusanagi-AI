@@ -2,13 +2,25 @@
  *
  * One call() for every app. Requires keys.js.
  *
+ * Providers: Google Gemini, Hugging Face, OpenRouter, and a local Ollama.
+ * Hugging Face and OpenRouter both speak the OpenAI chat-completions format, so
+ * they share a handler.
+ *
  * Security notes:
- *   - Gemini keys go in the x-goog-api-key header, not the query string. A key in a
- *     URL ends up in browser history, in Referer on any redirect, and in whatever
- *     proxy logs sit in between; a header does not.
+ *   - Gemini keys go in the x-goog-api-key header, not the query string. A key in
+ *     a URL ends up in browser history, in Referer on any redirect, and in
+ *     whatever proxy logs sit in between; a header does not.
+ *   - Everything else uses Authorization: Bearer.
+ *   - OpenRouter's optional HTTP-Referer / X-Title headers are deliberately not
+ *     sent: they exist for its public leaderboard and would announce which page
+ *     a researcher is using.
  *   - Error messages from providers are returned as plain strings and must be
  *     rendered as text by callers, never as HTML.
- *   - Requests are abortable and time-bounded so a hung provider cannot wedge the UI.
+ *   - Requests are abortable and time-bounded so a hung provider cannot wedge
+ *     the UI.
+ *
+ * Model IDs go stale fast. `python scripts/check_models.py` re-validates every
+ * list below against the live APIs.
  */
 window.Kusanagi = window.Kusanagi || {};
 
@@ -18,32 +30,49 @@ window.Kusanagi = window.Kusanagi || {};
     var DEFAULT_TIMEOUT_MS = 120000;
     var OLLAMA_DEFAULT = 'http://localhost:11434';
 
+    var ENDPOINTS = {
+        gemini: 'https://generativelanguage.googleapis.com/v1beta/models/',
+        // The old api-inference.huggingface.co/models/<id> route is legacy; the
+        // router is OpenAI-compatible and handles provider selection itself.
+        hf: 'https://router.huggingface.co/v1/chat/completions',
+        openrouter: 'https://openrouter.ai/api/v1/chat/completions',
+    };
+
     var MODELS = {
         gemini: [
+            { id: 'gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
+            { id: 'gemini-3.6-flash', name: 'Gemini 3.6 Flash' },
+            { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (cheapest)' },
             { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
-            { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-            { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
-            { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-        ],
-        groq: [
-            { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B' },
-            { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B (fast)' },
-            { id: 'gemma2-9b-it', name: 'Gemma 2 9B' },
+            { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
         ],
         hf: [
-            { id: 'mistralai/Mistral-7B-Instruct-v0.3', name: 'Mistral 7B' },
-            { id: 'microsoft/Phi-3-mini-4k-instruct', name: 'Phi-3 Mini' },
+            { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B' },
+            { id: 'deepseek-ai/DeepSeek-R1', name: 'DeepSeek R1' },
+            { id: 'meta-llama/Llama-3.3-70B-Instruct', name: 'Llama 3.3 70B' },
+            { id: 'Qwen/Qwen2.5-7B-Instruct', name: 'Qwen2.5 7B' },
         ],
+        openrouter: [
+            { id: 'deepseek/deepseek-v4-flash-0731:free', name: 'DeepSeek V4 Flash (free)' },
+            { id: 'openai/gpt-4o-mini', name: 'GPT-4o mini' },
+            { id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B' },
+            { id: 'deepseek/deepseek-chat', name: 'DeepSeek Chat' },
+            { id: 'google/gemini-3.8-flash', name: 'Gemini 3.8 Flash' },
+            { id: 'anthropic/claude-sonnet-5', name: 'Claude Sonnet 5' },
+        ],
+        // These are the models scripts_to_pull/*.ps1 actually fetches.
         ollama: [
-            { id: 'llama3', name: 'Llama 3 (local)' },
-            { id: 'qwen2:1.5b', name: 'Qwen2 1.5B (local)' },
+            { id: 'llama3.2:1b', name: 'Llama 3.2 1B (local)' },
+            { id: 'phi3.5', name: 'Phi-3.5 (local)' },
+            { id: 'tinyllama', name: 'TinyLlama (local)' },
+            { id: 'smollm2:360m', name: 'SmolLM2 360M (local)' },
         ],
     };
 
     var LABELS = {
         gemini: 'Google Gemini',
-        groq: 'Groq',
         hf: 'Hugging Face',
+        openrouter: 'OpenRouter',
         ollama: 'Ollama (local)',
     };
 
@@ -84,6 +113,9 @@ window.Kusanagi = window.Kusanagi || {};
         if (resp.status === 429) {
             return label + ': rate limited (HTTP 429). Wait a moment and retry.';
         }
+        if (resp.status === 402) {
+            return label + ': out of credit (HTTP 402).';
+        }
         return label + ' error ' + resp.status + (msg ? ': ' + msg : '');
     }
 
@@ -101,18 +133,8 @@ window.Kusanagi = window.Kusanagi || {};
         return [{ role: 'user', content: String(params.prompt || '') }];
     }
 
-    /** Flatten a conversation into one prompt, for endpoints with no chat format. */
-    function flatten(messages) {
-        return messages.map(function (m) {
-            var who = m.role === 'assistant' ? 'Assistant'
-                : m.role === 'system' ? 'System' : 'User';
-            return who + ': ' + m.content;
-        }).join('\n\n') + '\n\nAssistant:';
-    }
-
     function callGemini(messages, modelId, apiKey, temperature, opts) {
-        var url = 'https://generativelanguage.googleapis.com/v1beta/models/'
-            + encodeURIComponent(modelId) + ':generateContent';
+        var url = ENDPOINTS.gemini + encodeURIComponent(modelId) + ':generateContent';
 
         var body = { contents: [], generationConfig: {} };
         messages.forEach(function (m) {
@@ -164,48 +186,40 @@ window.Kusanagi = window.Kusanagi || {};
         });
     }
 
-    function callGroq(messages, modelId, apiKey, temperature, opts) {
-        var body = {
-            messages: messages,
-            model: modelId,
-            temperature: temperature,
+    /**
+     * Shared handler for every OpenAI-compatible chat-completions endpoint.
+     * Hugging Face's router and OpenRouter both speak this, so they differ only
+     * in URL and the label used in error messages.
+     */
+    function openAiCompatible(endpoint, label) {
+        return function (messages, modelId, apiKey, temperature, opts) {
+            var body = {
+                model: modelId,
+                messages: messages,
+                temperature: temperature,
+                stream: false,
+            };
+            if (opts && opts.json) body.response_format = { type: 'json_object' };
+
+            return request(endpoint, {
+                method: 'POST',
+                headers: {
+                    Authorization: 'Bearer ' + apiKey,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body),
+            }, opts && opts.timeoutMs).then(function (resp) {
+                return readJson(resp).then(function (data) {
+                    if (!resp.ok) throw new Error(providerError(data, resp, label));
+                    var choice = data.choices && data.choices[0];
+                    var text = choice && choice.message && choice.message.content;
+                    if (typeof text !== 'string') {
+                        throw new Error(label + ' returned no text.');
+                    }
+                    return { text: text, usage: data.usage || null };
+                });
+            });
         };
-        if (opts && opts.json) body.response_format = { type: 'json_object' };
-
-        return request('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        }, opts && opts.timeoutMs).then(function (resp) {
-            return readJson(resp).then(function (data) {
-                if (!resp.ok) throw new Error(providerError(data, resp, 'Groq'));
-                var choice = data.choices && data.choices[0];
-                var text = choice && choice.message && choice.message.content;
-                if (typeof text !== 'string') throw new Error('Groq returned no text.');
-                return { text: text, usage: data.usage || null };
-            });
-        });
-    }
-
-    function callHF(messages, modelId, apiKey, temperature, opts) {
-        var url = 'https://api-inference.huggingface.co/models/' + modelId;
-        // The inference API takes raw text, so a conversation has to be flattened.
-        return request(url, {
-            method: 'POST',
-            headers: { Authorization: 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                inputs: messages.length === 1 ? messages[0].content : flatten(messages),
-                parameters: { temperature: temperature, return_full_text: false, do_sample: true },
-            }),
-        }, opts && opts.timeoutMs).then(function (resp) {
-            return readJson(resp).then(function (data) {
-                if (!resp.ok) throw new Error(providerError(data, resp, 'Hugging Face'));
-                var text = Array.isArray(data) ? (data[0] && data[0].generated_text)
-                    : data.generated_text;
-                if (typeof text !== 'string') throw new Error('Hugging Face returned no text.');
-                return { text: text, usage: null };
-            });
-        });
     }
 
     /* For Ollama the "key" field holds the base URL instead. */
@@ -240,8 +254,8 @@ window.Kusanagi = window.Kusanagi || {};
 
     var HANDLERS = {
         gemini: callGemini,
-        groq: callGroq,
-        hf: callHF,
+        hf: openAiCompatible(ENDPOINTS.hf, 'Hugging Face'),
+        openrouter: openAiCompatible(ENDPOINTS.openrouter, 'OpenRouter'),
         ollama: callOllama,
     };
 
@@ -297,6 +311,7 @@ window.Kusanagi = window.Kusanagi || {};
     Object.assign(window.Kusanagi, {
         MODELS: MODELS,
         PROVIDER_LABELS: LABELS,
+        ENDPOINTS: ENDPOINTS,
         OLLAMA_DEFAULT: OLLAMA_DEFAULT,
         call: call,
         callJson: callJson,

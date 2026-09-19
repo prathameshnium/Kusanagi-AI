@@ -490,7 +490,7 @@
         };
 
         settings = K.ui.mountSettings({
-            providers: ['gemini', 'groq', 'hf', 'ollama'],
+            providers: ['gemini', 'hf', 'openrouter', 'ollama'],
             title: 'Secure configuration',
             onSave: function () {
                 checkStatus();

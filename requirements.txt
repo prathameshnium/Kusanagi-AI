@@ -1,5 +1,13 @@
-PyMuPDF
-numpy
-psutil
-ollama
-pyttsx3
+# Runtime dependencies for the desktop apps in local_apps/.
+# The browser apps in web_apps/ need none of this -- they are static files.
+
+ollama          # local model inference client
+PyMuPDF         # imported as `fitz`; PDF text extraction for RAG
+httpx           # used directly by Orochimaru for Ollama health checks
+numpy           # vector maths for the embedding store
+psutil          # memory reporting in the status panels
+pyttsx3         # optional: text-to-speech. Apps degrade gracefully without it.
+
+# Build and test extras are not installed by default:
+#   pip install pyinstaller    # scripts in local_apps/build_executable.py
+#   pip install pytest         # tests/

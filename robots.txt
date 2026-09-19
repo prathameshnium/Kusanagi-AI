@@ -2,9 +2,7 @@
 User-agent: *
 Allow: /
 
-# Disallow crawling of the web_apps directory directly,
-# as the apps are meant to be launched from the index page.
-Disallow: /web_apps/
+# The apps under /web_apps/ are listed in the sitemap and are intended to be
+# reachable directly, so they are deliberately not disallowed here.
 
-# Point crawlers to the sitemap for a list of all public pages.
 Sitemap: https://prathameshnium.github.io/Kusanagi-AI/sitemap.xml
