@@ -3,584 +3,148 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kusanagi AI - Research Suite</title>
-    <link rel="icon" href="https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/logo/Kusanagi-AI.png">
+    <!-- default-src 'none' means anything not listed below is blocked outright.
+         No inline script, no inline style, no third-party origins at all: every
+         library and font is served from this repo. -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'none';
+        script-src 'self';
+        style-src 'self';
+        img-src 'self' data:;
+        font-src 'self';
+        base-uri 'none';
+        form-action 'none';">
+    <title>Kusanagi AI &mdash; Research Suite</title>
     <meta name="description" content="Kusanagi AI — a free, open-source research toolkit: agentic search, PDF RAG chat, and AI visualizers, usable in the browser or fully offline.">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="static/theme.js"></script>
-    <script src="static/providers.js"></script>
-    <link rel="stylesheet" href="static/style.css">
-    <style>
-        /* Custom Classes */
-        .glass {
-            background: rgba(30, 41, 59, 0.7);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .glass-card {
-            background: linear-gradient(145deg, #1e293b, #172033);
-            border: 1px solid #334155;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .glass-card:hover {
-            border-color: var(--accent);
-            transform: translateY(-5px);
-            box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.5);
-        }
-        
-        /* Selection State for Path Cards */
-        .path-card.selected {
-            border-color: var(--accent);
-            background: linear-gradient(145deg, #1e293b, #2a3649);
-            box-shadow: 0 0 20px rgba(255, 171, 64, 0.2);
-        }
-
-        .step-line {
-            position: absolute;
-            left: 50%;
-            top: 0;
-            bottom: 0;
-            width: 2px;
-            background: #334155;
-            transform: translateX(-50%);
-            z-index: -1;
-        }
-
-        .step-number {
-            background: #1e293b;
-            border: 2px solid #334155;
-            color: #94a3b8;
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            margin: 0 auto 1rem;
-            position: relative;
-            z-index: 1;
-            transition: all 0.3s ease;
-        }
-
-        .active-step .step-number {
-            border-color: var(--accent);
-            color: var(--accent);
-            box-shadow: 0 0 15px rgba(255, 171, 64, 0.3);
-        }
-
-        /* Typewriter Cursor */
-        .typewriter-cursor {
-            display: inline-block;
-            width: 4px;
-            height: 1em;
-            background-color: var(--accent);
-            margin-left: 5px;
-            vertical-align: bottom;
-            animation: blink 1s infinite;
-        }
-
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0; }
-        }
-
-        /* Animations */
-        @keyframes float {
-            0% { transform: translateY(0px); }
-            50% { transform: translateY(-10px); }
-            100% { transform: translateY(0px); }
-        }
-        .animate-float { animation: float 6s ease-in-out infinite; }
-        
-        .fade-enter {
-            animation: fadeIn 0.5s ease-out forwards;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-    </style>
+    <link rel="icon" href="static/logo-64.png">
+    <link rel="apple-touch-icon" href="static/logo-180.png">
+    <link rel="stylesheet" href="static/kusanagi.css">
+    <script src="static/keys.js" defer></script>
+    <script src="static/providers.js" defer></script>
+    <script src="static/dom.js" defer></script>
+    <script src="static/ui.js" defer></script>
+    <script src="static/pages/index.js" defer></script>
 </head>
 <body class="min-h-screen flex flex-col">
 
-    <!-- Settings Modal -->
-    <div id="settings-modal" class="hidden fixed inset-0 settings-modal z-[100] flex items-center justify-center backdrop-blur-sm bg-slate-900/50">
-        <div class="settings-modal-content glass-card p-6 rounded-lg shadow-2xl max-w-md w-full">
-            <div class="flex justify-between items-start mb-4">
-                <h2 class="text-xl font-bold text-accent">Global Configuration</h2>
-                <button onclick="toggleSettings()" class="text-slate-400 hover:text-white">✕</button>
-            </div>
-            <div class="bg-tertiary/50 p-3 rounded mb-4 text-xs text-slate-400 border border-tertiary">
-                <strong>Note:</strong> These keys are saved in your browser's <code>localStorage</code> and will be used by all web apps.
-            </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm text-slate-400 mb-2">Google Gemini API Key</label>
-                    <input type="password" id="gemini-key-input" class="w-full bg-secondary border border-tertiary rounded-lg p-2 text-white placeholder-slate-500 focus:ring-2 focus:ring-accent outline-none" placeholder="AIza...">
-                </div>
-                <div>
-                    <label class="block text-sm text-slate-400 mb-2">Groq API Key</label>
-                    <input type="password" id="groq-key-input" class="w-full bg-secondary border border-tertiary rounded-lg p-2 text-white placeholder-slate-500 focus:ring-2 focus:ring-accent outline-none" placeholder="gsk_...">
-                </div>
-                <div>
-                    <label class="block text-sm text-slate-400 mb-2">Hugging Face Token</label>
-                    <input type="password" id="hf-token-input" class="w-full bg-secondary border border-tertiary rounded-lg p-2 text-white placeholder-slate-500 focus:ring-2 focus:ring-accent outline-none" placeholder="hf_...">
-                </div>
-            </div>
-            <div class="flex justify-between items-center mt-6 pt-4 border-t border-tertiary">
-                <button onclick="purgeData()" class="btn btn-danger text-xs">Purge All Keys</button>
-                <div class="flex gap-2">
-                    <button onclick="toggleSettings()" class="btn btn-secondary">Cancel</button>
-                    <button onclick="saveSettings()" class="btn btn-accent">Save</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Navbar -->
-    <nav class="fixed top-0 w-full z-50 glass border-b border-white/5">
-        <div class="container mx-auto px-6 h-20 flex justify-between items-center">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center text-slate-900 font-bold text-xl shadow-lg shadow-accent/20">K</div>
-                <span class="font-bold text-xl tracking-tight">Kusanagi AI</span>
-            </div>
-            <div class="flex items-center gap-6">
-                <button onclick="toggleSettings()" class="text-slate-300 hover:text-white transition flex items-center gap-2 bg-slate-800/50 hover:bg-slate-700/50 px-4 py-2 rounded-lg">
-                    ⚙️ Configure
-                </button>
-                <a href="https://github.com/prathameshnium/Kusanagi-AI" target="_blank" rel="noopener noreferrer" class="text-slate-400 hover:text-white transition flex items-center gap-2">
-                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-                    GitHub
-                </a>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Hero -->
-    <section class="pt-40 pb-20 px-6 text-center relative overflow-hidden">
-        <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-accent/5 rounded-full blur-3xl pointer-events-none"></div>
-        
-        <div class="inline-block mb-8 px-4 py-1.5 rounded-full bg-accent/10 border border-accent/20 text-accent text-xs font-bold tracking-wider uppercase animate-float">
-            Private • Secure • Open Source
-        </div>
-        
-        <!-- Main Headline (Typed Once) -->
-        <h1 class="text-6xl md:text-8xl font-extrabold mb-4 text-white tracking-tight leading-tight">
-            <span id="main-title"></span><span id="cursor-1" class="typewriter-cursor">|</span>
-        </h1>
-
-        <!-- Developer Attribution -->
-        <p class="text-md text-slate-400 mb-8">
-            Developed by <a href="https://github.com/prathameshnium" target="_blank" rel="noopener noreferrer" class="text-accent hover:underline font-semibold">Prathamesh Deshmukh</a>
+    <!-- ===================== Hero ===================== -->
+    <header class="text-center pt-20 pb-12 px-6">
+        <img src="static/logo-180.png" alt="" width="72" height="64" class="mx-auto mb-6 animate-float">
+        <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-4">Kusanagi AI</h1>
+        <p class="text-xl md:text-2xl font-bold text-accent tracking-wide mb-6 min-h-[2rem]">
+            <span id="tagline">For researchers in physics &amp; material science</span><span id="tagline-cursor" class="typewriter-cursor" aria-hidden="true"></span>
         </p>
-
-        <!-- Dynamic Sub-Heading (Rotating) -->
-        <div class="h-12 mb-6 flex items-center justify-center">
-            <h2 class="text-2xl md:text-4xl font-bold text-accent tracking-wide">
-                <span id="dynamic-subheadline"></span><span id="cursor-2" class="typewriter-cursor hidden">|</span>
-            </h2>
-        </div>
-
-        <!-- Static Sub-Sub-Heading -->
-        <p class="text-lg md:text-xl text-slate-400 max-w-2xl mx-auto mb-12 leading-relaxed opacity-0 transition-opacity duration-1000" id="static-desc">
-            Your personal AI research lab. Bring your own keys for the web apps, or run completely offline with the desktop suite.
+        <p class="text-base md:text-lg text-fg-secondary max-w-2xl mx-auto leading-relaxed">
+            Agentic search, RAG over your own PDFs, and model inspection tools.
+            Run them in this browser with your own API key, or install the desktop
+            suite and run everything offline.
         </p>
-        
-        <div id="hero-buttons" class="flex flex-col md:flex-row justify-center gap-4 opacity-0 transition-opacity duration-700">
-            <a href="#step-1" onclick="switchTab('web')" class="px-8 py-4 bg-accent text-slate-900 rounded-xl font-bold text-lg hover:bg-white transition shadow-lg shadow-accent/20 flex items-center justify-center gap-2">
-                Launch Web Suite
-            </a>
-            <a href="#step-2" onclick="switchTab('local')" class="px-8 py-4 bg-secondary border border-tertiary rounded-xl font-bold text-lg hover:border-white/50 transition flex items-center justify-center gap-2">
-                Install Desktop App
-            </a>
+        <div class="flex flex-wrap justify-center gap-3 mt-8">
+            <a href="#providers" class="btn btn-accent px-6 py-3">Connect a provider</a>
+            <a href="#offline" class="btn btn-secondary px-6 py-3">Run it offline instead</a>
         </div>
-    </section>
+    </header>
 
-    <!-- Steps Container -->
-    <div class="container mx-auto px-4 md:px-10 pb-32 relative">
-        <div id="step-line" class="step-line hidden md:block"></div>
+    <main class="flex-1 px-6 pb-20 max-w-6xl mx-auto w-full">
 
+        <!-- ===================== 1. Providers ===================== -->
+        <section id="providers" class="mb-20 scroll-mt-8">
+            <div class="flex items-center gap-3 mb-2">
+                <span class="step-number shrink-0" aria-hidden="true">1</span>
+                <h2 class="text-2xl font-bold">Connect a provider</h2>
+            </div>
+            <p class="text-sm text-fg-secondary mb-6 max-w-3xl">
+                Keys are held in this tab only and sent straight to the provider you
+                pick &mdash; there is no Kusanagi server in the path. Tick
+                <em>Remember</em> only on a machine you control; it writes the key to
+                disk, where anything that can read this browser profile can read it.
+            </p>
 
+            <div class="glass-card rounded-xl p-5 md:p-6">
+                <ul id="provider-rows" class="space-y-5"></ul>
 
-        <!-- STEP 2: CONFIGURE KEYS (Web Only) -->
-        <div id="step-2" class="relative mb-32 scroll-mt-24 transition-opacity duration-500">
-            <div class="flex flex-col items-center mb-12">
-                <div class="bg-secondary border border-tertiary px-6 py-2 rounded-full text-sm font-bold text-accent z-10 shadow-xl mb-2">
-                    STEP 02: CONFIGURE KEYS (Web Suite Only)
+                <div class="flex flex-wrap justify-between items-center gap-3 mt-6 pt-5 border-t border-tertiary">
+                    <button id="purge-keys" type="button" class="btn btn-danger text-xs">
+                        Purge all keys
+                    </button>
+                    <p class="text-xs text-fg-secondary">
+                        Default provider for the tools:
+                        <select id="default-provider" class="!w-auto !inline-block !py-1 !px-2 ml-1 text-xs" aria-label="Default provider"></select>
+                    </p>
                 </div>
-                <p class="text-slate-500 text-xs bg-primary/80 px-3 py-1 rounded border border-dashed border-slate-700 flex items-center gap-1.5">
-                    <svg class="w-3 h-3 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    Using Desktop App? <a href="#step-3" class="text-accent hover:underline" onclick="switchTab('local')">Skip this step. No keys required.</a>
+            </div>
+        </section>
+
+        <!-- ===================== 2. Tools ===================== -->
+        <section id="tools" class="mb-20 scroll-mt-8">
+            <div class="flex items-center gap-3 mb-2">
+                <span class="step-number shrink-0" aria-hidden="true">2</span>
+                <h2 class="text-2xl font-bold">Launch a tool</h2>
+            </div>
+            <p class="text-sm text-fg-secondary mb-6">
+                Each card shows whether the provider it needs is configured.
+            </p>
+            <div id="tool-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+        </section>
+
+        <!-- ===================== 3. Offline ===================== -->
+        <section id="offline" class="scroll-mt-8">
+            <div class="flex items-center gap-3 mb-2">
+                <span class="step-number shrink-0" aria-hidden="true">3</span>
+                <h2 class="text-2xl font-bold">Or run the whole suite offline</h2>
+            </div>
+            <p class="text-sm text-fg-secondary mb-6 max-w-3xl">
+                The desktop apps run against a local <a class="text-accent hover:underline" href="https://ollama.com/" target="_blank" rel="noopener noreferrer">Ollama</a>
+                model. No API key, no network, nothing leaves the machine &mdash; which
+                is the configuration to use for unpublished data.
+            </p>
+
+            <div class="grid md:grid-cols-2 gap-5">
+                <div class="glass-card rounded-xl p-5">
+                    <h3 class="font-bold text-lg mb-3">Install</h3>
+                    <pre id="install-cmd" class="bg-secondary border border-tertiary rounded-lg p-3 text-xs font-mono overflow-x-auto text-fg-secondary whitespace-pre">git clone https://github.com/prathameshnium/Kusanagi-AI.git
+cd Kusanagi-AI
+pip install -r requirements.txt
+python local_apps/launcher.py</pre>
+                    <button id="copy-install" type="button" class="btn btn-secondary text-xs mt-3">
+                        Copy commands
+                    </button>
+                </div>
+
+                <div class="glass-card rounded-xl p-5">
+                    <h3 class="font-bold text-lg mb-3">What you get</h3>
+                    <ul class="text-sm text-fg-secondary space-y-2">
+                        <li><strong class="text-fg-primary">Orochimaru Local</strong> &mdash; RAG over your PDFs with local embeddings.</li>
+                        <li><strong class="text-fg-primary">OneTail Desktop</strong> &mdash; multi-model chat against Ollama.</li>
+                        <li><strong class="text-fg-primary">Visualize AI</strong> &mdash; token probability inspector.</li>
+                        <li><strong class="text-fg-primary">Hopfield demo</strong> &mdash; associative memory playground.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="glass-card rounded-xl p-5 mt-5">
+                <h3 class="font-bold text-lg mb-2">Running the web apps offline</h3>
+                <p class="text-sm text-fg-secondary">
+                    Serve them rather than opening the files directly &mdash; the
+                    pages carry a strict Content-Security-Policy, and
+                    <code class="text-accent font-mono text-xs">file://</code> is not an
+                    origin it can grant anything to. Run
+                    <code class="text-accent font-mono text-xs">python scripts/serve.py</code>
+                    from the repo root and the whole suite works with no network at
+                    <code class="text-accent font-mono text-xs">http://localhost:8000</code>.
                 </p>
             </div>
+        </section>
+    </main>
 
-            <div class="grid md:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                <!-- Card 1 -->
-                <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="glass-card p-6 rounded-xl group block">
-                    <div class="flex justify-between items-start mb-4">
-                        <div class="p-3 bg-blue-500/10 rounded-lg text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        </div>
-                        <span class="text-[10px] font-bold bg-blue-500/10 text-blue-400 px-2 py-1 rounded border border-blue-500/20">FREE TIER</span>
-                    </div>
-                    <h3 class="text-lg font-bold text-white mb-2">Google Gemini</h3>
-                    <p class="text-slate-400 text-sm leading-relaxed">Best general-purpose reasoning. Large context window (2M tokens) perfect for long PDFs.</p>
-                </a>
-
-                <!-- Card 2 -->
-                <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" class="glass-card p-6 rounded-xl group block">
-                    <div class="flex justify-between items-start mb-4">
-                        <div class="p-3 bg-orange-500/10 rounded-lg text-orange-400 group-hover:bg-orange-500 group-hover:text-white transition">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        </div>
-                        <span class="text-[10px] font-bold bg-orange-500/10 text-orange-400 px-2 py-1 rounded border border-orange-500/20">FASTEST</span>
-                    </div>
-                    <h3 class="text-lg font-bold text-white mb-2">Groq Cloud</h3>
-                    <p class="text-slate-400 text-sm leading-relaxed">Lightning fast inference for Llama 3 models. Ideal for chat.</p>
-                </a>
-
-                <!-- Card 3 -->
-                <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener noreferrer" class="glass-card p-6 rounded-xl group block">
-                    <div class="flex justify-between items-start mb-4">
-                        <div class="p-3 bg-yellow-500/10 rounded-lg text-yellow-400 group-hover:bg-yellow-500 group-hover:text-white transition">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
-                        </div>
-                        <span class="text-[10px] font-bold bg-yellow-500/10 text-yellow-400 px-2 py-1 rounded border border-yellow-500/20">OPEN</span>
-                    </div>
-                    <h3 class="text-lg font-bold text-white mb-2">Hugging Face</h3>
-                    <p class="text-slate-400 text-sm leading-relaxed">Access thousands of open models. Great for specialized tasks and uncensored models.</p>
-                </a>
-            </div>
-             <div class="text-center mt-8">
-                <button onclick="toggleSettings()" class="px-8 py-4 bg-accent text-slate-900 rounded-xl font-bold text-lg hover:bg-white transition shadow-lg shadow-accent/20 flex items-center justify-center gap-2 mx-auto">
-                    Set API Keys
-                </button>
-            </div>
-        </div>
-
-        <!-- STEP 3: SELECT A MODULE -->
-        <div id="step-3" class="relative scroll-mt-24 transition-opacity duration-500">
-            <div class="flex justify-center mb-12">
-                <div class="bg-secondary border border-tertiary px-6 py-2 rounded-full text-sm font-bold text-accent z-10 shadow-xl">
-                    STEP 03: SELECT A MODULE
-                </div>
-            </div>
-
-            <!-- WEB CONTENT -->
-            <div id="content-web" class="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto transition-opacity duration-300">
-                
-                <!-- Kakashi -->
-                <div class="glass-card p-6 rounded-xl group flex flex-col h-full relative overflow-hidden">
-                    <div class="absolute top-0 right-0 bg-accent text-secondary text-[10px] font-bold px-3 py-1 rounded-bl-lg z-10">WEB APP</div>
-                    <div class="mb-4 text-accent p-3 bg-accent/10 rounded-lg w-fit">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                    </div>
-                    <h3 class="text-lg font-bold text-white mb-2">Kakashi Search</h3>
-                    <p class="text-slate-400 text-sm mb-6 flex-grow leading-relaxed">Agentic search engine. Breaks down queries into sub-tasks and searches Wikipedia, Papers, and the Web in parallel.</p>
-                    <a href="web_apps/Kakashi_Search.html" class="w-full py-2.5 bg-tertiary hover:bg-white hover:text-secondary rounded-lg font-bold text-sm transition flex items-center justify-center gap-2">
-                        Launch App <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                    </a>
-                </div>
-
-                <!-- Orochimaru -->
-                <div class="glass-card p-6 rounded-xl group flex flex-col h-full relative overflow-hidden">
-                    <div class="absolute top-0 right-0 bg-accent text-secondary text-[10px] font-bold px-3 py-1 rounded-bl-lg z-10">WEB APP</div>
-                    <div class="mb-4 text-accent p-3 bg-accent/10 rounded-lg w-fit">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                    </div>
-                    <h3 class="text-lg font-bold text-white mb-2">Orochimaru RAG</h3>
-                    <p class="text-slate-400 text-sm mb-6 flex-grow leading-relaxed">Secure document analyst. Load PDFs directly into browser RAM (no uploads) for private Q&A and summarization.</p>
-                    <a href="web_apps/Orochimaru_Web_Research_Assistent.html" class="w-full py-2.5 bg-tertiary hover:bg-white hover:text-secondary rounded-lg font-bold text-sm transition flex items-center justify-center gap-2">
-                        Launch App <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                    </a>
-                </div>
-
-                <!-- OneTail -->
-                <div class="glass-card p-6 rounded-xl group flex flex-col h-full relative overflow-hidden">
-                    <div class="absolute top-0 right-0 bg-accent text-secondary text-[10px] font-bold px-3 py-1 rounded-bl-lg z-10">WEB APP</div>
-                    <div class="mb-4 text-accent p-3 bg-accent/10 rounded-lg w-fit">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"></path></svg>
-                    </div>
-                    <h3 class="text-lg font-bold text-white mb-2">OneTail Chat</h3>
-                    <p class="text-slate-400 text-sm mb-6 flex-grow leading-relaxed">Lightweight, multi-provider chat interface. Perfect for quick code snippets, translation, or drafting.</p>
-                    <a href="web_apps/OneTail_Web_Chatapp.html" class="w-full py-2.5 bg-tertiary hover:bg-white hover:text-secondary rounded-lg font-bold text-sm transition flex items-center justify-center gap-2">
-                        Launch App <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                    </a>
-                </div>
-                
-                <!-- Neji -->
-                <div class="glass-card p-6 rounded-xl group flex flex-col h-full relative overflow-hidden">
-                    <div class="absolute top-0 right-0 bg-accent text-secondary text-[10px] font-bold px-3 py-1 rounded-bl-lg z-10">WEB APP</div>
-                    <div class="mb-4 text-accent p-3 bg-accent/10 rounded-lg w-fit">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-                    </div>
-                    <h3 class="text-lg font-bold text-white mb-2">Neji Search</h3>
-                    <p class="text-slate-400 text-sm mb-6 flex-grow leading-relaxed">AI-based research scholar tool. Dedicated engine for finding academic papers, citations, and scholarly sources.</p>
-                    <a href="web_apps/Neji_Search.html" class="w-full py-2.5 bg-tertiary hover:bg-white hover:text-secondary rounded-lg font-bold text-sm transition flex items-center justify-center gap-2">
-                        Launch App <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                    </a>
-                </div>
-
-                 <!-- AI Visualizer -->
-                 <div class="glass-card p-6 rounded-xl group flex flex-col h-full relative overflow-hidden">
-                    <div class="absolute top-0 right-0 bg-accent text-secondary text-[10px] font-bold px-3 py-1 rounded-bl-lg z-10">WEB APP</div>
-                    <div class="mb-4 text-accent p-3 bg-accent/10 rounded-lg w-fit">
-                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
-                    </div>
-                    <h3 class="text-lg font-bold text-white mb-2">AI Visualizer</h3>
-                    <p class="text-slate-400 text-sm mb-6 flex-grow leading-relaxed">Visualize token probabilities and LLM thinking process in real-time.</p>
-                    <a href="web_apps/Visualize_AI_Web.html" class="w-full py-2.5 bg-tertiary hover:bg-white hover:text-secondary rounded-lg font-bold text-sm transition flex items-center justify-center gap-2">
-                        Launch App <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
-                    </a>
-                </div>
-            </div>
-
-            <!-- LOCAL CONTENT -->
-            <div id="content-local" class="hidden max-w-5xl mx-auto">
-                
-                <!-- Installation Options -->
-                <div class="grid md:grid-cols-2 gap-8 mb-12">
-                    
-                    <!-- Standard Install -->
-                    <div class="bg-[#0f172a] border border-tertiary rounded-xl p-6 font-mono text-sm shadow-2xl relative group h-full flex flex-col">
-                        <div class="flex items-center gap-2 mb-4 border-b border-tertiary pb-4">
-                            <div class="w-3 h-3 rounded-full bg-red-500"></div>
-                            <div class="w-3 h-3 rounded-full bg-yellow-500"></div>
-                            <div class="w-3 h-3 rounded-full bg-green-500"></div>
-                            <span class="ml-2 text-slate-500">Standard Install (Requires Internet)</span>
-                        </div>
-                        <div class="space-y-3 text-slate-300 flex-grow">
-                            <p class="text-xs text-fg-secondary mb-2">// 1. Clone & Install Dependencies</p>
-                            <div class="flex"><span class="text-accent mr-2">$</span> git clone https://github.com/prathameshnium/Kusanagi-AI.git</div>
-                            <div class="flex"><span class="text-accent mr-2">$</span> pip install -r requirements.txt</div>
-                            
-                            <p class="text-xs text-fg-secondary mt-4 mb-2">// 2. Pull Models (Ollama)</p>
-                            <div class="flex"><span class="text-accent mr-2">$</span> ollama pull llama3</div>
-                            <div class="flex"><span class="text-accent mr-2">$</span> ollama pull mxbai-embed-large</div>
-                        </div>
-                        <button class="absolute top-4 right-4 bg-tertiary hover:bg-white hover:text-secondary text-xs px-3 py-1.5 rounded transition" onclick="copyStandard()">
-                            Copy
-                        </button>
-                    </div>
-
-                    <!-- Offline / Air-Gapped -->
-                    <div class="bg-[#0f172a] border border-tertiary rounded-xl p-6 font-mono text-sm shadow-2xl relative group h-full flex flex-col">
-                         <div class="flex items-center gap-2 mb-4 border-b border-tertiary pb-4">
-                            <svg class="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z"></path></svg>
-                            <span class="ml-2 text-slate-500">Offline / Air-Gapped System</span>
-                        </div>
-                        <div class="space-y-4 text-slate-300 flex-grow">
-                            <div class="bg-tertiary/20 p-3 rounded border border-accent/20">
-                                <h4 class="text-accent font-bold mb-1">Download All-in-One ZIP</h4>
-                                <p class="text-xs text-fg-secondary">Contains App + Dependencies + Models (Llama3/Qwen)</p>
-                            </div>
-                            <a href="#" class="block w-full py-3 bg-secondary hover:bg-tertiary border border-dashed border-accent text-center rounded-lg text-accent hover:text-white transition">
-                                Download Kusanagi_Offline_Bundle_v1.zip (4.2 GB)
-                            </a>
-                            <p class="text-[10px] text-fg-secondary italic">
-                                * Extract to C:/Kusanagi-AI on target machine. No internet required.
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="grid md:grid-cols-2 gap-6">
-                    <!-- Orochimaru Local -->
-                    <div class="glass-card p-6 rounded-xl flex flex-col gap-4 relative overflow-hidden">
-                        <div class="absolute top-0 right-0 bg-success text-secondary text-[10px] font-bold px-3 py-1 rounded-bl-lg">OFFLINE READY</div>
-                        <div class="flex items-center gap-4">
-                            <div class="p-4 bg-tertiary rounded-full flex-shrink-0">
-                                <svg class="w-8 h-8 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
-                            </div>
-                            <div>
-                                <h3 class="font-bold text-lg text-white">Orochimaru Local</h3>
-                                <p class="text-xs text-accent mt-1">NO API KEYS REQUIRED</p>
-                            </div>
-                        </div>
-                        <p class="text-sm text-fg-secondary">
-                            Full desktop RAG agent. Uses local Ollama models (Llama3/Mistral). Perfect for sensitive documents on air-gapped networks.
-                        </p>
-                         <div class="flex gap-2 mt-auto">
-                            <a href="https://github.com/prathameshnium/Kusanagi-AI/releases" target="_blank" class="flex-1 py-2 bg-accent text-secondary text-center rounded font-bold text-sm hover:bg-white transition">Download EXE</a>
-                        </div>
-                    </div>
-                    
-                    <!-- OneTail Local -->
-                    <div class="glass-card p-6 rounded-xl flex flex-col gap-4 relative overflow-hidden">
-                        <div class="absolute top-0 right-0 bg-success text-secondary text-[10px] font-bold px-3 py-1 rounded-bl-lg">OFFLINE READY</div>
-                         <div class="flex items-center gap-4">
-                            <div class="p-4 bg-tertiary rounded-full flex-shrink-0">
-                                <svg class="w-8 h-8 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a1.994 1.994 0 01-1.414-.586m0 0L11 14h4a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2v4l.586-.586z"></path></svg>
-                            </div>
-                            <div>
-                                <h3 class="font-bold text-lg text-white">OneTail Desktop</h3>
-                                <p class="text-xs text-accent mt-1">NO API KEYS REQUIRED</p>
-                            </div>
-                        </div>
-                         <p class="text-sm text-fg-secondary">
-                            System-tray chat assistant. Runs completely offline. Ideal for coding help or quick drafting without leaking data.
-                        </p>
-                        <div class="flex gap-2 mt-auto">
-                            <a href="https://github.com/prathameshnium/Kusanagi-AI/releases" target="_blank" class="flex-1 py-2 bg-accent text-secondary text-center rounded font-bold text-sm hover:bg-white transition">Download EXE</a>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-
-    </div>
-
-    <footer class="border-t border-tertiary/30 bg-primary py-10 text-center mt-auto">
-        <p class="text-slate-500 text-sm">© 2025 Kusanagi AI. Developed by <a href="https://github.com/prathameshnium" class="text-accent hover:underline">Prathamesh Deshmukh</a>.</p>
-        <div class="flex justify-center gap-4 mt-4 opacity-50 text-sm">
-            <a href="#" class="hover:text-white">Privacy</a>
-            <a href="#" class="hover:text-white">Documentation</a>
-            <a href="#" class="hover:text-white">Report Issue</a>
-        </div>
+    <footer class="border-t border-tertiary py-8 px-6 text-center text-xs text-fg-secondary">
+        <p class="mb-2">
+            Kusanagi AI &mdash; MIT licensed.
+            <a class="text-accent hover:underline" href="https://github.com/prathameshnium/Kusanagi-AI" target="_blank" rel="noopener noreferrer">Source</a> &middot;
+            <a class="text-accent hover:underline" href="https://github.com/prathameshnium/Kusanagi-AI/issues" target="_blank" rel="noopener noreferrer">Report an issue</a>
+        </p>
+        <p>Your keys and documents stay in your browser. Nothing is sent to this site.</p>
     </footer>
 
-    <script>
-        // --- Settings Modal ---
-        function toggleSettings() {
-            document.getElementById('settings-modal').classList.toggle('hidden');
-        }
-
-        function saveSettings() {
-            const geminiKey = document.getElementById('gemini-key-input').value.trim();
-            const groqKey = document.getElementById('groq-key-input').value.trim();
-            const hfToken = document.getElementById('hf-token-input').value.trim();
-
-            // Shared store: every web app reads keys from here, so this single save reaches all of them.
-            if (geminiKey) Kusanagi.keys.set('gemini', geminiKey);
-            if (groqKey) Kusanagi.keys.set('groq', groqKey);
-            if (hfToken) Kusanagi.keys.set('hf', hfToken);
-
-            alert("Keys saved. All web apps will now use them.");
-            toggleSettings();
-        }
-
-        function purgeData() {
-            if (confirm("Are you sure you want to purge all API keys from localStorage?")) {
-                Kusanagi.keys.purge();
-                document.getElementById('gemini-key-input').value = '';
-                document.getElementById('groq-key-input').value = '';
-                document.getElementById('hf-token-input').value = '';
-                alert("All keys have been purged.");
-            }
-        }
-
-        // --- TYPEWRITER LOGIC ---
-        const mainTitleText = "Kusanagi AI";
-        const phrases = [
-            "For Researchers in Physics & Material Science",
-            "Kakashi Search: An agentic web search engine.",
-            "Orochimaru RAG: Chat with your PDFs securely.",
-            "Neji Scholar: For academic paper discovery.",
-            "OneTail Chat: A multi-provider chat interface.",
-            "AI Visualizer: See how language models think.",
-            "Offline Suite: Run 100% locally on your desktop."
-        ];
-
-        let currentPhraseIndex = 0;
-        let isDeleting = false;
-        let txt = '';
-        const typeSpeed = 100;
-        const backSpeed = 50;
-        const waitTime = 2000;
-
-        function typeMainTitle() {
-            const element = document.getElementById('main-title');
-            const cursor = document.getElementById('cursor-1');
-            let i = 0;
-            
-            function typeChar() {
-                if (i < mainTitleText.length) {
-                    element.textContent += mainTitleText.charAt(i);
-                    i++;
-                    setTimeout(typeChar, typeSpeed);
-                } else {
-                    // Finished main title
-                    cursor.style.display = 'none'; 
-                    document.getElementById('cursor-2').classList.remove('hidden'); 
-                    
-                    // Reveal buttons and description
-                    const buttons = document.getElementById('hero-buttons');
-                    const desc = document.getElementById('static-desc');
-                    if(buttons) buttons.classList.remove('opacity-0');
-                    if(desc) desc.classList.remove('opacity-0');
-
-                    setTimeout(typeSlogans, 500); 
-                }
-            }
-            typeChar();
-        }
-
-        function typeSlogans() {
-            const fullTxt = phrases[currentPhraseIndex];
-            const element = document.getElementById('dynamic-subheadline');
-            
-            if (isDeleting) {
-                txt = fullTxt.substring(0, txt.length - 1);
-            } else {
-                txt = fullTxt.substring(0, txt.length + 1);
-            }
-
-            element.textContent = txt;
-
-            let delta = isDeleting ? backSpeed : typeSpeed;
-
-            if (!isDeleting && txt === fullTxt) {
-                delta = waitTime;
-                isDeleting = true;
-            } else if (isDeleting && txt === '') {
-                isDeleting = false;
-                currentPhraseIndex = (currentPhraseIndex + 1) % phrases.length;
-                delta = 500;
-            }
-
-            setTimeout(typeSlogans, delta);
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            typeMainTitle();
-            // Load keys into modal on open
-            document.getElementById('gemini-key-input').value = Kusanagi.keys.get('gemini');
-            document.getElementById('groq-key-input').value = Kusanagi.keys.get('groq');
-            document.getElementById('hf-token-input').value = Kusanagi.keys.get('hf');
-        });
-
-        function switchTab(tab) {
-            const webContent = document.getElementById('content-web');
-            const localContent = document.getElementById('content-local');
-
-            const step2 = document.getElementById('step-2');
-            const step3 = document.getElementById('step-3');
-            const stepLine = document.getElementById('step-line');
-
-            if(tab === 'web') {
-                webContent.classList.remove('hidden');
-                localContent.classList.add('hidden');
-                step2.style.opacity = '1';
-                step3.style.opacity = '1';
-                stepLine.style.display = 'block';
-            } else {
-                localContent.classList.remove('hidden');
-                webContent.classList.add('hidden');
-                step2.style.opacity = '0';
-                step3.style.opacity = '1';
-                stepLine.style.display = 'none';
-            }
-        }
-
-        function copyStandard() {
-            const text = "git clone https://github.com/prathameshnium/Kusanagi-AI.git\ncd Kusanagi-AI\npip install -r requirements.txt\npython local_apps/launcher.py";
-            navigator.clipboard.writeText(text);
-            alert("Git commands copied to clipboard!");
-        }
-    </script>
 </body>
 </html>

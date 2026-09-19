@@ -1,28 +1,11 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
-from tkinter.font import Font
 import ollama
 import threading
 import queue
 import time
-import json
-import os
-import subprocess
-import sys
 
-# --- UI Constants ---
-class Style:
-    UI_FONT = ("Segoe UI", 11)
-    # ... (rest of Style class is unchanged)
-
-# --- Project Root ---
-def get_project_root():
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    else:
-        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-PROJECT_ROOT = get_project_root()
+from kusanagi_core import Style, load_config, OllamaServer
 
 class VisualizeApp(tk.Tk):
     def __init__(self):
@@ -33,7 +16,7 @@ class VisualizeApp(tk.Tk):
         # --- Instance Variables ---
         self.app_config = {}
         self.ollama_client = None
-        self.ollama_process = None
+        self.ollama_server = None
         self.update_queue = queue.Queue()
         self.last_job_id = 0
         self.after_id = None
@@ -113,64 +96,14 @@ class VisualizeApp(tk.Tk):
         self.prediction_list.bind("<Double-1>", self.on_suggestion_click)
 
     def _load_config(self):
-        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
-        default_config = {
-            "ollama_path": os.path.join("Portable_AI_Assets", "ollama_main", "ollama.exe"),
-            "model_folder": os.path.join("Portable_AI_Assets", "models"),
-            "vector_cache_dir": os.path.join("Portable_AI_Assets", "vector_cache"),
-            "embedding_model_name": "mxbai-embed-large",
-            "default_model": "tinyllama:latest"
-        }
-        
-        config_from_file = {}
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, 'r') as f:
-                    config_from_file = json.load(f)
-            except (json.JSONDecodeError, IOError):
-                pass
-
-        final_config = default_config.copy()
-        final_config.update(config_from_file)
-
-        for key in ["ollama_path", "model_folder", "vector_cache_dir"]:
-            path_value = final_config.get(key, "")
-            if not os.path.isabs(path_value):
-                absolute_path = os.path.normpath(os.path.join(PROJECT_ROOT, path_value))
-            else:
-                absolute_path = os.path.normpath(path_value)
-            
-            if not os.path.exists(absolute_path) and key != "vector_cache_dir":
-                default_relative_path = default_config[key]
-                absolute_path = os.path.normpath(os.path.join(PROJECT_ROOT, default_relative_path))
-            
-            final_config[key] = absolute_path
-        
-        self.app_config = final_config
-        print(f"Info: Using configuration: {self.app_config}")
-
-    def _start_ollama_server(self, ollama_path, model_folder):
-        env = os.environ.copy()
-        if model_folder and os.path.exists(model_folder):
-            env["OLLAMA_MODELS"] = model_folder
-        
-        log_dir = os.path.join(PROJECT_ROOT, "logs")
-        os.makedirs(log_dir, exist_ok=True)
-        log_file = open(os.path.join(log_dir, "ollama_visualizer.log"), "a", encoding="utf-8")
-
-        process = subprocess.Popen(
-            [ollama_path, "serve"], env=env, stdout=log_file, stderr=log_file,
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-        )
-        return process
+        # Defaults, System_Config.json and path resolution all live in
+        # kusanagi_core so the four desktop apps cannot drift apart again.
+        self.app_config = load_config()
+        self.app_config.setdefault("default_model", "tinyllama:latest")
 
     def _stop_ollama_server(self):
-        if self.ollama_process and self.ollama_process.poll() is None:
-            self.ollama_process.terminate()
-            try:
-                self.ollama_process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.ollama_process.kill()
+        if self.ollama_server:
+            self.ollama_server.stop()
 
     def initialize_ollama(self):
         ollama_path = self.app_config.get("ollama_path")
@@ -184,8 +117,9 @@ class VisualizeApp(tk.Tk):
         except Exception:
             pass
 
-        if ollama_path and os.path.exists(ollama_path):
-            self.ollama_process = self._start_ollama_server(ollama_path, model_folder)
+        self.ollama_server = OllamaServer(ollama_path, model_folder,
+                                          log_name="ollama_visualizer.log")
+        if self.ollama_server.available and self.ollama_server.start():
             self.ollama_client = ollama.Client(host='127.0.0.1', timeout=60)
             self.after(100, lambda: self._check_server_readiness(time.time(), 45))
         else:
@@ -206,7 +140,6 @@ class VisualizeApp(tk.Tk):
             self.after(1000, lambda: self._check_server_readiness(start_time, max_wait))
 
     def get_next_word_predictions(self, prompt, temperature, num_predictions=5):
-        # ... (implementation remains the same, just change global access to self)
         if not self.selected_model: return {}
         model_name = self.selected_model.get()
         if not prompt.strip() or not self.ollama_client or "No models" in model_name or "Error" in model_name:
@@ -307,7 +240,7 @@ class VisualizeApp(tk.Tk):
             self.status_light.config(foreground=Style.ACCENT)
             self.status_label.config(text="Ready", foreground=Style.ACCENT)
 
-        except Exception as e:
+        except Exception:
             self.status_light.config(foreground=Style.ERROR)
             self.status_label.config(text="Connection Failed", foreground=Style.ERROR)
             self.selected_model.set("Connection Failed")

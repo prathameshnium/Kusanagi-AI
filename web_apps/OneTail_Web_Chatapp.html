@@ -3,355 +3,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OneTail - Web Chat</title>
-    <link rel="icon" href="https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/logo/Kusanagi-AI.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../static/theme.js"></script>
-    <script src="../static/providers.js"></script>
-    <script src="../static/settings-modal.js"></script>
-    <!-- Added Marked.js for Markdown rendering -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
-    <meta name="description" content="OneTail Chat — a lightweight, multi-provider chat interface for quick code snippets, translation, or drafting.">
-
-    <link rel="stylesheet" href="../static/style.css">
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'none';
+        script-src 'self';
+        style-src 'self';
+        img-src 'self' data:;
+        font-src 'self';
+        connect-src https://generativelanguage.googleapis.com https://api.groq.com https://api-inference.huggingface.co;
+        base-uri 'none';
+        form-action 'none';">
+    <title>OneTail Chat &mdash; Kusanagi AI</title>
+    <meta name="description" content="OneTail — a private multi-provider AI chat. Nothing is written to disk.">
+    <link rel="icon" href="../static/logo-64.png">
+    <link rel="stylesheet" href="../static/kusanagi.css">
+    <script src="../static/vendor/marked.min.js" defer></script>
+    <script src="../static/vendor/purify.min.js" defer></script>
+    <script src="../static/keys.js" defer></script>
+    <script src="../static/providers.js" defer></script>
+    <script src="../static/dom.js" defer></script>
+    <script src="../static/ui.js" defer></script>
+    <script src="../static/pages/onetail.js" defer></script>
 </head>
 <body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden">
-    <a href="../index.html" class="home-button">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
-        </svg>
+    <a href="../index.html" class="home-button" aria-label="Back to the Kusanagi AI dashboard">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
     </a>
 
     <div class="flex h-full max-h-screen">
-        
+
         <!-- === Sidebar === -->
         <aside class="w-64 flex-shrink-0 bg-secondary flex flex-col p-4 border-r border-tertiary">
-            <!-- Header -->
-            <div class="px-1">
-                <h1 class="text-2xl font-bold"><a href="../index.html" class="hover:underline text-fg-primary">Kusanagi AI</a><span class="text-fg-secondary font-normal mx-1"> / </span><span class="text-accent">OneTail Chat</span></h1>
-                <p class="text-sm font-bold text-accent">Private & Secure</p>
-                <p class="text-xs text-fg-secondary mt-1">Local Session Storage Only</p>
+            <div class="px-1 mt-12">
+                <h1 class="text-xl font-bold">
+                    <a href="../index.html" class="hover:underline text-fg-primary">Kusanagi AI</a>
+                    <span class="text-fg-secondary font-normal">/</span>
+                    <span class="text-accent">OneTail</span>
+                </h1>
+                <p class="text-xs text-fg-secondary mt-1">Nothing is written to disk</p>
             </div>
 
-            <!-- Status -->
-            <div class="flex items-center space-x-2 px-2 mt-4">
-                <span id="status-light" class="text-red-500 text-lg">●</span>
-                <span id="status-label" class="text-sm text-fg-primary">No Key</span>
+            <div class="flex items-center gap-2 px-1 mt-4">
+                <span id="status-light" class="w-2.5 h-2.5 rounded-full bg-danger inline-block" aria-hidden="true"></span>
+                <span id="status-label" class="text-sm text-fg-primary">No API key</span>
             </div>
 
             <hr class="border-tertiary my-4">
 
-            <!-- Model Controls -->
             <div class="px-1 space-y-3">
                 <div>
-                    <label for="model-selector" class="text-sm font-semibold text-fg-primary">Chat Model:</label>
-                    <select id="model-selector" class="w-full bg-tertiary text-fg-primary p-2 rounded-md mt-1 focus:outline-none focus:ring-2 focus:ring-accent text-sm">
-                        <!-- Populated by JS -->
-                    </select>
+                    <label for="model-selector" class="text-sm font-semibold text-fg-primary">Chat model</label>
+                    <select id="model-selector" class="mt-1 text-sm"></select>
                 </div>
                 <div>
-                    <label class="text-sm font-semibold text-fg-primary flex justify-between">
-                        <span>Temperature:</span>
-                        <span id="temp-value">0.7</span>
+                    <label for="temperature-slider" class="text-sm font-semibold text-fg-primary flex justify-between">
+                        <span>Temperature</span>
+                        <span id="temp-value" class="font-mono text-accent">0.7</span>
                     </label>
-                    <input id="temperature-slider" type="range" min="0" max="1" step="0.1" value="0.7" class="w-full h-2 bg-tertiary rounded-lg appearance-none cursor-pointer mt-1">
+                    <input id="temperature-slider" type="range" min="0" max="1" step="0.1" value="0.7" class="w-full mt-1">
                 </div>
             </div>
 
             <hr class="border-tertiary my-4">
 
-            <!-- Chat History List -->
-            <div class="flex-grow flex flex-col mt-4 overflow-hidden">
+            <div class="flex-grow flex flex-col overflow-hidden">
                 <div class="flex-shrink-0 flex justify-between items-center mb-2">
-                    <h2 class="text-lg font-semibold">Session</h2>
-                    <div class="flex space-x-1">
-                        <button id="new-chat-btn" class="bg-accent hover:bg-yellow-500 p-1.5 rounded-md text-accent-fg text-xs font-bold transition flex items-center gap-1">
-                            <span>+</span> New Chat
-                        </button>
-                    </div>
+                    <h2 class="text-base font-semibold">Session</h2>
+                    <button id="new-chat-btn" type="button" class="btn btn-accent text-xs">New chat</button>
                 </div>
-                <div class="flex-grow bg-tertiary rounded-md p-1 space-y-1 overflow-y-auto">
-                    <div class="p-2 rounded-md bg-primary border border-accent opacity-80 cursor-default">
-                        <h3 class="font-semibold text-fg-primary truncate text-sm" id="session-title">Current Chat</h3>
-                        <p class="text-[10px] text-fg-secondary">In-Memory Only</p>
-                    </div>
+                <div class="bg-tertiary rounded-md p-2">
+                    <p class="text-xs text-fg-primary">In-memory only</p>
+                    <p class="text-[10px] text-fg-secondary mt-1">
+                        <span id="turn-count">0</span> turns held for context
+                    </p>
                 </div>
             </div>
         </aside>
 
-        <!-- === Main Chat Area === -->
-        <main class="flex-1 flex flex-col max-h-screen p-2 relative">
-            <!-- Top Bar -->
-            <header class="flex-shrink-0 flex justify-between items-center p-2 bg-secondary/50 rounded-t-lg mx-2 mt-2 border-b border-tertiary">
-                <div class="flex items-center gap-2">
-                    <div class="w-2 h-2 bg-green-400 rounded-full animate-pulse" title="Secure Connection"></div>
-                    <!-- Replaced Text with Padlock Icon -->
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-accent" title="Secure Session Active">
+        <!-- === Main === -->
+        <main class="flex-1 flex flex-col max-h-screen p-2 relative min-w-0">
+            <header class="flex-shrink-0 flex justify-between items-center gap-3 p-2 bg-secondary/50 rounded-t-lg mx-2 mt-2 border-b border-tertiary">
+                <div class="flex items-center gap-2 text-accent">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5" aria-hidden="true">
                         <path fill-rule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clip-rule="evenodd" />
                     </svg>
-                </div>
-                
-                <!-- Stats Display -->
-                <div class="flex items-center gap-4 text-xs font-mono text-fg-secondary bg-tertiary/30 px-3 py-1 rounded-full border border-tertiary">
-                    <div title="Total tokens used in this RAM session">
-                        <span class="text-accent">Tokens:</span> <span id="token-display" class="text-fg-primary">0</span>
-                    </div>
-                    <div class="w-[1px] h-3 bg-fg-secondary/30"></div>
-                    <div title="Generation speed (Tokens per Second)">
-                        <span class="text-accent">Speed:</span> <span id="speed-display" class="text-fg-primary">0 t/s</span>
-                    </div>
+                    <span class="text-xs font-bold hidden sm:inline">Direct to provider</span>
                 </div>
 
-                <div class="flex items-center space-x-3">
-                    <button onclick="Kusanagi.purgeAll()" class="text-lg hover:scale-110 transition duration-200" title="Delete All Data (Keys & History)">🔥</button>
-                    <div class="w-[1px] h-6 bg-tertiary"></div>
-                    <button onclick="settingsApi.open()" class="text-sm bg-tertiary hover:bg-secondary text-fg-primary px-3 py-1 rounded border border-accent/30 transition" title="Configure API Keys">⚙️ Settings</button>
+                <div class="flex items-center gap-4 text-xs font-mono text-fg-secondary bg-tertiary/30 px-3 py-1 rounded-full border border-tertiary">
+                    <div><span class="text-accent">Tokens:</span> <span id="token-display" class="text-fg-primary">0</span></div>
+                    <div class="w-px h-3 bg-fg-secondary/30"></div>
+                    <div><span class="text-accent">Speed:</span> <span id="speed-display" class="text-fg-primary">0 t/s</span></div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <button id="purge-btn" type="button" class="btn btn-danger text-xs">Purge keys</button>
+                    <button id="open-settings" type="button" class="btn btn-secondary text-xs">Settings</button>
                 </div>
             </header>
 
-            <!-- Chat History -->
-            <div id="chat-history" class="flex-grow p-4 overflow-y-auto space-y-6 bg-primary mx-2 mb-2 custom-scrollbar">
-                <!-- Greeting -->
-                <div class="flex items-start space-x-4">
-                    <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent">AI</div>
-                    <div class="bg-tertiary p-4 rounded-lg max-w-3xl">
-                        <p class="font-bold text-accent mb-1">OneTail Secure</p>
-                        <p>This environment is designed for privacy. 
-                        <ul class="list-disc ml-5 mt-2 text-sm opacity-90">
-                            <li>Chats are <strong>not saved</strong>. Reloading deletes them.</li>
-                            <li>API Keys are stored <strong>locally</strong> in your browser.</li>
-                            <li>Traffic goes <strong>directly</strong> to the AI provider.</li>
-                        </ul>
-                        </p>
-                    </div>
-                </div>
-            </div>
+            <div id="chat-history" class="flex-grow p-4 overflow-y-auto space-y-6 bg-primary mx-2 mb-2" role="log" aria-live="polite" aria-label="Conversation"></div>
 
-            <!-- Input Bar -->
             <div class="flex-shrink-0 p-2">
                 <div class="flex bg-tertiary rounded-md p-1.5 border border-tertiary focus-within:border-accent transition-colors shadow-lg">
-                    <input id="chat-input" type="text" placeholder="Type your message securely..." class="w-full bg-transparent p-2 text-lg text-fg-primary placeholder-fg-secondary focus:outline-none">
-                    <button id="send-button" class="bg-accent text-accent-fg rounded-md p-3 ml-2 hover:bg-yellow-500 transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
-                        <span class="font-bold text-xl leading-none">➤</span>
-                    </button>
+                    <label for="chat-input" class="sr-only">Message</label>
+                    <input id="chat-input" type="text" autocomplete="off" placeholder="Type your message..." class="w-full bg-transparent !border-0 !p-2 text-lg text-fg-primary placeholder-fg-secondary focus:outline-none">
+                    <button id="send-button" type="button" class="btn btn-accent ml-2 px-4" aria-label="Send message">Send</button>
                 </div>
             </div>
         </main>
     </div>
-
-    <script>
-        // --- DOM ELEMENTS ---
-        const chatInput = document.getElementById('chat-input');
-        const sendButton = document.getElementById('send-button');
-        const chatHistory = document.getElementById('chat-history');
-        const modelSelector = document.getElementById('model-selector');
-        const tempSlider = document.getElementById('temperature-slider');
-        const tempValue = document.getElementById('temp-value');
-        const statusLight = document.getElementById('status-light');
-        const statusLabel = document.getElementById('status-label');
-        const newChatBtn = document.getElementById('new-chat-btn');
-        const tokenDisplay = document.getElementById('token-display');
-        const speedDisplay = document.getElementById('speed-display');
-
-        // --- STATE ---
-        const config = {
-            get provider() { return Kusanagi.keys.provider(); },
-            get hfToken() { return Kusanagi.keys.get('hf'); },
-            get geminiKey() { return Kusanagi.keys.get('gemini'); },
-            get groqKey() { return Kusanagi.keys.get('groq'); },
-        };
-
-        // RAM-only stats
-        let sessionTokens = 0;
-        let settingsApi;
-
-        // --- INITIALIZATION ---
-        document.addEventListener('DOMContentLoaded', () => {
-            settingsApi = Kusanagi.mountSettings({
-                providers: ['hf', 'gemini', 'groq'],
-                onSave: () => { updateModelList(); checkStatus(); },
-            });
-
-            updateModelList();
-            checkStatus();
-
-            // Temp Slider
-            tempSlider.addEventListener('input', () => {
-                tempValue.textContent = tempSlider.value;
-            });
-
-            // Event Listeners
-            sendButton.addEventListener('click', handleSend);
-            newChatBtn.addEventListener('click', startNewChat);
-
-            chatInput.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') handleSend();
-            });
-        });
-
-        // --- NEW CHAT LOGIC ---
-        function startNewChat() {
-            // Clear history
-            chatHistory.innerHTML = `
-                <div class="flex items-start space-x-4">
-                    <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent">AI</div>
-                    <div class="bg-tertiary p-4 rounded-lg max-w-3xl">
-                        <p class="font-bold text-accent mb-1">OneTail Secure</p>
-                        <p>Chat cleared. Memory wiped. Ready for a new topic.</p>
-                    </div>
-                </div>
-            `;
-            // Reset Stats
-            sessionTokens = 0;
-            tokenDisplay.textContent = "0";
-            speedDisplay.textContent = "0 t/s";
-            chatInput.value = '';
-            chatInput.focus();
-        }
-
-        function updateModelList() {
-            const providerModels = Kusanagi.MODELS[config.provider] || [];
-            modelSelector.innerHTML = providerModels.map(m =>
-                `<option value="${m.id}">${m.name}</option>`
-            ).join('');
-        }
-
-        function checkStatus() {
-            let hasKey = false;
-            if (config.provider === 'hf' && config.hfToken) hasKey = true;
-            if (config.provider === 'gemini' && config.geminiKey) hasKey = true;
-            if (config.provider === 'groq' && config.groqKey) hasKey = true;
-
-            if (hasKey) {
-                statusLight.classList.remove('text-red-500');
-                statusLight.classList.add('text-green-400');
-                statusLabel.textContent = "Keys Loaded";
-            } else {
-                statusLight.classList.remove('text-green-400');
-                statusLight.classList.add('text-red-500');
-                statusLabel.textContent = "No API Key";
-            }
-            return hasKey;
-        }
-
-        // --- CHAT LOGIC ---
-        async function handleSend() {
-            const prompt = chatInput.value.trim();
-            if (!prompt) return;
-            
-            if (!checkStatus()) {
-                alert(`Please set up your ${config.provider.toUpperCase()} API key in Settings.`);
-                settingsApi.open();
-                return;
-            }
-
-            // Estimate input tokens (approx 4 chars per token)
-            const estimatedInputTokens = Math.ceil(prompt.length / 4);
-
-            // UI Updates
-            chatInput.value = '';
-            appendMessage('user', prompt);
-            sendButton.disabled = true;
-            
-            const thinkingId = appendThinking();
-            const modelId = modelSelector.value;
-            const temperature = parseFloat(tempSlider.value);
-            const startTime = performance.now();
-
-            try {
-                const apiKey = config.provider === 'hf' ? config.hfToken
-                    : config.provider === 'groq' ? config.groqKey
-                    : config.geminiKey;
-                const response = await Kusanagi.call(config.provider, { apiKey, model: modelId, temperature, prompt });
-
-                const endTime = performance.now();
-                const durationSec = (endTime - startTime) / 1000;
-
-                // Update Stats
-                let outputTokens = 0;
-                let totalTokens = 0;
-
-                if (response.usage) {
-                    // Use exact API usage if available
-                    totalTokens = response.usage.total_tokens || (response.usage.prompt_tokens + response.usage.completion_tokens);
-                    outputTokens = response.usage.completion_tokens || (totalTokens - estimatedInputTokens);
-                } else {
-                    // Fallback estimation for HF
-                    outputTokens = Math.ceil(response.text.length / 4);
-                    totalTokens = estimatedInputTokens + outputTokens;
-                }
-
-                const speed = outputTokens / durationSec;
-
-                // Update UI State
-                sessionTokens += totalTokens;
-                tokenDisplay.textContent = sessionTokens.toLocaleString();
-                speedDisplay.textContent = speed.toFixed(1) + " t/s";
-
-                // Remove thinking, add response
-                document.getElementById(thinkingId).remove();
-                appendMessage('ai', response.text);
-
-            } catch (error) {
-                document.getElementById(thinkingId).remove();
-                appendMessage('error', `Error: ${error.message}`);
-            } finally {
-                sendButton.disabled = false;
-                chatInput.focus();
-            }
-        }
-
-        function appendMessage(role, text) {
-            const div = document.createElement('div');
-            div.className = "flex items-start space-x-4" + (role === 'user' ? " justify-end" : "");
-            
-            let content = "";
-            if (role === 'user') {
-                content = `
-                    <div class="bg-accent text-accent-fg p-4 rounded-lg max-w-2xl shadow-md">
-                        <p class="font-bold mb-1 text-xs opacity-70">You</p>
-                        <div class="whitespace-pre-wrap">${text}</div>
-                    </div>
-                `;
-            } else if (role === 'ai') {
-                const parsedText = DOMPurify.sanitize(marked.parse(text));
-                content = `
-                    <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent">AI</div>
-                    <div class="bg-tertiary p-4 rounded-lg max-w-3xl shadow-md prose prose-invert text-sm text-fg-primary">
-                        ${parsedText}
-                    </div>
-                `;
-            } else if (role === 'error') {
-                content = `
-                     <div class="flex-shrink-0 w-10 h-10 bg-red-900 rounded-full flex items-center justify-center font-bold text-white">!</div>
-                     <div class="bg-red-900/50 p-4 rounded-lg max-w-2xl border border-red-700 text-red-200">
-                        ${text}
-                    </div>
-                `;
-            }
-
-            div.innerHTML = content;
-            chatHistory.appendChild(div);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-        }
-
-        function appendThinking() {
-            const id = 'thinking-' + Date.now();
-            const div = document.createElement('div');
-            div.id = id;
-            div.className = "flex items-start space-x-4";
-            div.innerHTML = `
-                <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent animate-pulse">...</div>
-                <div class="bg-tertiary p-4 rounded-lg text-fg-secondary italic animate-pulse">
-                    Thinking...
-                </div>
-            `;
-            chatHistory.appendChild(div);
-            chatHistory.scrollTop = chatHistory.scrollHeight;
-            return id;
-        }
-
-    </script>
 </body>
 </html>

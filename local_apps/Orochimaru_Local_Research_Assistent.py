@@ -1,35 +1,17 @@
 import tkinter as tk
 from tkinter import scrolledtext, ttk, Listbox, filedialog, messagebox
-import re
 import time
 import threading
 import queue
-import subprocess
 import sys
 import os
-import gc
 import datetime
-import json
-import signal
 import shutil
 import httpx
 from multiprocessing import Pool, cpu_count
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# --- PROJECT ROOT ---
-# Get project root for both dev and bundled (PyInstaller) environments
-def get_project_root():
-    if getattr(sys, 'frozen', False):
-        # Running as a bundled executable (e.g., via PyInstaller).
-        # For a one-dir bundle, sys.executable is the path to the executable,
-        # so its directory is our root.
-        return os.path.dirname(sys.executable)
-    else:
-        # Running as a script from the 'local_apps' subdirectory.
-        # We need to go up one level to find the project root.
-        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-PROJECT_ROOT = get_project_root()
+from kusanagi_core import PROJECT_ROOT, Style, load_config, OllamaServer
 
 # --- RAG & File Processing Imports ---
 try:
@@ -65,30 +47,6 @@ try:
 except ImportError:
     print("Warning: 'pyttsx3' not found. TTS will be disabled.")
     pyttsx3 = None
-
-# --- UI CONSTANTS ---
-class Style:
-    UI_FONT = ("Segoe UI", 11)
-    CHAT_FONT = ("Segoe UI", 11)
-    TITLE_FONT = ("Segoe UI", 18, "bold")
-    LOG_FONT = ("Courier New", 9)
-    BG_PRIMARY = "#193549"
-    BG_SECONDARY = "#002240"
-    BG_TERTIARY = "#25435A"
-    FG_PRIMARY = "#FFFFFF"
-    FG_SECONDARY = "#97B1C2"
-    ACCENT = "#ffab40"
-    ACCENT_FG = "#002240"
-    ERROR = "#FF628C"
-    LOG_COLOR = "#F1FA8C"
-    ICON_LOAD = "📄"
-    ICON_SAVE = "💾"
-    ICON_CLEAR = "🗑️"
-    ICON_SEND = "➤"
-    ICON_UNMUTE = "🔊"
-    ICON_MUTE = "🔇"
-    ICON_NEW_CHAT = "➕"
-    ICON_DELETE = "➖"
 
 # --- GLOBAL STATE & PROMPTS ---
 ENTRY_PLACEHOLDER = "Ask a question or type a command..."
@@ -154,7 +112,7 @@ class ResearchApp(tk.Tk):
 
         # 1. Initialize core attributes
         self.ollama_client = None
-        self.ollama_process = None # To store the subprocess
+        self.ollama_server = None  # OllamaServer, when we manage one ourselves
         self.stop_loading_event = threading.Event()
         self.is_muted = False
         self.embedding_model_available = False
@@ -228,7 +186,6 @@ class ResearchApp(tk.Tk):
 
     def _start_review_with_role(self, reviewer_role):
         # Retrieve the temporarily stored document info
-        doc_id = self._temp_review_doc_id
         full_text = self._temp_review_full_text
 
         threading.Thread(target=self.review_thread, args=(full_text, self.current_chat_id, reviewer_role), daemon=True).start()
@@ -791,7 +748,7 @@ class ResearchApp(tk.Tk):
                 text_embedding_dir = os.path.join(base_dir, 'text_embedding_model')
 
                 if nested_model_folders or os.path.exists(text_embedding_dir):
-                    print(f"     - DIAGNOSIS: Found potential unconsolidated model folders. Consolidating now.")
+                    print("     - DIAGNOSIS: Found potential unconsolidated model folders. Consolidating now.")
                     self._consolidate_models(model_folder_path, nested_model_folders)
                     print("     - Rerunning model population after consolidation...")
                     self.after(100, self.populate_models)
@@ -806,20 +763,20 @@ class ResearchApp(tk.Tk):
             if not models_list:
                 print("3. WARNING: 'models' key not found in response or is empty. No models will be loaded.")
                 model_folder_path = self.app_config.get('model_folder')
-                print(f"   - This usually means the OLLAMA_MODELS path is incorrect or the directory is empty.")
+                print("   - This usually means the OLLAMA_MODELS path is incorrect or the directory is empty.")
                 print(f"   - Current OLLAMA_MODELS path set at server start: '{model_folder_path}'")
                 if os.path.exists(model_folder_path):
                     if not os.listdir(model_folder_path):
-                        print(f"   - DIAGNOSIS: The directory exists but is empty. Please place your Ollama models inside it.")
+                        print("   - DIAGNOSIS: The directory exists but is empty. Please place your Ollama models inside it.")
                     else:
                         print(f"   - DIAGNOSIS: The directory '{model_folder_path}' exists and is not empty, but Ollama found no models.")
                         subdirs = [d for d in os.listdir(model_folder_path) if os.path.isdir(os.path.join(model_folder_path, d))]
                         if 'manifests' not in subdirs or 'blobs' not in subdirs:
                             print(f"     - PROBLEM: The folder '{model_folder_path}' is missing the required 'manifests' and/or 'blobs' subdirectories.")
                         else:
-                             print(f"   - The folder structure appears correct. Check for corrupted model files.")
+                             print("   - The folder structure appears correct. Check for corrupted model files.")
                 else:
-                    print(f"   - DIAGNOSIS: The directory does not exist. Please check 'model_folder' in System_Config.json.")
+                    print("   - DIAGNOSIS: The directory does not exist. Please check 'model_folder' in System_Config.json.")
 
             model_names = sorted([m['model'] for m in models_list])
             print(f"3. Extracted and sorted model names: {model_names}")
@@ -861,7 +818,7 @@ class ResearchApp(tk.Tk):
                 self.embedding_model_available = False
                 self.embed_model_var.set("No models found")
                 self.load_pdf_button.config(state=tk.DISABLED)
-                print(f"   - WARNING: No embedding models were found. Document features will be disabled.")
+                print("   - WARNING: No embedding models were found. Document features will be disabled.")
 
             # --- Select Active Chat Model ---
             current_selection = self.model_selector.get()
@@ -876,7 +833,7 @@ class ResearchApp(tk.Tk):
             print("--- Model Population Complete ---")
 
         except Exception as e:
-            print(f"\n--- Ollama Connection/Population FAILED ---")
+            print("\n--- Ollama Connection/Population FAILED ---")
             print(f"ERROR: {e}")
             self.status_light.config(foreground=Style.ERROR); self.status_label.config(text="Ollama Not Found")
             self.model_selector['values'] = ["Connection Failed"]; self.model_var.set("Connection Failed")
@@ -967,7 +924,6 @@ class ResearchApp(tk.Tk):
 
             worker_args = [chunk['text'] for chunk in chunks]
             # Set concurrency to 1 to prevent overloading the local Ollama server.
-            safe_concurrency = 1
             num_threads = 1
 
             results = [None] * total_chunks # Pre-allocate list to store results in order
@@ -1021,7 +977,12 @@ class ResearchApp(tk.Tk):
 
         except Exception as e:
             print(f"--- Error processing PDF '{pdf_id}': {e} ---", file=sys.stderr)
-            self.after(0, lambda: messagebox.showerror("Processing Error", f"Failed to process '{pdf_id}'.\n\nDetails: {e}"))
+            # Bind the text now. Python unbinds `e` when the except block ends, so
+            # a lambda closing over it raises NameError by the time after() runs it
+            # -- i.e. the error dialog itself used to crash.
+            detail = str(e)
+            self.after(0, lambda msg=detail: messagebox.showerror(
+                "Processing Error", "Failed to process '{}'.\n\nDetails: {}".format(pdf_id, msg)))
             self.remove_document_data(pdf_id)
         finally:
             self.after(0, lambda: self.load_pdf_button.config(state=tk.NORMAL))
@@ -1214,7 +1175,6 @@ class ResearchApp(tk.Tk):
         print("--- Initializing Ollama Connection ---")
         ollama_path = self.app_config.get("ollama_path")
         model_folder = self.app_config.get("model_folder")
-        embedding_model_needed = self.app_config.get("embedding_model_name")
 
         # Try to connect to an existing server first
         try:
@@ -1241,11 +1201,11 @@ class ResearchApp(tk.Tk):
                 return # Success, we are done.
             else:
                 print("3. WARNING: Existing server found, but it does NOT have a suitable embedding model.")
-                print(f"   - Could not find a suitable embedding model (e.g. 'all-minilm', 'mxbai-embed-large').")
+                print("   - Could not find a suitable embedding model (e.g. 'all-minilm', 'mxbai-embed-large').")
                 print("   - The application will now attempt to start its own managed Ollama server.")
                 # Attempt to shut down our own previously managed server if it's still running,
                 # as it might be the one without the model.
-                if self.ollama_process:
+                if self.ollama_server:
                     print("   - Shutting down previously managed Ollama server to restart it correctly.")
                     self._stop_ollama_server()
                 print("   - Please ensure the external Ollama server is shut down if you encounter port conflicts.")
@@ -1269,7 +1229,9 @@ class ResearchApp(tk.Tk):
         print(f"1. Executable path: {ollama_path}")
         print(f"2. Model folder to be used: {model_folder}")
         try:
-            self.ollama_process = self._start_ollama_server(ollama_path, model_folder)
+            self.ollama_server = OllamaServer(ollama_path, model_folder,
+                                              log_name='ollama_server.log')
+            self.ollama_server.start()
             self.ollama_client = ollama.Client(host='127.0.0.1', timeout=300)
             print("3. Waiting for managed Ollama server to become responsive...")
             self.after(100, lambda: self._check_server_readiness(time.time(), 60))
@@ -1296,147 +1258,15 @@ class ResearchApp(tk.Tk):
             self.status_label.config(text=f"Waiting... ({int(elapsed_time)}s)")
             self.after(1000, lambda: self._check_server_readiness(start_time, max_wait))
 
-    def _start_ollama_server(self, ollama_path, model_folder):
-        print(f"Attempting to start Ollama server from: {ollama_path}")
-        env = os.environ.copy()
-        if model_folder and os.path.exists(model_folder):
-            env["OLLAMA_MODELS"] = model_folder
-            print(f"Setting OLLAMA_MODELS environment variable to: {model_folder}")
-        else:
-            print(f"Warning: Model folder '{model_folder}' not found. Ollama will use its default.")
-
-        # Create a log file for the server process
-        log_dir = "logs"
-        os.makedirs(log_dir, exist_ok=True)
-        ollama_log_path = os.path.join(log_dir, "ollama_server.log")
-        print(f"Redirecting Ollama server output to: {ollama_log_path}")
-        log_file = open(ollama_log_path, "a", encoding="utf-8")
-
-        # Start Ollama server in a detached process
-        process = subprocess.Popen(
-            [ollama_path, "serve"],
-            env=env,
-            stdout=log_file,
-            stderr=log_file,
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-        )
-        return process
-
     def _stop_ollama_server(self):
-        if self.ollama_process and self.ollama_process.poll() is None:
-            print("Stopping Ollama server...")
-            # Terminate the process group to ensure all child processes are killed
-            self.ollama_process.terminate()
-            try:
-                self.ollama_process.wait(timeout=5)
-                print("Ollama server stopped.")
-            except subprocess.TimeoutExpired:
-                print("Ollama server did not terminate in time. Forcing kill.")
-                self.ollama_process.kill()
-
+        if self.ollama_server:
+            self.ollama_server.stop()
 
     def _load_config(self):
-        print("\n--- Loading Configuration ---")
-        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
-        print(f"1. Project Root: '{PROJECT_ROOT}'")
-        print(f"2. Checking for config file at: '{config_path}'")
+        # Shared with every other desktop app -- see local_apps/kusanagi_core.py.
+        self.app_config = load_config()
+        print("Info: using configuration: %s" % self.app_config)
 
-        default_config = {
-            "ollama_path": os.path.join("Portable_AI_Assets", "ollama_main", "ollama.exe"),
-            # NOTE: Ollama can only be started with one model directory. All models, including the
-            # embedding model required for document analysis (e.g., 'mxbai-embed-large'), must be
-            # located within this single 'model_folder' directory.
-            "model_folder": os.path.join("Portable_AI_Assets", "models"),
-            "vector_cache_dir": os.path.join("Portable_AI_Assets", "vector_cache"),
-            "embedding_model_name": "all-minilm"
-        }
-        print(f"3. Default config loaded: {json.dumps(default_config, indent=2)}")
-
-        config_from_file = {}
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, 'r') as f:
-                    config_from_file = json.load(f)
-                print(f"4. Successfully loaded config from file: {json.dumps(config_from_file, indent=2)}")
-            except (json.JSONDecodeError, IOError) as e:
-                print(f"4. WARNING: Could not read or parse '{config_path}'. Using default settings. Error: {e}")
-        else:
-            print("4. Config file not found. Using default settings.")
-
-        # Start with defaults, then layer config from file on top
-        final_config = default_config.copy()
-        final_config.update(config_from_file)
-        print(f"5. Merged config (defaults + file): {json.dumps(final_config, indent=2)}")
-
-        print("\n--- Resolving and Validating Paths ---")
-        # All paths are treated as relative to the project root for portability.
-        for key in ["ollama_path", "model_folder", "vector_cache_dir"]:
-            print(f"\nProcessing path for '{key}':")
-            path_value = final_config[key]
-            print(f"  - Initial value: '{path_value}'")
-            
-            # If path is not absolute, resolve it relative to the project root
-            if not os.path.isabs(path_value):
-                print("  - Path is relative. Resolving against project root.")
-                absolute_path = os.path.normpath(os.path.join(PROJECT_ROOT, path_value))
-            else:
-                print("  - Path is absolute.")
-                absolute_path = os.path.normpath(path_value)
-            print(f"  - Resolved absolute path: '{absolute_path}'")
-
-            # If the resolved path from the config is invalid, fall back to the default path
-            if not os.path.exists(absolute_path) and key != "vector_cache_dir":
-                print(f"  - WARNING: Path does not exist: '{absolute_path}'")
-                default_relative_path = default_config[key]
-                absolute_path = os.path.normpath(os.path.join(PROJECT_ROOT, default_relative_path))
-                print(f"  - Falling back to default path: '{absolute_path}'")
-            
-            final_config[key] = absolute_path # Update config with the validated, absolute path
-            print(f"  - Final path for '{key}': '{final_config[key]}'")
-            if os.path.exists(final_config[key]):
-                print("    - Path validation: OK")
-            elif key != "vector_cache_dir":
-                 print("    - Path validation: FAILED - Path does not exist.")
-        
-        # Ensure the vector cache directory exists.
-        try:
-            print(f"\nEnsuring vector cache directory exists at: '{final_config['vector_cache_dir']}'")
-            os.makedirs(final_config["vector_cache_dir"], exist_ok=True)
-        except OSError as e:
-            print(f"Error creating vector cache directory '{final_config['vector_cache_dir']}': {e}")
-
-        print(f"\n--- Configuration Loading Complete ---")
-        print(f"Final configuration object: {json.dumps(final_config, indent=2)}")
-        return final_config
-
-    def _save_config(self, app_config):
-        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
-        # When saving, try to make paths relative to the project root for portability
-        relative_config = {}
-        for key, value in app_config.items():
-            if isinstance(value, str) and os.path.isabs(value) and key in ["ollama_path", "model_folder", "vector_cache_dir"]:
-                try:
-                    # This will make the path relative if it's on the same drive
-                    relative_config[key] = os.path.relpath(value, PROJECT_ROOT)
-                except ValueError:
-                    # Paths are on different drives, so keep the absolute path
-                    relative_config[key] = value
-            else:
-                relative_config[key] = value
-
-        with open(config_path, 'w') as f:
-            json.dump(relative_config, f, indent=4)
-
-    def _create_and_redirect_console(self):
-        """Creates the console widget and redirects stdout/stderr to it."""
-        self.console = scrolledtext.ScrolledText(self, height=8, bg=Style.BG_TERTIARY, font=Style.LOG_FONT)
-        self.console.tag_config("log", foreground=Style.LOG_COLOR)
-        self.console.tag_config("error", foreground=Style.ERROR)
-        self.console.grid(row=1, column=0, columnspan=2, sticky="ew", padx=5, pady=5)
-
-        sys.stdout = ConsoleRedirector(self.console, "log")
-        sys.stderr = ConsoleRedirector(self.console, "error")
-        print("--- Console Initialized and Redirected ---")
 
 class ConsoleRedirector:
     def __init__(self, text_widget, tag=None):

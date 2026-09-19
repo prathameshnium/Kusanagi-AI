@@ -141,6 +141,10 @@
             font-size: 11px;
             color: var(--log-color);
         }
+
+        .log-time {
+            color: var(--fg-secondary);
+        }
     </style>
 </head>
 <body>
@@ -230,7 +234,15 @@
     function logMessage(message) {
         const time = new Date().toLocaleTimeString();
         const msgDiv = document.createElement('div');
-        msgDiv.innerHTML = `<span style="color:var(--fg-secondary)">[${time}]</span> ${message}`;
+
+        // Built as nodes rather than an innerHTML template. Every caller passes an
+        // internally generated string today, but this stops that being load-bearing.
+        const stamp = document.createElement('span');
+        stamp.className = 'log-time';
+        stamp.textContent = `[${time}]`;
+
+        msgDiv.appendChild(stamp);
+        msgDiv.appendChild(document.createTextNode(' ' + message));
         consoleLogEl.appendChild(msgDiv);
         // Auto-scroll to the bottom
         consoleLogEl.scrollTop = consoleLogEl.scrollHeight;

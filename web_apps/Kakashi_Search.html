@@ -3,510 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kusanagi AI / Kakashi Search</title>
-    <link rel="icon" href="https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/logo/Kusanagi-AI.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../static/theme.js"></script>
-    <script src="../static/providers.js"></script>
-    <script src="../static/settings-modal.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+    <!-- connect-src lists every endpoint this app is allowed to reach. A script
+         injected through a paper title could not exfiltrate to anywhere else. -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'none';
+        script-src 'self';
+        style-src 'self';
+        img-src 'self' data:;
+        font-src 'self';
+        connect-src https://generativelanguage.googleapis.com https://api.groq.com https://api-inference.huggingface.co https://en.wikipedia.org https://api.duckduckgo.com https://api.openalex.org https://hn.algolia.com https://api.crossref.org;
+        base-uri 'none';
+        form-action 'none';">
+    <title>Kakashi Search &mdash; Kusanagi AI</title>
     <meta name="description" content="Kakashi Search — an agentic search engine that breaks queries into sub-tasks and searches Wikipedia, papers, and the web in parallel.">
-
-    <link rel="stylesheet" href="../static/style.css">
+    <link rel="icon" href="../static/logo-64.png">
+    <link rel="stylesheet" href="../static/kusanagi.css">
+    <link rel="stylesheet" href="../static/vendor/katex/katex.min.css">
+    <script src="../static/vendor/marked.min.js" defer></script>
+    <script src="../static/vendor/purify.min.js" defer></script>
+    <script src="../static/vendor/katex/katex.min.js" defer></script>
+    <script src="../static/vendor/katex/auto-render.min.js" defer></script>
+    <script src="../static/keys.js" defer></script>
+    <script src="../static/providers.js" defer></script>
+    <script src="../static/dom.js" defer></script>
+    <script src="../static/ui.js" defer></script>
+    <script src="../static/pages/kakashi.js" defer></script>
 </head>
 <body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden flex flex-col">
-    <a href="../index.html" class="home-button">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+    <a href="../index.html" class="home-button" aria-label="Back to the Kusanagi AI dashboard">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
     </a>
 
     <!-- HEADER -->
-    <header class="flex-shrink-0 h-14 border-b border-tertiary flex items-center justify-between px-4 bg-secondary/95 backdrop-blur z-20">
-        <div class="flex items-center gap-3">
-            <div class="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-secondary font-bold text-xl shadow-lg cursor-pointer" onclick="resetSearch()">K</div>
+    <header class="flex-shrink-0 h-14 border-b border-tertiary flex items-center justify-between px-4 pl-16 bg-secondary/95 backdrop-blur z-20 gap-3">
+        <div class="flex items-center gap-3 shrink-0">
             <h1 class="text-lg font-bold text-fg-primary tracking-tight hidden md:block">
                 <a href="../index.html" class="hover:underline">Kusanagi AI</a>
                 <span class="text-fg-secondary font-normal mx-1">/</span>
-                <span class="cursor-pointer" onclick="resetSearch()">Kakashi Search</span>
+                <button id="reset-search" type="button" class="hover:underline">Kakashi</button>
             </h1>
         </div>
-        
-        <div class="flex-1 max-w-2xl mx-4 hidden" id="header-search-container">
-             <div class="relative group">
-                <input id="header-input" type="text" class="w-full bg-primary text-fg-primary border border-tertiary rounded-full py-1.5 pl-4 pr-12 focus:border-accent focus:outline-none shadow-inner transition-all text-sm" placeholder="New search..." onkeydown="if(event.key === 'Enter') triggerSearch('header-input')">
-                <button onclick="triggerSearch('header-input')" class="absolute right-1 top-0.5 bottom-0.5 bg-secondary hover:bg-tertiary text-accent rounded-full w-8 flex items-center justify-center transition">➤</button>
+
+        <div class="flex-1 max-w-2xl hidden" id="header-search-container">
+            <div class="relative">
+                <label for="header-input" class="sr-only">New search</label>
+                <input id="header-input" type="text" autocomplete="off" class="!py-1.5 !pl-4 !pr-12 !rounded-full !bg-primary text-sm" placeholder="New search...">
+                <button id="header-go" type="button" class="absolute right-1 top-1 bottom-1 bg-secondary hover:bg-tertiary text-accent rounded-full w-9 flex items-center justify-center transition" aria-label="Search">&rsaquo;</button>
             </div>
         </div>
 
-        <div class="flex items-center gap-3">
-             <!-- Performance Dashboard -->
-             <div class="hidden lg:flex items-center gap-3 text-[10px] font-mono text-fg-secondary bg-primary/50 px-3 py-1 rounded-full border border-tertiary mr-2" title="Live Session Metrics">
-                 <div class="flex items-center gap-1 text-success font-bold">
-                    <span class="w-2 h-2 rounded-full bg-success animate-pulse"></span> Secure
-                 </div>
-                 <div class="w-[1px] h-3 bg-tertiary"></div>
-                 <div><span class="text-accent">RAM:</span> <span id="header-ram">--</span></div>
-                 <div class="w-[1px] h-3 bg-tertiary"></div>
-                 <div><span class="text-accent">Tok:</span> <span id="header-tokens">0</span></div>
-                 <div class="w-[1px] h-3 bg-tertiary"></div>
-                 <div><span class="text-accent">Spd:</span> <span id="header-speed">--</span></div>
-             </div>
-
-             <button onclick="Kusanagi.purgeAll()" class="text-lg hover:scale-110 transition duration-200" title="Delete All Data">🔥</button>
-             <button onclick="settingsApi.open()" class="text-sm bg-tertiary hover:bg-primary text-fg-primary px-3 py-1.5 rounded border border-accent/30 transition font-medium">⚙️</button>
+        <div class="flex items-center gap-3 shrink-0">
+            <div class="hidden lg:flex items-center gap-3 text-[10px] font-mono text-fg-secondary bg-primary/50 px-3 py-1 rounded-full border border-tertiary">
+                <div><span class="text-accent">RAM:</span> <span id="header-ram">--</span></div>
+                <div class="w-px h-3 bg-tertiary"></div>
+                <div><span class="text-accent">Tok:</span> <span id="header-tokens">0</span></div>
+                <div class="w-px h-3 bg-tertiary"></div>
+                <div><span class="text-accent">Spd:</span> <span id="header-speed">--</span></div>
+            </div>
+            <button id="purge-btn" type="button" class="btn btn-danger text-xs">Purge keys</button>
+            <button id="open-settings" type="button" class="btn btn-secondary text-xs">Settings</button>
         </div>
     </header>
 
-    <!-- MAIN LAYOUT -->
+    <!-- MAIN -->
     <main class="flex-1 flex overflow-hidden relative">
-        
-        <!-- LEFT: ORGANIC RESULTS (50%) -->
-        <section id="organic-column" class="w-full md:w-1/2 overflow-y-auto custom-scrollbar bg-primary border-r border-tertiary relative">
-            
-            <!-- HOME STATE -->
+
+        <!-- LEFT: organic results -->
+        <section id="organic-column" class="w-full md:w-1/2 overflow-y-auto bg-primary border-r border-tertiary">
             <div id="home-state" class="min-h-full flex flex-col items-center justify-center pb-32 px-4">
-                <h1 class="text-4xl md:text-5xl font-bold text-fg-primary mb-6 tracking-tight text-center">Deep Search</h1>
-                <div class="w-full max-w-xl relative mb-8">
-                    <div class="absolute -inset-1 bg-gradient-to-r from-accent to-blue-600 rounded-2xl opacity-20 blur"></div>
-                    <div class="relative flex items-center bg-secondary rounded-xl shadow-2xl border border-tertiary overflow-hidden">
-                        <input id="home-input" type="text" class="w-full bg-transparent text-lg text-fg-primary p-4 placeholder-fg-secondary/50 focus:outline-none" placeholder="Ask a complex question..." onkeydown="if(event.key === 'Enter') triggerSearch('home-input')" autofocus>
-                        <button onclick="triggerSearch('home-input')" class="p-4 bg-accent hover:bg-accent-hover text-secondary font-bold transition">GO</button>
+                <h2 class="text-4xl md:text-5xl font-bold text-fg-primary mb-6 tracking-tight text-center">Deep search</h2>
+                <div class="w-full max-w-xl mb-8">
+                    <div class="flex items-center bg-secondary rounded-xl shadow-2xl border border-tertiary overflow-hidden focus-within:border-accent transition-colors">
+                        <label for="home-input" class="sr-only">Search query</label>
+                        <input id="home-input" type="text" autocomplete="off" class="!border-0 !rounded-none !bg-transparent text-lg !p-4" placeholder="Ask a complex question..." autofocus>
+                        <button id="home-go" type="button" class="p-4 bg-accent hover:bg-accent-hover text-secondary font-bold transition shrink-0">GO</button>
                     </div>
                 </div>
-                <div class="flex gap-4 text-xs text-fg-secondary">
-                    <span>⚡ Agentic Search</span>
-                    <span>🔒 Local Privacy</span>
-                    <span>🧠 Multi-Model</span>
+                <div class="flex flex-wrap justify-center gap-4 text-xs text-fg-secondary">
+                    <span>Agentic query expansion</span>
+                    <span>Five open databases</span>
+                    <span>Keys never leave the browser</span>
                 </div>
             </div>
 
-            <!-- RESULTS FEED -->
             <div id="results-feed" class="hidden p-4 md:p-6 space-y-4">
                 <div class="border-b border-tertiary pb-4 mb-4">
-                    <h1 id="query-display" class="text-2xl font-bold text-fg-primary mb-2">...</h1>
-                    <div class="flex justify-between items-end">
-                        <h2 class="text-sm font-bold text-accent uppercase tracking-wider">Organic Intelligence</h2>
+                    <h2 id="query-display" class="text-2xl font-bold text-fg-primary mb-2"></h2>
+                    <div class="flex justify-between items-end gap-3">
+                        <h3 class="text-sm font-bold text-accent uppercase tracking-wider">Organic results</h3>
                         <span id="result-stats" class="text-[10px] text-fg-secondary font-mono">Searching...</span>
                     </div>
                 </div>
-                
+
                 <div id="search-strategy" class="hidden mb-4">
                     <div class="bg-secondary/50 border border-tertiary rounded p-3">
-                        <p class="text-[10px] text-fg-secondary font-bold uppercase mb-2">Agentic Strategy</p>
+                        <p class="text-[10px] text-fg-secondary font-bold uppercase mb-2">Agentic strategy</p>
                         <div id="strategy-list" class="space-y-3"></div>
                     </div>
                 </div>
 
-                <div id="organic-container" class="space-y-3">
-                    <!-- Results injected here -->
-                </div>
+                <div id="organic-container" class="space-y-3"></div>
             </div>
         </section>
 
-        <!-- RIGHT: AI SIDEBAR (50%) -->
+        <!-- RIGHT: AI panel -->
         <aside id="ai-sidebar" class="hidden md:flex w-1/2 bg-secondary flex-col z-10 shadow-2xl">
-            
-            <!-- AI Control Header -->
-            <div class="p-3 border-b border-tertiary bg-secondary/95 backdrop-blur flex flex-wrap items-center justify-between gap-2 sticky top-0 z-10">
+            <div class="p-3 border-b border-tertiary bg-secondary/95 backdrop-blur flex flex-wrap items-center justify-between gap-2">
                 <div class="flex items-center gap-2">
-                    <div class="w-2 h-2 bg-accent rounded-full animate-pulse"></div>
-                    <span class="font-bold text-sm text-fg-primary">AI Analysis</span>
+                    <span class="w-2 h-2 bg-accent rounded-full" aria-hidden="true"></span>
+                    <span class="font-bold text-sm text-fg-primary">AI analysis</span>
                 </div>
-                
+
                 <div class="flex items-center gap-3">
-                    <!-- Model Select -->
-                    <select id="model-select" class="bg-primary text-xs text-fg-primary p-1.5 rounded border border-tertiary focus:outline-none max-w-[140px]">
-                        <!-- Models -->
-                    </select>
-                    
-                    <!-- Temp Slider -->
-                    <div class="flex items-center gap-1 bg-primary px-2 py-1 rounded border border-tertiary" title="Temperature (Creativity)">
-                        <span class="text-[10px] text-fg-secondary">Temp:</span>
+                    <label for="model-select" class="sr-only">Model</label>
+                    <select id="model-select" class="!w-auto !bg-primary !text-xs !p-1.5 max-w-[150px]"></select>
+
+                    <div class="flex items-center gap-1 bg-primary px-2 py-1 rounded border border-tertiary">
+                        <label for="temp-slider" class="text-[10px] text-fg-secondary">Temp</label>
                         <input type="range" id="temp-slider" min="0" max="1" step="0.1" value="0.7" class="w-12">
-                        <span id="temp-display" class="text-[10px] text-accent font-mono w-4">0.7</span>
+                        <span id="temp-display" class="text-[10px] text-accent font-mono w-5">0.7</span>
                     </div>
                 </div>
             </div>
 
-            <div id="ai-content" class="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                <div id="ai-placeholder" class="text-center mt-32 opacity-50">
-                    <div class="text-5xl mb-3">🧠</div>
-                    <p class="text-sm text-fg-secondary">Enter a query to start<br>Deep Analysis.</p>
+            <div id="ai-content" class="flex-1 overflow-y-auto p-6">
+                <div id="ai-placeholder" class="text-center mt-32 opacity-60">
+                    <p class="text-sm text-fg-secondary">Enter a query to start a deep analysis.</p>
                 </div>
-                
+
                 <div id="ai-loading" class="hidden space-y-4">
-                    <div class="flex items-center gap-2 text-accent text-xs font-mono mb-4 animate-pulse">
-                        <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                        Synthesizing knowledge...
+                    <div class="flex items-center gap-2 text-accent text-xs font-mono mb-4">
+                        <span class="w-3 h-3 border-2 border-accent border-t-transparent rounded-full animate-spin inline-block" role="status" aria-label="Loading"></span>
+                        Synthesising...
                     </div>
                     <div class="h-4 bg-tertiary rounded w-3/4 animate-pulse"></div>
                     <div class="h-4 bg-tertiary rounded w-full animate-pulse"></div>
                     <div class="h-4 bg-tertiary rounded w-5/6 animate-pulse"></div>
                 </div>
-                
+
                 <div id="ai-response" class="prose prose-invert hidden leading-relaxed"></div>
             </div>
         </aside>
-
     </main>
-
-    <script>
-        // --- CONFIG ---
-        const config = {
-            get provider() { return Kusanagi.keys.provider(); },
-            get apiKey() { return Kusanagi.keys.get(Kusanagi.keys.provider()); },
-        };
-
-        let sessionTokens = 0;
-        let settingsApi;
-
-        // Warn user on close (Privacy Feature)
-        window.onbeforeunload = function() {
-            return "Data is RAM-only. Closing this tab will wipe your session.";
-        };
-
-        // --- INIT ---
-        document.addEventListener('DOMContentLoaded', () => {
-            settingsApi = Kusanagi.mountSettings({
-                providers: ['gemini', 'groq', 'hf'],
-                onSave: populateModels,
-            });
-            initUI();
-            setInterval(updateRAM, 2000);
-        });
-
-        function initUI() {
-            populateModels();
-
-            const slider = document.getElementById('temp-slider');
-            const display = document.getElementById('temp-display');
-            slider.addEventListener('input', (e) => display.textContent = e.target.value);
-
-            document.getElementById('home-input').focus();
-        }
-
-        // --- SEARCH LOGIC ---
-        async function triggerSearch(inputId) {
-            const input = document.getElementById(inputId);
-            const query = input.value.trim();
-            if (!query) return;
-
-            if (!config.apiKey) {
-                settingsApi.open();
-                alert("Please enter an API Key to activate Kakashi.");
-                return;
-            }
-
-            // UI Transition
-            document.getElementById('home-state').classList.add('hidden');
-            document.getElementById('results-feed').classList.remove('hidden');
-            document.getElementById('header-search-container').classList.remove('hidden');
-            document.getElementById('header-input').value = query;
-            
-            const queryDisplay = document.getElementById('query-display');
-            if (queryDisplay) queryDisplay.textContent = query;
-            
-            const orgContainer = document.getElementById('organic-container');
-            orgContainer.innerHTML = `<div class="flex justify-center py-20"><div class="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin"></div></div>`;
-
-            // Reset AI Panel
-            document.getElementById('ai-placeholder').classList.add('hidden');
-            document.getElementById('ai-response').classList.add('hidden');
-            document.getElementById('ai-loading').classList.remove('hidden');
-            document.getElementById('strategy-list').innerHTML = '';
-            document.getElementById('search-strategy').classList.add('hidden');
-
-            // 1. Generate 5 Search Prompts (Agentic)
-            let prompts = [query]; // Default fallbacks
-            try {
-                const strategyPrompt = `User Query: "${query}". Generate exactly 5 diverse, high-value search queries to find comprehensive info (e.g. specific technical terms, news angles, debates). Return ONLY a JSON array of strings.`;
-                const strategyRes = await callAI(strategyPrompt, 0.5);
-                prompts = JSON.parse(strategyRes.replace(/```json|```/g, '').trim());
-                if (!Array.isArray(prompts)) prompts = [query];
-            } catch (e) { console.warn("Strategy generation failed, using raw query"); }
-
-            // Render Strategy
-            const stratContainer = document.getElementById('strategy-list');
-            document.getElementById('search-strategy').classList.remove('hidden');
-            stratContainer.innerHTML = ''; // Clear it
-            stratContainer.className = 'space-y-3'; // Ensure vertical stacking
-
-            const searchEngines = [
-                { name: 'Google', url: 'https://www.google.com/search?q=' },
-                { name: 'StartPage', url: 'https://www.startpage.com/do/search?query=' },
-                { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=' },
-                { name: 'Brave', url: 'https://search.brave.com/search?q=' },
-                { name: 'Qwant', url: 'https://www.qwant.com/?q=' },
-                { name: 'SearXNG', url: 'https://searx.space/?q=' }
-            ];
-
-            prompts.forEach(p => {
-                const promptEl = document.createElement('div');
-                promptEl.className = "bg-primary border border-tertiary p-2 rounded";
-                
-                const promptText = document.createElement('p');
-                promptText.className = "text-xs text-fg-primary mb-2 font-mono";
-                promptText.textContent = p;
-                promptEl.appendChild(promptText);
-
-                const buttonContainer = document.createElement('div');
-                buttonContainer.className = "flex flex-wrap gap-1";
-
-                searchEngines.forEach(engine => {
-                    const link = document.createElement('a');
-                    link.href = `${engine.url}${encodeURIComponent(p)}`;
-                    link.target = '_blank';
-                    link.rel = 'noopener noreferrer';
-                    link.className = 'text-[9px] bg-secondary border border-tertiary px-1.5 py-0.5 rounded text-fg-secondary hover:bg-accent hover:text-black transition-colors';
-                    link.textContent = engine.name;
-                    buttonContainer.appendChild(link);
-                });
-
-                promptEl.appendChild(buttonContainer);
-                stratContainer.appendChild(promptEl);
-            });
-
-            // 2. Execute Hydra Search (Parallel)
-            const startTime = performance.now();
-            const allResults = [];
-            
-            // Use all 5 prompts as requested
-            const activePrompts = prompts.slice(0, 5);
-            
-            const searchPromises = activePrompts.map(async (p) => {
-                 const [wiki, alex, ddg, hn, arxiv] = await Promise.all([
-                     fetchWikipedia(p),
-                     fetchOpenAlex(p),
-                     fetchDuckDuckGo(p),
-                     fetchHackerNews(p),
-                     fetchArxiv(p)
-                 ]);
-                 return [...wiki, ...alex, ...ddg, ...hn, ...arxiv];
-            });
-
-            const resultBatches = await Promise.all(searchPromises);
-            resultBatches.flat().forEach(r => allResults.push(r));
-
-            // Deduplicate by URL
-            const uniqueResults = [];
-            const urls = new Set();
-            allResults.forEach(r => {
-                if (!urls.has(r.url)) {
-                    urls.add(r.url);
-                    uniqueResults.push(r);
-                }
-            });
-
-            const duration = ((performance.now() - startTime) / 1000).toFixed(2);
-            document.getElementById('result-stats').textContent = `${uniqueResults.length} organic results (${duration}s)`;
-
-            renderOrganicResults(uniqueResults);
-
-            // 3. Generate AI Answer
-            const aiPrompt = `You are Kakashi. User Query: "${query}". 
-            Provide a deep, comprehensive analysis. 
-            IMPORTANT: Use LaTeX for any mathematical formulas or chemical equations (wrap them in single $ signs, e.g. $E=mc^2$, $H_2O$).
-            Use Markdown for other formatting.
-            
-            Structure:
-            1. Direct Answer/Summary.
-            2. Key Details/Mechanisms.
-            3. Context/History/Debate.`;
-            
-            const aiStartTime = performance.now();
-            try {
-                const aiRes = await callAI(aiPrompt, parseFloat(document.getElementById('temp-slider').value));
-                const aiDur = ((performance.now() - aiStartTime) / 1000);
-                const tokens = Math.ceil(aiRes.length / 4);
-                
-                updateMetrics(tokens, tokens/aiDur);
-                
-                document.getElementById('ai-loading').classList.add('hidden');
-                const responseContainer = document.getElementById('ai-response');
-                responseContainer.innerHTML = DOMPurify.sanitize(marked.parse(aiRes));
-                responseContainer.classList.remove('hidden');
-                
-                // Render Math
-                if (window.renderMathInElement) {
-                    renderMathInElement(responseContainer, {
-                        delimiters: [
-                            {left: "$$", right: "$$", display: true},
-                            {left: "$", right: "$", display: false}
-                        ],
-                        throwOnError: false
-                    });
-                }
-                
-            } catch (e) {
-                document.getElementById('ai-loading').classList.add('hidden');
-                document.getElementById('ai-response').innerHTML = `<span class="text-danger">AI Error: ${e.message}</span>`;
-                document.getElementById('ai-response').classList.remove('hidden');
-            }
-        }
-
-        function renderOrganicResults(results) {
-            const container = document.getElementById('organic-container');
-            container.innerHTML = "";
-
-            if(results.length === 0) {
-                container.innerHTML = `<div class="text-center text-fg-secondary py-10">No results found.</div>`;
-                return;
-            }
-
-            // Sort mechanism (External cards stay top)
-            const typeScore = { 'DuckDuckGo': 10, 'Qwant': 9, 'SearXNG': 8, 'OpenAlex': 4, 'Wikipedia': 3, 'Arxiv': 3, 'HackerNews': 1 };
-            results.sort((a, b) => (typeScore[b.source] || 0) - (typeScore[a.source] || 0));
-
-            results.forEach(res => {
-                const card = document.createElement('div');
-                card.className = "result-card bg-secondary border border-tertiary rounded-lg p-4 hover:bg-primary transition group";
-                
-                let badgeClass = "bg-tertiary text-fg-secondary";
-                if(res.source === 'Wikipedia') badgeClass = "bg-gray-700 text-gray-200";
-                if(res.source === 'DuckDuckGo') badgeClass = "bg-orange-900/50 text-orange-200";
-                if(res.source === 'OpenAlex') badgeClass = "bg-green-900/50 text-green-200";
-                if(res.source === 'Arxiv') badgeClass = "bg-red-900/50 text-red-200";
-                if(res.source === 'HackerNews') badgeClass = "bg-orange-600/20 text-orange-400";
-                if(res.meta === 'External') badgeClass = "bg-blue-600 text-white font-bold";
-
-                card.innerHTML = `
-                    <div class="flex items-start justify-between mb-1.5">
-                        <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded ${badgeClass}">${res.source}</span>
-                        <span class="text-[10px] text-fg-secondary">${res.meta || ''}</span>
-                    </div>
-                    <a href="${res.url}" target="_blank" rel="noopener noreferrer" class="block group-hover:underline">
-                        <h3 class="text-base font-bold text-accent mb-1 leading-snug">${res.title}</h3>
-                    </a>
-                    <p class="text-sm text-fg-secondary line-clamp-3 leading-relaxed">${res.snippet}</p>
-                    <div class="mt-3 pt-2 border-t border-tertiary/50 flex gap-2">
-                        <a href="${res.url}" target="_blank" rel="noopener noreferrer" class="text-[10px] text-tertiary hover:text-fg-primary truncate max-w-[200px]">${res.url}</a>
-                    </div>
-                `;
-                container.appendChild(card);
-            });
-        }
-
-        // --- DATA SOURCES ---
-        async function fetchWikipedia(query) {
-            try {
-                const url = `https://en.wikipedia.org/w/api.php?action=opensearch&search=${encodeURIComponent(query)}&limit=3&namespace=0&format=json&origin=*`;
-                const resp = await fetch(url);
-                const data = await resp.json();
-                if(!data[1]) return [];
-                return data[1].map((title, i) => ({
-                    source: 'Wikipedia', title: title, snippet: data[2][i] || "No description.", url: data[3][i], meta: 'Wiki'
-                }));
-            } catch(e) { return []; }
-        }
-
-        async function fetchDuckDuckGo(query) {
-            try {
-                const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
-                const resp = await fetch(url);
-                const data = await resp.json();
-                const results = [];
-                if(data.Abstract && data.AbstractURL) results.push({ source: 'DuckDuckGo', title: data.Heading, snippet: data.Abstract, url: data.AbstractURL, meta: 'Instant' });
-                if(data.RelatedTopics) data.RelatedTopics.slice(0, 2).forEach(t => { if(t.Text && t.FirstURL) results.push({ source: 'DuckDuckGo', title: t.Text.split('-')[0], snippet: t.Text, url: t.FirstURL, meta: 'Related' }); });
-                return results;
-            } catch(e) { return []; }
-        }
-
-        async function fetchOpenAlex(query) {
-            try {
-                const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per_page=3&sort=cited_by_count:desc&mailto=kakashi@example.com`;
-                const resp = await fetch(url);
-                const data = await resp.json();
-                return data.results.map(w => ({
-                    source: 'OpenAlex', title: w.title, snippet: (w.abstract_inverted_index ? "Abstract available. " : "") + `Cited by ${w.cited_by_count}.`, url: w.doi || w.id, meta: w.publication_year
-                }));
-            } catch(e) { return []; }
-        }
-
-        async function fetchHackerNews(query) {
-            try {
-                const url = `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(query)}&tags=story&hitsPerPage=2`;
-                const resp = await fetch(url);
-                const data = await resp.json();
-                return data.hits.map(h => ({
-                    source: 'HackerNews', title: h.title, snippet: `Points: ${h.points} | Comments: ${h.num_comments}`, url: h.url || `https://news.ycombinator.com/item?id=${h.objectID}`, meta: new Date(h.created_at).getFullYear()
-                }));
-            } catch(e) { return []; }
-        }
-
-        async function fetchArxiv(query) {
-            try {
-                const url = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(query)}&max_results=3&sortBy=relevance&sortOrder=descending`;
-                const resp = await fetch(url);
-                const text = await resp.text();
-                const parser = new DOMParser();
-                const xml = parser.parseFromString(text, "text/xml");
-                const entries = Array.from(xml.querySelectorAll("entry"));
-                return entries.map(entry => {
-                    const title = entry.querySelector("title").textContent.trim();
-                    const snippet = entry.querySelector("summary").textContent.trim();
-                    const url = entry.querySelector("id").textContent.trim();
-                    const published = new Date(entry.querySelector("published").textContent);
-                    const year = published.getFullYear();
-                    return {
-                        source: 'Arxiv',
-                        title: title,
-                        snippet: snippet,
-                        url: url,
-                        meta: year
-                    };
-                });
-            } catch(e) {
-                console.warn("Arxiv fetch failed", e);
-                return [];
-            }
-        }
-
-        // --- METRICS ---
-        function updateMetrics(tokens, speed) {
-            sessionTokens += tokens;
-            const headerTokens = document.getElementById('header-tokens');
-            if(headerTokens) headerTokens.textContent = sessionTokens.toLocaleString();
-
-            const headerSpeed = document.getElementById('header-speed');
-            if(headerSpeed && speed) headerSpeed.textContent = speed.toFixed(1) + " t/s";
-        }
-
-        function updateRAM() {
-            const headerRam = document.getElementById('header-ram');
-            if (performance.memory) {
-                headerRam.textContent = `${Math.round(performance.memory.usedJSHeapSize / 1024 / 1024)} MB`;
-            } else {
-                headerRam.textContent = "--";
-            }
-        }
-
-        function populateModels() {
-            const select = document.getElementById('model-select');
-            select.innerHTML = "";
-            (Kusanagi.MODELS[config.provider] || []).forEach(m => {
-                let opt = document.createElement('option');
-                opt.value = m.id; opt.textContent = m.name;
-                select.appendChild(opt);
-            });
-        }
-
-        function resetSearch() {
-            document.getElementById('results-feed').classList.add('hidden');
-            document.getElementById('header-search-container').classList.add('hidden');
-            document.getElementById('home-state').classList.remove('hidden');
-            document.getElementById('home-input').value = "";
-            document.getElementById('home-input').focus();
-        }
-
-        // --- API CALLER ---
-        async function callAI(prompt, temp) {
-            const model = document.getElementById('model-select').value;
-            const result = await Kusanagi.call(config.provider, { apiKey: config.apiKey, model, temperature: temp, prompt });
-            return result.text;
-        }
-    </script>
 </body>
 </html>

@@ -1,5 +1,10 @@
-// Shared Tailwind config for all Kusanagi AI pages. Load after the Tailwind CDN script.
-tailwind.config = {
+/* Build-time only. Nothing loads this at runtime any more -- the pages link the
+   compiled static/kusanagi.css instead of the Tailwind CDN, which is what lets the
+   Content-Security-Policy drop 'unsafe-eval' and 'unsafe-inline'.
+
+   Rebuild after touching any HTML class:  python scripts/build_css.py          */
+module.exports = {
+    content: ['./index.html', './web_apps/*.html', './static/**/*.js', './local_apps/*.html'],
     theme: {
         extend: {
             colors: {

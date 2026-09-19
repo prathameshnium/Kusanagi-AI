@@ -1,0 +1,34 @@
+# core.autocrlf is on for this checkout, which rewrites line endings on the way
+# in and out. That is fine for source we edit, and wrong for anything whose bytes
+# should match what was downloaded.
+
+# Normalise our own text to LF in the repository.
+*.py    text eol=lf
+*.js    text eol=lf
+*.mjs   text eol=lf
+*.css   text eol=lf
+*.html  text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.xml   text eol=lf
+*.ps1   text eol=crlf
+
+# Vendored third-party assets: keep byte-for-byte what upstream served, so the
+# files can be re-downloaded and diffed against their source.
+static/vendor/** -text
+
+# Binary, never munge or try to diff.
+*.woff2 binary
+*.woff  binary
+*.ttf   binary
+*.png   binary
+*.jpg   binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.exe   binary
+*.pyd   binary
+*.dll   binary
+*.zip   binary
+*.mmap  binary

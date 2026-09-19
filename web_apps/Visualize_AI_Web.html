@@ -3,80 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Visualizer - Web</title>
-    <link rel="icon" href="https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/logo/Kusanagi-AI.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../static/theme.js"></script>
-    <script src="../static/providers.js"></script>
-    <script src="../static/settings-modal.js"></script>
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'none';
+        script-src 'self';
+        style-src 'self';
+        img-src 'self' data:;
+        font-src 'self';
+        connect-src https://generativelanguage.googleapis.com https://api.groq.com https://api-inference.huggingface.co;
+        base-uri 'none';
+        form-action 'none';">
+    <title>AI Visualizer &mdash; Kusanagi AI</title>
     <meta name="description" content="AI Visualizer — see next-word token probabilities and LLM thinking in real-time.">
-    <link rel="stylesheet" href="../static/style.css">
-    <style>
-        /* Probability Bar Animation */
-        .prob-bar-bg {
-            background: var(--tertiary);
-            border-radius: 4px;
-            overflow: hidden;
-            height: 8px;
-            margin-top: 6px;
-        }
-        .prob-bar-fill {
-            height: 100%;
-            background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
-            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-            width: 0%;
-        }
-
-        /* Custom Range Slider */
-        input[type=range] { -webkit-appearance: none; background: transparent; }
-        input[type=range]::-webkit-slider-thumb {
-            -webkit-appearance: none; height: 14px; width: 14px; border-radius: 50%; background: var(--accent); margin-top: -5px; cursor: pointer;
-        }
-        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 4px; background: var(--tertiary); border-radius: 2px; }
-    </style>
+    <link rel="icon" href="../static/logo-64.png">
+    <link rel="stylesheet" href="../static/kusanagi.css">
+    <script src="../static/keys.js" defer></script>
+    <script src="../static/providers.js" defer></script>
+    <script src="../static/dom.js" defer></script>
+    <script src="../static/ui.js" defer></script>
+    <script src="../static/pages/visualize.js" defer></script>
 </head>
-<body class="bg-secondary text-fg-primary font-sans antialiased flex items-center justify-center h-full">
-    <a href="../index.html" class="home-button">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+<body class="bg-secondary text-fg-primary font-sans antialiased h-full">
+    <a href="../index.html" class="home-button" aria-label="Back to the Kusanagi AI dashboard">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
     </a>
 
-    <div class="flex h-full max-h-screen">
-        
+    <div class="flex h-full">
+
         <!-- === Sidebar === -->
         <aside class="w-72 flex-shrink-0 bg-secondary flex flex-col p-4 border-r border-tertiary">
-            <!-- Header -->
-            <div class="px-1 mb-6">
-                <h1 class="text-2xl font-bold flex items-center gap-2">
+            <div class="px-1 mb-6 mt-12">
+                <h1 class="text-2xl font-bold flex flex-wrap items-center gap-2">
                     <a href="../index.html" class="hover:underline text-fg-primary">Kusanagi AI</a>
-                    <span class="text-fg-secondary font-normal mx-1">/</span>
+                    <span class="text-fg-secondary font-normal">/</span>
                     <span class="text-accent">Visualizer</span>
-                    <span class="text-[10px] bg-tertiary text-fg-secondary px-2 py-0.5 rounded border border-tertiary">Web</span>
                 </h1>
-                <p class="text-xs text-fg-secondary mt-1">LLM Probability Inspector</p>
+                <p class="text-xs text-fg-secondary mt-1">LLM probability inspector</p>
             </div>
 
-            <!-- Status -->
             <div class="bg-tertiary/30 rounded-lg p-3 mb-6 border border-tertiary">
                 <div class="flex justify-between items-center mb-2">
                     <span class="text-xs font-bold text-fg-secondary uppercase">Status</span>
-                    <span id="status-indicator" class="text-xs font-bold text-danger">● Offline</span>
+                    <span id="status-indicator" class="text-xs font-bold text-danger">Offline</span>
                 </div>
-                <div class="text-[10px] text-fg-secondary" id="model-display">Model: None</div>
+                <div class="text-[10px] text-fg-secondary" id="model-display">No provider configured</div>
             </div>
 
-            <!-- Controls -->
             <div class="space-y-4 mb-6">
                 <div>
                     <div class="flex justify-between text-xs text-fg-secondary mb-1">
-                        <label>Temperature</label>
+                        <label for="temp-slider">Temperature</label>
                         <span id="temp-val" class="text-accent font-mono">1.0</span>
                     </div>
                     <input type="range" id="temp-slider" min="0" max="2" step="0.1" value="1.0" class="w-full">
                 </div>
-                
+
                 <div>
                     <div class="flex justify-between text-xs text-fg-secondary mb-1">
-                        <label>Top K (Suggestions)</label>
+                        <label for="topk-slider">Top K (suggestions)</label>
                         <span id="topk-val" class="text-accent font-mono">5</span>
                     </div>
                     <input type="range" id="topk-slider" min="1" max="10" step="1" value="5" class="w-full">
@@ -84,42 +67,37 @@
             </div>
 
             <div class="mt-auto pt-4 border-t border-tertiary">
-                 <button onclick="settingsApi.open()" class="flex items-center gap-2 text-sm text-fg-secondary hover:text-accent transition w-full justify-center p-2 hover:bg-tertiary rounded">
-                    <span>⚙️</span> Configure API
-                 </button>
+                <button id="open-settings" type="button" class="flex items-center gap-2 text-sm text-fg-secondary hover:text-accent transition w-full justify-center p-2 hover:bg-tertiary rounded">
+                    Configure API
+                </button>
             </div>
         </aside>
 
-        <!-- === Main Area === -->
-        <main class="flex-1 flex flex-col h-full relative bg-primary p-6">
-            
-            <!-- Top Bar -->
-            <div class="flex justify-between items-center mb-6">
+        <!-- === Main === -->
+        <main class="flex-1 flex flex-col h-full relative bg-primary p-6 min-w-0">
+            <div class="flex justify-between items-center mb-6 gap-4">
                 <div>
-                    <h2 class="text-xl font-bold text-fg-primary">Next Token Prediction</h2>
-                    <p class="text-xs text-fg-secondary">Type below. Click a bar to choose the path.</p>
+                    <h2 class="text-xl font-bold text-fg-primary">Next token prediction</h2>
+                    <p class="text-xs text-fg-secondary">Type below. Click a bar to extend the text along that path.</p>
                 </div>
-                <button onclick="clearText()" class="text-sm text-fg-secondary hover:text-danger transition flex items-center gap-1 border border-tertiary px-3 py-1 rounded hover:bg-secondary">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                <button id="clear-text" type="button" class="text-sm text-fg-secondary hover:text-danger transition flex items-center gap-1 border border-tertiary px-3 py-1 rounded hover:bg-secondary shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                     Clear
                 </button>
             </div>
 
             <div class="flex-1 flex flex-col md:flex-row gap-6 overflow-hidden">
-                
-                <!-- Input Area -->
-                <div class="flex-1 flex flex-col h-full">
+                <div class="flex-1 flex flex-col h-full min-w-0">
                     <div class="flex-1 bg-tertiary/20 rounded-xl border border-tertiary p-4 relative focus-within:border-accent transition-colors flex flex-col">
+                        <label for="text-input" class="sr-only">Text to continue</label>
                         <textarea id="text-input" class="w-full h-full bg-transparent text-lg text-fg-primary placeholder-fg-secondary/30 focus:outline-none resize-none font-mono leading-relaxed" placeholder="The future of AI is..." spellcheck="false"></textarea>
-                        
-                        <!-- Manual Trigger Button -->
-                        <button onclick="getPredictions()" class="absolute bottom-4 right-12 bg-accent hover:bg-accent-fg text-accent-fg font-bold text-xs px-3 py-1.5 rounded shadow transition">
+
+                        <button id="predict-now" type="button" class="absolute bottom-4 right-14 btn btn-accent text-xs">
                             Predict
                         </button>
 
-                        <!-- Loading Spinner -->
                         <div id="loading" class="hidden absolute bottom-4 right-4 bg-primary/80 rounded-full p-2">
-                            <svg class="animate-spin h-5 w-5 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                            <div class="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" role="status" aria-label="Loading"></div>
                         </div>
                     </div>
                     <div class="flex justify-between mt-2 px-1">
@@ -128,179 +106,14 @@
                     </div>
                 </div>
 
-                <!-- Visualization Area -->
-                <div class="w-full md:w-80 flex flex-col bg-secondary rounded-xl border border-tertiary overflow-hidden">
+                <div class="w-full md:w-80 flex flex-col bg-secondary rounded-xl border border-tertiary overflow-hidden shrink-0">
                     <div class="p-3 bg-tertiary/30 border-b border-tertiary">
-                        <h3 class="text-xs font-bold text-fg-secondary uppercase">Probable Next Tokens</h3>
+                        <h3 class="text-xs font-bold text-fg-secondary uppercase">Probable next tokens</h3>
                     </div>
-                    <div id="prediction-list" class="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-                        <div class="text-center text-fg-secondary text-xs mt-10 opacity-50">
-                            Start typing to see<br>AI probabilities.
-                        </div>
-                    </div>
+                    <div id="prediction-list" class="flex-1 overflow-y-auto p-3 space-y-2"></div>
                 </div>
-
             </div>
         </main>
     </div>
-
-    <script>
-        // --- CONFIG & STATE ---
-        const config = {
-            get provider() { return Kusanagi.keys.provider(); },
-            get apiKey() { return Kusanagi.keys.get(Kusanagi.keys.provider()); },
-        };
-
-        let debounceTimer;
-        let settingsApi;
-
-        // --- INITIALIZATION ---
-        document.addEventListener('DOMContentLoaded', () => {
-            settingsApi = Kusanagi.mountSettings({ providers: ['gemini', 'groq', 'hf'], onSave: checkStatus });
-            checkStatus();
-
-            // Listeners
-            const textInput = document.getElementById('text-input');
-            textInput.addEventListener('input', handleInput);
-            textInput.focus();
-
-            // Sliders
-            setupSlider('temp-slider', 'temp-val');
-            setupSlider('topk-slider', 'topk-val');
-        });
-
-        function setupSlider(id, displayId) {
-            const slider = document.getElementById(id);
-            const display = document.getElementById(displayId);
-            slider.addEventListener('input', () => display.textContent = slider.value);
-        }
-
-        // --- CORE LOGIC ---
-        function handleInput(e) {
-            const text = e.target.value;
-            document.getElementById('char-count').textContent = `${text.length} chars`;
-            
-            // Clear previous timer
-            clearTimeout(debounceTimer);
-            
-            if (text.trim() === '') {
-                document.getElementById('prediction-list').innerHTML = '<div class="text-center text-fg-secondary text-xs mt-10 opacity-50">Start typing to see<br>AI probabilities.</div>';
-                return;
-            }
-
-            // Aggressive Debounce: Wait 1.5s after typing stops to avoid Rate Limits on Free Tier
-            debounceTimer = setTimeout(getPredictions, 1500);
-        }
-
-        async function getPredictions() {
-            if (!config.apiKey) return;
-
-            const text = document.getElementById('text-input').value;
-            if(!text) return;
-
-            const loading = document.getElementById('loading');
-            loading.classList.remove('hidden');
-
-            try {
-                const topK = document.getElementById('topk-slider').value;
-                const temp = document.getElementById('temp-slider').value;
-                
-                const predictions = await callAISimulation(text, topK, temp);
-                renderPredictions(predictions);
-            } catch (e) {
-                console.error(e);
-                document.getElementById('prediction-list').innerHTML = `<div class="text-xs text-danger p-2"><strong>Error:</strong> ${e.message}</div>`;
-            } finally {
-                loading.classList.add('hidden');
-            }
-        }
-
-        function renderPredictions(predictions) {
-            const container = document.getElementById('prediction-list');
-            container.innerHTML = '';
-
-            predictions.forEach(pred => {
-                const width = Math.max(pred.prob * 100, 1); 
-                
-                const item = document.createElement('div');
-                item.className = "p-2 rounded hover:bg-tertiary/50 cursor-pointer transition group";
-                item.onclick = () => selectToken(pred.token);
-                
-                item.innerHTML = `
-                    <div class="flex justify-between items-center mb-1">
-                        <span class="font-mono text-sm text-accent font-bold">"${pred.token}"</span>
-                        <span class="text-xs text-fg-secondary font-mono">${(pred.prob * 100).toFixed(1)}%</span>
-                    </div>
-                    <div class="prob-bar-bg">
-                        <div class="prob-bar-fill" style="width: 0%"></div>
-                    </div>
-                `;
-                container.appendChild(item);
-
-                requestAnimationFrame(() => {
-                    item.querySelector('.prob-bar-fill').style.width = `${width}%`;
-                });
-            });
-        }
-
-        function selectToken(token) {
-            const input = document.getElementById('text-input');
-            input.value += token;
-            input.focus();
-            getPredictions(); // Trigger immediately on click as user intent is clear
-            document.getElementById('char-count').textContent = `${input.value.length} chars`;
-        }
-
-        function clearText() {
-            document.getElementById('text-input').value = '';
-            document.getElementById('prediction-list').innerHTML = '';
-            document.getElementById('text-input').focus();
-        }
-
-        // --- AI SIMULATION LAYER ---
-        async function callAISimulation(context, topK, temp) {
-            const prompt = `You are a token probability engine. 
-            Given the text: "${context}"
-            List the ${topK} most likely single words/tokens to follow next.
-            Assign a probability (0.0-1.0) to each based on your internal model.
-            
-            Return ONLY JSON format:
-            [{"token": "word1", "prob": 0.85}, {"token": "word2", "prob": 0.10}]`;
-
-            try {
-                const model = Kusanagi.MODELS[config.provider][0].id;
-                const result = await Kusanagi.call(config.provider, {
-                    apiKey: config.apiKey, model, temperature: 0.1, prompt,
-                });
-
-                const cleanJson = result.text.replace(/```json|```/g, '').trim();
-                return JSON.parse(cleanJson);
-            } catch (e) {
-                console.error("AI Simulation Error", e);
-                if (/429|rate limit|resource_exhausted/i.test(e.message)) {
-                    return [{token: "Rate Limited...", prob: 0}, {token: "Wait 5s", prob: 0}];
-                }
-                // Simple fallback to avoid breaking UI
-                return [
-                    {token: "...", prob: 0.0},
-                    {token: "error", prob: 0.0}
-                ];
-            }
-        }
-
-        function checkStatus() {
-            const el = document.getElementById('status-indicator');
-            const modelEl = document.getElementById('model-display');
-            if (config.apiKey) {
-                el.textContent = "● Online";
-                el.className = "text-xs font-bold text-success";
-                modelEl.textContent = `Provider: ${config.provider.toUpperCase()}`;
-            } else {
-                el.textContent = "● Offline";
-                el.className = "text-xs font-bold text-danger";
-                modelEl.textContent = "Model: None";
-            }
-        }
-    </script>
 </body>
 </html>

@@ -4,33 +4,12 @@ import subprocess
 import os
 import sys
 import webbrowser
-import json
 try:
     import ollama
 except ImportError:
     ollama = None
 
-# --- PROJECT ROOT ---
-def get_project_root():
-    """Get the project root directory."""
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    else:
-        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-PROJECT_ROOT = get_project_root()
-
-class Style:
-    UI_FONT = ("Segoe UI", 11)
-    TITLE_FONT = ("Segoe UI", 24, "bold")
-    BUTTON_FONT = ("Segoe UI", 12, "bold")
-    BG_PRIMARY = "#193549"
-    BG_SECONDARY = "#1e293b"
-    FG_PRIMARY = "#f8fafc"
-    ACCENT = "#ffab40"
-    ACCENT_FG = "#0f172a"
-    LINK_FG = "#64b5f6"
-    ERROR = "#FF628C"
+from kusanagi_core import Style, load_config
 
 class ConsoleRedirector:
     def __init__(self, text_widget):
@@ -65,25 +44,8 @@ class KusanagiApp(tk.Tk):
         self.populate_models()
 
     def _load_config(self):
-        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
-        default_config = {
-            "ollama_path": os.path.join("Portable_AI_Assets", "ollama_main", "ollama.exe"),
-        }
-        
-        config = default_config.copy()
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, 'r') as f:
-                    config.update(json.load(f))
-            except (json.JSONDecodeError, IOError):
-                print(f"Warning: Could not read or parse '{config_path}'. Using default settings.")
-        
-        # Resolve ollama_path to be absolute
-        ollama_path = config["ollama_path"]
-        if not os.path.isabs(ollama_path):
-            config["ollama_path"] = os.path.normpath(os.path.join(PROJECT_ROOT, ollama_path))
-
-        return config
+        # Shared with every other desktop app -- see local_apps/kusanagi_core.py.
+        return load_config()
 
     def setup_styles(self):
         s = ttk.Style(self)

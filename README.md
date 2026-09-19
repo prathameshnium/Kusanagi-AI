@@ -30,6 +30,7 @@
 - [Portability and Included Assets](#portability-and-included-assets)
 - [Project Stats](#project-stats)
 - [Project Structure](#project-structure)
+- [Security and Privacy](#security-and-privacy)
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
@@ -64,19 +65,13 @@ Kusanagi-AI is built with a focus on local execution, privacy, and ease of use. 
  
 ## Screenshots
 
-### Kakashi - Local RAG Assistant
+### Orochimaru — research assistant
 
-<p align="center"><i>The primary RAG application, inspired by the copy-ninja himself. Chat with documents, summarize findings, and convene a "Kage Summit" of AI experts for a peer review.</i><br><img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Demos/Kakashi-Demo.gif" alt="Kakashi Demo GIF" width="800"/></p>
-
-![Kakashi Screenshot](https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/Kakashi_Screenshot.png)
-
-### Orochimaru - Advanced Research Agent
-
-<p align="center"><i>A quick demonstration of Orochimaru's RAG capabilities with a research paper.</i><br><img src="https://github.com/prathameshnium/Kusanagi-AI/raw/main/_assets/Demos/Orochimaru-Demo.gif" alt="Orochimaru Demo GIF" width="800"/></p>
+<p align="center"><i>RAG over your own PDFs: load a paper, ask questions against it, request a summary or a critical review.</i></p>
 
 ![Orochimaru Screenshot](https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/Orochimaru_Screenshot.jpg)
 
-### OneTail - Local Chat App
+### OneTail — local chat
 
 ![One Tail Screenshot](https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/One_Tail_Screenshot.jpg)
 
@@ -86,11 +81,38 @@ Follow these steps to set up your local AI research environment.
 
 ### Application Suite
 
-Kusanagi-AI includes several applications. The main applications are:
--   **`Kakashi_Local_RAG_App.py`**: The primary, full-featured RAG assistant for document analysis and chat.
--   **`Orochimaru_Local_Research_Assistent.py`**: An alternative, advanced RAG assistant.
--   **`OneTail_Local_Chatapp.py`**: A simple, lightweight chat application.
--   **`Visualize_AI.py`**: A tool to see next-word predictions from a model in real-time.
+There are two ways to run Kusanagi-AI.
+
+**Desktop (fully offline, no API key).** Tkinter apps that talk to a local Ollama.
+Start them from the menu:
+
+```sh
+python local_apps/launcher.py
+```
+
+-   **`local_apps/Orochimaru_Local_Research_Assistent.py`** — the full RAG assistant: load PDFs, chat, request expert reviews.
+-   **`local_apps/OneTail_Local_Chatapp.py`** — lightweight multi-model chat.
+-   **`local_apps/Visualize_AI.py`** — next-token predictions in real time.
+-   **`local_apps/Kusanagi_Local.py`** — console and model manager.
+-   **`local_apps/holffield_demo.py`** — Hopfield associative-memory demo.
+
+All five share `local_apps/kusanagi_core.py`, which owns the project paths, the
+colour palette, `System_Config.json` loading and the Ollama process manager.
+
+**Browser (your own API key, nothing installed).** The pages in `web_apps/` run
+against Gemini, Groq, Hugging Face or a local Ollama. Open
+[the dashboard](https://prathameshnium.github.io/Kusanagi-AI/index.html), or serve
+them locally:
+
+```sh
+python scripts/serve.py
+```
+
+Serve them rather than double-clicking the HTML files. Two things need a real
+origin: the strict `Content-Security-Policy` each page carries (`'self'` grants
+nothing on a `file://` document), and Orochimaru's PDF reader, which loads
+pdf.js as an ES module. The command above needs no network — everything it
+serves is in this repository.
 
 ### Prerequisites
 
@@ -153,17 +175,29 @@ For more granular control, you can modify the `System_Config.json` file. This al
 
 ## Usage
 
-The primary tool in this toolkit is the **Kakashi RAG Assistant**. To launch it, navigate to the `local_apps` directory and execute the following command:
+The menu is the easiest way in, from the repository root:
 
 ```sh
-cd local_apps
-python Kakashi_Local_RAG_App.py
-```
-You can also run other tools like `Orochimaru_Local_Research_Assistent.py` or `OneTail_Local_Chatapp.py` in the same way.
-python Orochimaru_Local_Research_Assistent.py
+python local_apps/launcher.py
 ```
 
-Explore other scripts like `OneTail_Local_Chatapp.py` and `Visualize_AI.py` to discover additional functionalities and experiments.
+Any app can also be started directly:
+
+```sh
+python local_apps/Orochimaru_Local_Research_Assistent.py
+```
+
+The flagship tool is **Orochimaru**: load a PDF, ask questions against it, and
+request a summary or a critical review from a physicist, chemist or editor
+persona. `OneTail_Local_Chatapp.py` is a lighter chat client, and
+`Visualize_AI.py` shows next-token probabilities as you type.
+
+For the browser versions, start the local server and pick a tool from the
+dashboard:
+
+```sh
+python scripts/serve.py
+```
 
 ## Portability and Included Assets
 
@@ -200,14 +234,76 @@ Please refer to the original repositories for detailed information and licensing
 
 ```
 Kusanagi-AI/
-├── Portable_AI_Assets/
-├── Orochimaru_Local_Research_Assistent.py
-├── OneTail_Local_Chatapp.py
-├── Visualize_AI.py
+├── index.html                  Dashboard: configure providers, launch a tool
+├── web_apps/                   The five browser apps
+├── static/
+│   ├── keys.js                 API-key store (session-scoped by default)
+│   ├── providers.js            Gemini / Groq / Hugging Face / Ollama
+│   ├── dom.js                  Safe DOM construction + Markdown sanitising
+│   ├── ui.js                   Settings dialog, toasts, result cards
+│   ├── pages/                  One script per page
+│   ├── kusanagi.css            Compiled Tailwind (generated)
+│   ├── src/input.css           Stylesheet source — edit this one
+│   └── vendor/                 Self-hosted libraries and fonts (see its README)
+├── local_apps/
+│   ├── kusanagi_core.py        Shared paths, palette, config, Ollama manager
+│   ├── launcher.py             Desktop menu
+│   └── *.py                    The desktop apps
+├── scripts/
+│   ├── serve.py                Local web server for the suite
+│   ├── build_css.py            Compile static/src/input.css → static/kusanagi.css
+│   └── fetch_fonts.py          Re-vendor the webfonts
+├── Portable_AI_Assets/         Ollama binary + models (not in git)
 ├── System_Config.json
 └── requirements.txt
 ```
 </details>
+
+### Rebuilding the stylesheet
+
+`static/kusanagi.css` is generated. After changing any CSS or any HTML class:
+
+```sh
+python scripts/build_css.py
+```
+
+No Node required — the script fetches the standalone Tailwind binary on first run
+and caches it outside the repo.
+
+## Security and privacy
+
+What the web apps actually guarantee, and what they do not.
+
+**Your keys.** A key you enter is held in `sessionStorage` and disappears when the
+tab closes. Ticking *Remember on this device* moves it to `localStorage`, where it
+persists until purged — convenient on your own machine, and readable by anything
+that can read your browser profile, so the dialog says so. There is no Kusanagi
+server: requests go from your browser straight to the provider. Gemini keys are
+sent in the `x-goog-api-key` header rather than the query string, so they do not
+end up in browser history or in proxy logs. *Purge all keys* clears both stores.
+
+**Your documents.** PDFs opened in Orochimaru are parsed in the browser and held
+in memory. They are never uploaded. Excerpts retrieved for a question are sent to
+whichever provider you configured, as part of the prompt — for work that must not
+leave the machine at all, use the desktop app against a local Ollama.
+
+**Untrusted content.** Paper titles, abstracts and model output are third-party
+text. It is rendered as text nodes, never by assigning to `innerHTML`; the one
+exception is Markdown from a model, which goes through DOMPurify. Outbound links
+are scheme-checked, so a `javascript:` DOI renders as inert text.
+
+**Content-Security-Policy.** Every page ships `default-src 'none'` with an
+explicit allowlist: no inline script, no inline style, no third-party origin, and
+a `connect-src` naming exactly the APIs that page uses. An injected script could
+not reach an endpoint that is not on that list. `frame-ancestors` cannot be set
+from a `<meta>` tag; `scripts/serve.py` sends it as a header, and a production
+deployment should too.
+
+**Dependencies.** Every library and font is committed under `static/vendor/`, so
+no page load reaches a CDN. See [`static/vendor/README.md`](static/vendor/README.md)
+for versions and why they were chosen.
+
+Found something? Please [open an issue](https://github.com/prathameshnium/Kusanagi-AI/issues).
 
 ## Roadmap
 

@@ -3,600 +3,119 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kusanagi AI / Neji Search</title>
-    <link rel="icon" href="https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/logo/Kusanagi-AI.png">
-    <!-- Load Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../static/theme.js"></script>
-    <script src="../static/providers.js"></script>
-    <script src="../static/settings-modal.js"></script>
-    <!-- Load Markdown Parser -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <meta name="description" content="Neji Search — an AI research-scholar tool for finding academic papers, citations, and scholarly sources.">
-
-    <link rel="stylesheet" href="../static/style.css">
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'none';
+        script-src 'self';
+        style-src 'self';
+        img-src 'self' data:;
+        font-src 'self';
+        connect-src https://generativelanguage.googleapis.com https://api.groq.com https://api-inference.huggingface.co https://api.openalex.org;
+        base-uri 'none';
+        form-action 'none';">
+    <title>Neji Scholar &mdash; Kusanagi AI</title>
+    <meta name="description" content="Neji Scholar — academic paper discovery over OpenAlex, with an incognito mode that never contacts a model.">
+    <link rel="icon" href="../static/logo-64.png">
+    <link rel="stylesheet" href="../static/kusanagi.css">
+    <script src="../static/keys.js" defer></script>
+    <script src="../static/providers.js" defer></script>
+    <script src="../static/dom.js" defer></script>
+    <script src="../static/ui.js" defer></script>
+    <script src="../static/pages/neji.js" defer></script>
 </head>
 <body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden flex flex-col items-center relative">
-    <a href="../index.html" class="home-button">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+    <a href="../index.html" class="home-button" aria-label="Back to the Kusanagi AI dashboard">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
     </a>
 
-    <!-- Status Bar -->
-    <div class="absolute top-4 right-4 flex items-center space-x-4 text-xs text-fg-secondary bg-secondary px-4 py-2 rounded-lg shadow-md z-50">
-        <div class="flex items-center space-x-1">
-            <span id="api-status-dot" class="w-2 h-2 bg-red-500 rounded-full"></span>
-            <span id="api-status-text">Setup Required</span>
-        </div>
-        <span>|</span>
-        <button onclick="settingsApi.open()" class="hover:text-accent underline decoration-dotted">Configure AI</button>
+    <div class="absolute top-4 right-4 flex items-center gap-3 text-xs text-fg-secondary bg-secondary px-4 py-2 rounded-lg shadow-md z-50">
+        <span id="api-status-dot" class="w-2 h-2 rounded-full bg-danger" aria-hidden="true"></span>
+        <span id="api-status-text">Setup required</span>
+        <span class="text-tertiary">|</span>
+        <button id="open-settings" type="button" class="hover:text-accent underline decoration-dotted">Configure AI</button>
     </div>
 
-    <!-- MAIN CONTAINER -->
     <div class="flex w-full h-full max-w-7xl mx-auto relative overflow-hidden">
-        
-        <div class="absolute inset-0 minimal-bg-pattern z-0 pointer-events-none"></div>
 
-        <!-- LEFT COLUMN: Search Strategy & Filters -->
-        <aside id="strategy-sidebar" class="w-0 opacity-0 transition-all duration-500 flex-shrink-0 bg-secondary/30 border-r border-tertiary flex flex-col overflow-y-auto custom-scrollbar">
+        <!-- LEFT: strategy + filters -->
+        <aside id="strategy-sidebar" class="w-0 opacity-0 transition-all duration-500 flex-shrink-0 bg-secondary/30 border-r border-tertiary flex flex-col overflow-y-auto">
             <div class="p-4 min-w-[300px] space-y-6">
-                
-                <!-- FILTER SECTION -->
                 <div id="filter-section" class="hidden">
-                    <h3 class="text-accent font-bold uppercase text-xs tracking-wider mb-3 flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
-                        Result Filters
-                    </h3>
+                    <h3 class="text-accent font-bold uppercase text-xs tracking-wider mb-3">Result filters</h3>
                     <div class="space-y-3 bg-secondary p-3 rounded border border-tertiary">
                         <div>
-                            <label class="text-xs text-fg-secondary block mb-1">Published After</label>
-                            <input type="number" id="filter-year" class="w-full bg-tertiary text-fg-primary text-xs p-2 rounded border border-tertiary focus:border-accent outline-none" placeholder="e.g., 2020" oninput="applyFilters()">
+                            <label for="filter-year" class="text-xs text-fg-secondary block mb-1">Published after</label>
+                            <input type="number" id="filter-year" class="!text-xs !p-2" placeholder="e.g. 2020">
                         </div>
                         <div>
-                            <label class="text-xs text-fg-secondary block mb-1">Sort By</label>
-                            <select id="filter-sort" class="w-full bg-tertiary text-fg-primary text-xs p-2 rounded border border-tertiary focus:border-accent outline-none" onchange="applyFilters()">
-                                <option value="citations">Most Cited</option>
-                                <option value="newest">Newest First</option>
+                            <label for="filter-sort" class="text-xs text-fg-secondary block mb-1">Sort by</label>
+                            <select id="filter-sort" class="!text-xs !p-2">
+                                <option value="citations">Most cited</option>
+                                <option value="newest">Newest first</option>
                                 <option value="relevance">Relevance</option>
                             </select>
                         </div>
                     </div>
                 </div>
 
-                <!-- STRATEGY LIST -->
                 <div>
-                    <h3 class="text-accent font-bold uppercase text-xs tracking-wider mb-4 flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-                        AI Search Strategy
-                    </h3>
-                    <div id="strategy-list" class="space-y-4 text-sm">
-                        <!-- Strategies injected here -->
-                    </div>
+                    <h3 class="text-accent font-bold uppercase text-xs tracking-wider mb-4">AI search strategy</h3>
+                    <div id="strategy-list" class="space-y-4 text-sm"></div>
                 </div>
             </div>
         </aside>
 
-        <!-- CENTER COLUMN: Search & Results -->
-        <main class="flex-1 flex flex-col p-6 z-10 overflow-y-auto relative transition-all duration-500" id="main-content">
-            
-            <!-- Header & Search -->
+        <!-- CENTER -->
+        <main class="flex-1 flex flex-col p-6 z-10 overflow-y-auto relative transition-all duration-500">
+
             <div id="search-container" class="w-full max-w-2xl mx-auto mt-[20vh] transition-all duration-500">
                 <div class="text-center mb-8" id="branding">
-                    <h1 class="text-5xl font-extrabold text-fg-primary mb-2 tracking-tight"><a href="../index.html" class="hover:underline">Kusanagi AI</a> / <span class="text-accent">Neji Search</span></h1>
-                    <p class="text-fg-secondary text-lg">Autonomous Research Agent</p>
+                    <h1 class="text-5xl font-extrabold text-fg-primary mb-2 tracking-tight">
+                        <a href="../index.html" class="hover:underline">Kusanagi AI</a>
+                        <span class="text-fg-secondary font-normal">/</span>
+                        <span class="text-accent">Neji</span>
+                    </h1>
+                    <p class="text-fg-secondary text-lg">Autonomous research agent</p>
                 </div>
 
-                <div class="w-full bg-secondary rounded-2xl shadow-2xl input-focus-ring transition-all duration-300 border border-tertiary relative">
-                    <div class="flex items-center p-2">
-                        <!-- Privacy Toggle -->
-                        <button id="privacy-toggle" onclick="togglePrivacy()" class="pl-3 pr-2 text-fg-secondary hover:text-green-400 transition flex items-center gap-2 tooltip" title="Incognito Mode">
-                            <svg id="privacy-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
-                            <span class="tooltiptext w-24 bottom-full mb-2">Incognito Mode</span>
+                <div class="w-full bg-secondary rounded-2xl shadow-2xl transition-all duration-300 border border-tertiary focus-within:border-accent">
+                    <div class="flex items-center p-2 gap-1">
+                        <button id="privacy-toggle" type="button" class="pl-3 pr-2 text-fg-secondary hover:text-success transition flex items-center shrink-0" aria-pressed="false" title="Incognito mode: search databases directly, never contact a model">
+                            <svg id="privacy-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"></svg>
+                            <span class="sr-only">Toggle incognito mode</span>
                         </button>
-                        
-                        <div class="h-8 w-[1px] bg-tertiary mx-2"></div>
 
-                        <input type="text" 
-                               id="search-input"
-                               placeholder="Enter a research topic (e.g., 'CRISPR off-target effects')..." 
-                               class="w-full bg-transparent text-lg text-fg-primary p-4 placeholder-fg-secondary focus:outline-none font-medium"
-                               autofocus>
-                        
-                        <button onclick="startResearch()" id="search-btn" class="bg-accent hover:bg-yellow-500 text-accent-fg px-6 py-3 rounded-xl font-bold transition duration-200 flex items-center gap-2 flex-shrink-0">
-                            <span>Research</span>
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                        </button>
+                        <div class="h-8 w-px bg-tertiary mx-1" aria-hidden="true"></div>
+
+                        <label for="search-input" class="sr-only">Research topic</label>
+                        <input type="text" id="search-input" autocomplete="off"
+                               placeholder="Enter a research topic..."
+                               class="!border-0 !bg-transparent text-lg !p-4 font-medium" autofocus>
+
+                        <button id="search-btn" type="button" class="btn btn-accent px-6 py-3 shrink-0">Research</button>
                     </div>
                 </div>
 
-                <!-- Quick Pills -->
-                <div class="mt-6 flex flex-wrap justify-center gap-3" id="pills-section">
-                    <button onclick="fillSearch('Microplastics in marine ecosystems')" class="px-3 py-1.5 rounded-full border border-tertiary text-fg-secondary text-xs hover:border-accent hover:text-accent transition">Microplastics</button>
-                    <button onclick="fillSearch('Quantum error correction algorithms')" class="px-3 py-1.5 rounded-full border border-tertiary text-fg-secondary text-xs hover:border-accent hover:text-accent transition">Quantum Computing</button>
-                    <button onclick="fillSearch('Impact of intermittent fasting on longevity')" class="px-3 py-1.5 rounded-full border border-tertiary text-fg-secondary text-xs hover:border-accent hover:text-accent transition">Longevity</button>
-                </div>
-                
+                <div class="mt-6 flex flex-wrap justify-center gap-3" id="pills-section"></div>
+
                 <div id="privacy-badge" class="hidden mt-4 text-center">
-                    <span class="bg-green-900/30 text-green-400 text-xs border border-green-800 px-3 py-1 rounded-full">
-                        🔒 Incognito: AI disabled. Direct database search only.
+                    <span class="bg-success/10 text-success text-xs border border-success/40 px-3 py-1 rounded-full">
+                        Incognito: AI disabled, direct database search only.
                     </span>
                 </div>
             </div>
 
-            <!-- Results Grid (Hidden Initially) -->
             <div id="results-area" class="hidden w-full max-w-4xl mx-auto mt-8">
-                
-                <div class="flex justify-between items-end mb-4 border-b border-tertiary pb-2">
+                <div class="flex justify-between items-end mb-4 border-b border-tertiary pb-2 gap-3">
                     <div>
-                        <h2 class="text-xl font-bold text-fg-primary">Direct Results</h2>
+                        <h2 class="text-xl font-bold text-fg-primary">Direct results</h2>
                         <p class="text-xs text-fg-secondary" id="results-count">Aggregated from OpenAlex</p>
                     </div>
-                    <button onclick="resetSearch()" class="text-sm text-accent hover:underline">New Search</button>
+                    <button id="reset-search" type="button" class="text-sm text-accent hover:underline shrink-0">New search</button>
                 </div>
-                
-                <div id="paper-list" class="space-y-4">
-                    <!-- Paper Cards Go Here -->
-                </div>
-            </div>
 
+                <div id="paper-list" class="space-y-4"></div>
+            </div>
         </main>
     </div>
-
-    <script>
-        // --- DOM ELEMENTS ---
-        const searchInput = document.getElementById('search-input');
-        const searchBtn = document.getElementById('search-btn');
-        const searchContainer = document.getElementById('search-container');
-        const branding = document.getElementById('branding');
-        const pillsSection = document.getElementById('pills-section');
-        const resultsArea = document.getElementById('results-area');
-        const paperList = document.getElementById('paper-list');
-        const strategySidebar = document.getElementById('strategy-sidebar');
-        const strategyList = document.getElementById('strategy-list');
-        const filterSection = document.getElementById('filter-section');
-        const filterYear = document.getElementById('filter-year');
-        const filterSort = document.getElementById('filter-sort');
-        const resultsCount = document.getElementById('results-count');
-        const privacyToggle = document.getElementById('privacy-toggle');
-        const privacyIcon = document.getElementById('privacy-icon');
-        const privacyBadge = document.getElementById('privacy-badge');
-
-        // Status
-        const statusDot = document.getElementById('api-status-dot');
-        const statusText = document.getElementById('api-status-text');
-
-        // --- STATE ---
-        const config = {
-            get provider() { return Kusanagi.keys.provider(); },
-            get geminiKey() { return Kusanagi.keys.get('gemini'); },
-            get groqKey() { return Kusanagi.keys.get('groq'); },
-            get hfToken() { return Kusanagi.keys.get('hf'); },
-        };
-
-        let isPrivacyMode = false;
-        let globalPapers = [];
-        let settingsApi;
-
-        // --- INIT ---
-        function init() {
-            settingsApi = Kusanagi.mountSettings({ providers: ['hf', 'gemini', 'groq'], onSave: checkStatus });
-            checkStatus();
-
-            searchInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') startResearch();
-            });
-        }
-
-        // --- PRIVACY LOGIC ---
-        function togglePrivacy() {
-            isPrivacyMode = !isPrivacyMode;
-            if (isPrivacyMode) {
-                privacyIcon.classList.add('text-green-400');
-                privacyIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>`;
-                privacyBadge.classList.remove('hidden');
-            } else {
-                privacyIcon.classList.remove('text-green-400');
-                privacyIcon.innerHTML = `<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>`;
-                privacyBadge.classList.add('hidden');
-            }
-        }
-
-        function checkStatus() {
-            let hasKey = false;
-            if (config.provider === 'hf' && config.hfToken) hasKey = true;
-            if (config.provider === 'gemini' && config.geminiKey) hasKey = true;
-            if (config.provider === 'groq' && config.groqKey) hasKey = true;
-
-            if (hasKey) {
-                statusDot.className = "w-2 h-2 bg-green-500 rounded-full animate-pulse";
-                statusText.textContent = "Agent Ready";
-                statusText.className = "text-green-400";
-            } else {
-                statusDot.className = "w-2 h-2 bg-red-500 rounded-full";
-                statusText.textContent = "Setup Required";
-                statusText.className = "text-red-400";
-            }
-            return hasKey;
-        }
-
-        // --- CORE LOGIC ---
-
-        function fillSearch(text) {
-            searchInput.value = text;
-            startResearch();
-        }
-
-        function resetSearch() {
-            resultsArea.classList.add('hidden');
-            strategySidebar.classList.remove('w-80');
-            strategySidebar.classList.add('w-0', 'opacity-0');
-            filterSection.classList.add('hidden');
-            
-            searchContainer.classList.remove('mt-4', 'scale-90');
-            searchContainer.classList.add('mt-[20vh]');
-            branding.classList.remove('hidden');
-            pillsSection.classList.remove('hidden');
-            privacyBadge.classList.add('hidden'); 
-            if (isPrivacyMode) privacyBadge.classList.remove('hidden');
-            
-            searchInput.value = '';
-            paperList.innerHTML = '';
-            strategyList.innerHTML = '';
-            globalPapers = [];
-        }
-
-        async function startResearch() {
-            const query = searchInput.value.trim();
-            if (!query) return;
-            
-            if (!checkStatus() && !isPrivacyMode) {
-                alert("Please configure your API key in Settings first, or enable Incognito Mode for direct search.");
-                settingsApi.open();
-                return;
-            }
-
-            // UI Transition
-            searchBtn.disabled = true;
-            searchBtn.innerHTML = `<svg class="animate-spin h-5 w-5 text-accent-fg" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>`;
-            
-            searchContainer.classList.remove('mt-[20vh]');
-            searchContainer.classList.add('mt-4', 'scale-90');
-            branding.classList.add('hidden');
-            pillsSection.classList.add('hidden');
-            privacyBadge.classList.add('hidden'); 
-            
-            // Open Sidebar
-            strategySidebar.classList.remove('w-0', 'opacity-0');
-            strategySidebar.classList.add('w-80');
-            filterSection.classList.add('hidden'); 
-            
-            strategyList.innerHTML = isPrivacyMode 
-                ? `<div class="text-green-400 text-xs font-mono p-2 border border-green-800 rounded bg-green-900/20">🔒 Incognito Mode Active.<br>AI Agent Disabled.<br>Running direct query.</div>`
-                : `<div class="text-fg-secondary italic animate-pulse">🤖 Analyzing research intent...</div>`;
-
-            try {
-                let strategies = [];
-
-                // 2. AI Step
-                if (!isPrivacyMode) {
-                    try {
-                        strategies = await generateSearchStrategies(query);
-                    } catch (e) {
-                        console.warn("AI Failed, falling back", e);
-                        strategies = [query]; 
-                    }
-                } else {
-                    strategies = [query]; 
-                }
-                
-                // Render Strategies
-                if (!isPrivacyMode) {
-                    strategyList.innerHTML = '';
-                    strategies.forEach((s, i) => {
-                        const enc = encodeURIComponent(s);
-                        const div = document.createElement('div');
-                        div.className = "bg-tertiary p-3 rounded border-l-4 border-accent text-xs hover:bg-secondary transition group";
-                        div.innerHTML = `
-                            <div class="font-bold text-accent mb-1 flex justify-between">
-                                <span>Prompt ${i+1}</span>
-                            </div>
-                            <div class="text-fg-primary font-mono mb-2">"${s}"</div>
-                            <div class="flex flex-wrap gap-1 mt-2 pt-2 border-t border-primary/50">
-                                <a href="https://scholar.google.com/scholar?q=${enc}" target="_blank" rel="noopener noreferrer" class="bg-primary hover:bg-accent hover:text-accent-fg text-fg-secondary px-2 py-1 rounded text-[10px] font-bold transition" title="Google Scholar">G.Scholar</a>
-                                <a href="https://www.semanticscholar.org/search?q=${enc}" target="_blank" rel="noopener noreferrer" class="bg-primary hover:bg-accent hover:text-accent-fg text-fg-secondary px-2 py-1 rounded text-[10px] font-bold transition" title="Semantic Scholar">Semantic</a>
-                                <a href="https://pubmed.ncbi.nlm.nih.gov/?term=${enc}" target="_blank" rel="noopener noreferrer" class="bg-primary hover:bg-accent hover:text-accent-fg text-fg-secondary px-2 py-1 rounded text-[10px] font-bold transition" title="PubMed">PubMed</a>
-                                <a href="https://core.ac.uk/search?q=${enc}" target="_blank" rel="noopener noreferrer" class="bg-primary hover:bg-accent hover:text-accent-fg text-fg-secondary px-2 py-1 rounded text-[10px] font-bold transition" title="CORE Aggregator">CORE</a>
-                            </div>
-                        `;
-                        strategyList.appendChild(div);
-                    });
-                } else {
-                    const enc = encodeURIComponent(query);
-                    const div = document.createElement('div');
-                    div.className = "bg-tertiary p-3 rounded border-l-4 border-green-500 text-xs hover:bg-secondary transition group";
-                    div.innerHTML = `
-                        <div class="font-bold text-green-400 mb-1">Direct Search</div>
-                        <div class="text-fg-primary font-mono mb-2">"${query}"</div>
-                        <div class="flex flex-wrap gap-1 mt-2 pt-2 border-t border-primary/50">
-                                <a href="https://scholar.google.com/scholar?q=${enc}" target="_blank" rel="noopener noreferrer" class="bg-primary hover:bg-accent hover:text-accent-fg text-fg-secondary px-2 py-1 rounded text-[10px] font-bold transition" title="Google Scholar">G.Scholar</a>
-                                <a href="https://www.semanticscholar.org/search?q=${enc}" target="_blank" rel="noopener noreferrer" class="bg-primary hover:bg-accent hover:text-accent-fg text-fg-secondary px-2 py-1 rounded text-[10px] font-bold transition" title="Semantic Scholar">Semantic</a>
-                                <a href="https://pubmed.ncbi.nlm.nih.gov/?term=${enc}" target="_blank" rel="noopener noreferrer" class="bg-primary hover:bg-accent hover:text-accent-fg text-fg-secondary px-2 py-1 rounded text-[10px] font-bold transition" title="PubMed">PubMed</a>
-                                <a href="https://core.ac.uk/search?q=${enc}" target="_blank" rel="noopener noreferrer" class="bg-primary hover:bg-accent hover:text-accent-fg text-fg-secondary px-2 py-1 rounded text-[10px] font-bold transition" title="CORE Aggregator">CORE</a>
-                        </div>
-                    `;
-                    strategyList.appendChild(div);
-                }
-
-                // 3. Parallel Search (OpenAlex Only)
-                resultsArea.classList.remove('hidden');
-                paperList.innerHTML = `<div class="text-center text-fg-secondary p-8"><svg class="animate-spin h-8 w-8 text-accent mx-auto mb-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Scanning Global Databases...</div>`;
-
-                // Use all 5 strategies (or whatever amount generated)
-                // Using slice might be safer if >5 generated, but user asked for all.
-                const promises = [];
-                strategies.forEach(q => {
-                    promises.push(searchOpenAlex(q));
-                });
-
-                const results = await Promise.all(promises);
-                const flatResults = results.flat();
-
-                // Deduplicate
-                globalPapers = [];
-                const titles = new Set();
-                
-                flatResults.forEach(p => {
-                    if(!p) return;
-                    const key = p.title.toLowerCase().substring(0, 50);
-                    if (!titles.has(key)) {
-                        titles.add(key);
-                        globalPapers.push(p);
-                    }
-                });
-
-                // Show filters
-                filterSection.classList.remove('hidden');
-                
-                // Initial Apply
-                applyFilters();
-
-            } catch (error) {
-                console.error(error);
-                paperList.innerHTML = `<div class="text-red-400 text-center p-4">Search failed. ${error.message}</div>`;
-            } finally {
-                searchBtn.disabled = false;
-                searchBtn.innerHTML = `<span>Research</span><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>`;
-            }
-        }
-
-        // --- FILTER LOGIC ---
-        function applyFilters() {
-            const minYear = parseInt(filterYear.value) || 0;
-            const sortMode = filterSort.value; 
-            
-            let filtered = globalPapers.filter(p => p.year >= minYear);
-
-            if (sortMode === 'newest') {
-                filtered.sort((a, b) => b.year - a.year);
-            } else if (sortMode === 'citations') {
-                filtered.sort((a, b) => {
-                    const citA = (a.cited_by === "N/A") ? 0 : a.cited_by;
-                    const citB = (b.cited_by === "N/A") ? 0 : b.cited_by;
-                    return citB - citA;
-                });
-            }
-
-            renderPapers(filtered);
-            resultsCount.textContent = `Showing ${filtered.length} results`;
-        }
-
-        // --- COPY LOGIC ---
-        function copyTitle(text, btn) {
-            navigator.clipboard.writeText(text).then(() => {
-                const original = btn.innerHTML;
-                btn.innerHTML = `<span class="text-green-400">✓</span>`;
-                setTimeout(() => btn.innerHTML = original, 1500);
-            });
-        }
-
-        // --- ABSTRACT TOGGLE LOGIC ---
-        function toggleReadMore(index) {
-            const shortSpan = document.getElementById(`short-${index}`);
-            const fullSpan = document.getElementById(`full-${index}`);
-            const btn = document.getElementById(`btn-${index}`);
-            
-            if (fullSpan.classList.contains('hidden')) {
-                shortSpan.classList.add('hidden');
-                fullSpan.classList.remove('hidden');
-                btn.textContent = "Show less";
-            } else {
-                shortSpan.classList.remove('hidden');
-                fullSpan.classList.add('hidden');
-                btn.textContent = "Read more";
-            }
-        }
-
-        // --- AI AGENT FUNCTION ---
-        async function generateSearchStrategies(userQuery) {
-            const systemPrompt = `You are a Senior Research Librarian. The user wants to find papers on: "${userQuery}".
-            Generate exactly 5 distinct, high-quality academic search queries.
-            Return ONLY a JSON array of strings. Example: ["mRNA vaccine stability", "lipid nanoparticle delivery", "immune response mechanisms", "clinical trials efficacy", "side effects profiling"]`;
-
-            let responseText = "";
-
-            try {
-                if (config.provider === 'gemini') {
-                    const cleanKey = config.geminiKey.trim();
-                    if (!cleanKey) throw new Error("Gemini API Key is empty.");
-                    
-                    const modelsToTry = [
-                        "gemini-2.5-flash",
-                        "gemini-2.0-flash",
-                        "gemini-1.5-flash-8b",
-                        "gemini-1.5-flash"
-                    ];
-                    
-                    let success = false;
-                    let lastError = null;
-
-                    for (const modelId of modelsToTry) {
-                        try {
-                            const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelId}:generateContent?key=${cleanKey}`;
-                            const conf = { responseMimeType: "application/json" };
-
-                            const resp = await fetch(url, {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({
-                                    contents: [{ parts: [{ text: systemPrompt }] }],
-                                    generationConfig: conf
-                                })
-                            });
-
-                            if (resp.ok) {
-                                const data = await resp.json();
-                                if (data.candidates?.length > 0) {
-                                    responseText = data.candidates[0].content.parts[0].text;
-                                    success = true;
-                                    break;
-                                }
-                            } 
-                        } catch (e) { lastError = e; }
-                    }
-                    if (!success) throw lastError || new Error("Models unavailable.");
-
-                } else if (config.provider === 'groq') {
-                    const resp = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-                        method: "POST",
-                        headers: {
-                            "Authorization": `Bearer ${config.groqKey.trim()}`,
-                            "Content-Type": "application/json"
-                        },
-                        body: JSON.stringify({
-                            messages: [{ role: "user", content: systemPrompt }],
-                            model: "llama3-8b-8192",
-                            response_format: { type: "json_object" }
-                        })
-                    });
-                    if(!resp.ok) throw new Error("Groq Error");
-                    const data = await resp.json();
-                    responseText = data.choices[0].message.content;
-                } else {
-                    throw new Error("HF agent not supported in this mode.");
-                }
-
-                // Parse
-                const cleanText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-                try {
-                    const json = JSON.parse(cleanText);
-                    return Array.isArray(json) ? json : (json.queries || []);
-                } catch(e) {
-                    return cleanText.split('\n').filter(l => l.length > 5).slice(0, 5);
-                }
-            } catch (e) {
-                console.warn("AI Generation Failed, falling back to raw query.", e);
-                return [userQuery]; 
-            }
-        }
-
-        // --- OPEN ALEX SEARCH ---
-        async function searchOpenAlex(query) {
-            // Using polite pool via mailto
-            const url = `https://api.openalex.org/works?search=${encodeURIComponent(query)}&per_page=5&sort=cited_by_count:desc&mailto=kusanagi_scholar_demo@example.com`;
-            try {
-                const resp = await fetch(url);
-                if(!resp.ok) return [];
-                const data = await resp.json();
-                return data.results.map(work => ({
-                    source: "OpenAlex",
-                    title: work.title,
-                    year: work.publication_year,
-                    cited_by: work.cited_by_count,
-                    doi: work.doi,
-                    host: work.primary_location?.source?.display_name || "Unknown Source",
-                    abstract: work.abstract_inverted_index ? reconstructAbstract(work.abstract_inverted_index) : "Abstract not available via API.",
-                    authors: work.authorships.map(a => ({ display_name: a.author.display_name }))
-                }));
-            } catch (e) { 
-                console.warn("OpenAlex fetch failed", e);
-                return []; 
-            }
-        }
-        
-        // Helper
-        function reconstructAbstract(invertedIndex) {
-            if (!invertedIndex) return "";
-            const sorted = [];
-            for (const [word, positions] of Object.entries(invertedIndex)) {
-                positions.forEach(pos => sorted[pos] = word);
-            }
-            return sorted.join(" ");
-        }
-
-        // --- RENDER UI ---
-        function renderPapers(papers) {
-            if (papers.length === 0) {
-                paperList.innerHTML = `<div class="text-fg-secondary text-center">No results matching filters.</div>`;
-                return;
-            }
-
-            paperList.innerHTML = papers.map((p, index) => {
-                const badgeColor = 'bg-blue-900 text-blue-200';
-                const cleanTitle = p.title.replace(/'/g, "\\'");
-                
-                const authors = p.authors && p.authors.length > 0 
-                    ? p.authors.map(a => a.display_name).slice(0, 3).join(', ') + (p.authors.length > 3 ? ' et al.' : '')
-                    : "Unknown Authors";
-
-                const abstractText = p.abstract;
-                const maxLength = 250;
-                const isLong = abstractText.length > maxLength;
-                const shortAbstract = isLong ? abstractText.substring(0, maxLength) + "..." : abstractText;
-                
-                return `
-                <div class="bg-secondary border border-tertiary p-5 rounded-xl hover:border-accent transition group relative overflow-hidden">
-                    <div class="absolute top-0 right-0 ${badgeColor} text-[10px] font-bold px-2 py-1 rounded-bl">${p.source.toUpperCase()}</div>
-                    
-                    <!-- Title & Copy -->
-                    <div class="flex justify-between items-start pr-8 mb-1">
-                        <div class="flex items-start gap-2">
-                             <button onclick="copyTitle('${cleanTitle}', this)" title="Copy Title" class="text-fg-secondary hover:text-accent transition pt-1">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
-                            </button>
-                            <h3 class="text-lg font-bold text-fg-primary group-hover:text-accent transition cursor-pointer leading-tight" onclick="window.open('${p.doi || '#'}', '_blank')">
-                                ${p.title || "Untitled Work"}
-                            </h3>
-                        </div>
-                    </div>
-                    
-                    <!-- Authors - Larger Font & Brighter -->
-                    <div class="text-base font-semibold text-white mb-2 ml-6">
-                        By ${authors}
-                    </div>
-
-                    <!-- Metadata -->
-                    <div class="flex items-center gap-3 mb-3 text-xs text-fg-secondary ml-6">
-                        <span class="bg-tertiary px-2 py-0.5 rounded text-accent font-bold">${p.year}</span>
-                        <span>${p.host}</span>
-                        ${p.cited_by !== "N/A" ? `<span>⭐ Cited: ${p.cited_by}</span>` : ''}
-                    </div>
-
-                    <!-- Abstract with Read More -->
-                    <div class="text-sm text-fg-secondary mb-3 opacity-90 bg-tertiary/30 p-3 rounded">
-                        <span id="short-${index}">${shortAbstract}</span>
-                        <span id="full-${index}" class="hidden">${abstractText}</span>
-                        ${isLong ? `<button id="btn-${index}" onclick="toggleReadMore(${index})" class="text-accent hover:underline ml-1 font-bold text-xs">Read more</button>` : ''}
-                    </div>
-
-                    <div class="flex gap-2 ml-1">
-                        <a href="${p.doi}" target="_blank" rel="noopener noreferrer" class="text-xs bg-accent text-accent-fg px-3 py-1.5 rounded font-bold hover:bg-yellow-400 transition">View Paper</a>
-                        <a href="https://scholar.google.com/scholar?q=${encodeURIComponent(p.title)}" target="_blank" rel="noopener noreferrer" class="text-xs border border-tertiary text-fg-secondary px-3 py-1.5 rounded hover:text-fg-primary transition">Find on Google Scholar</a>
-                    </div>
-                </div>
-            `}).join('');
-        }
-
-        init();
-
-    </script>
 </body>
 </html>

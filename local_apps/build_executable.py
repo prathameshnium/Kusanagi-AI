@@ -15,8 +15,12 @@
 # 2. Run this script:
 #    python local_apps/build_executable.py
 #
-# 3. The final executable will be located in the `dist` directory:
-#    dist/Kusanagi_Suite.exe
+# 3. The bundle lands in the `dist` directory, alongside a zip of it:
+#    dist/Orochimaru_Local/Orochimaru_Local.exe
+#
+# This builds the research assistant only -- change `exe_name` and `entry_script`
+# below to bundle one of the other apps. local_apps/kusanagi_core.py is picked up
+# automatically as an import of whichever entry script you choose.
 
 import PyInstaller.__main__
 import os

@@ -4,13 +4,10 @@ import re
 import time
 import threading
 import queue
-import subprocess
 import sys
 import os
-import gc
-import datetime
-import json
-import signal
+
+from kusanagi_core import PROJECT_ROOT, Style, load_config, OllamaServer
 
 # --- Standard App Imports ---
 try:
@@ -28,30 +25,6 @@ except ImportError:
     print("Warning: 'pyttsx3' not found. TTS will be disabled.")
     pyttsx3 = None
 
-# --- UI CONSTANTS ---
-class Style:
-    UI_FONT = ("Segoe UI", 11)
-    CHAT_FONT = ("Segoe UI", 11)
-    TITLE_FONT = ("Segoe UI", 18, "bold")
-    LOG_FONT = ("Courier New", 9)
-    BG_PRIMARY = "#193549"
-    BG_SECONDARY = "#002240"
-    BG_TERTIARY = "#25435A"
-    FG_PRIMARY = "#FFFFFF"
-    FG_SECONDARY = "#97B1C2"
-    ACCENT = "#ffab40"
-    ACCENT_FG = "#002240"
-    ERROR = "#FF628C"
-    LOG_COLOR = "#F1FA8C"
-    ICON_LOAD = "📄"
-    ICON_SAVE = "💾"
-    ICON_CLEAR = "🗑️"
-    ICON_SEND = "➤"
-    ICON_UNMUTE = "🔊"
-    ICON_MUTE = "🔇"
-    ICON_NEW_CHAT = "➕"
-    ICON_DELETE = "➖"
-
 # --- GLOBAL STATE & PROMPTS ---
 ENTRY_PLACEHOLDER = "Ask a question or type a command..."
 tts_queue = queue.Queue()
@@ -64,14 +37,6 @@ def tts_worker():
             engine.runAndWait()
         tts_queue.task_done()
 
-def get_project_root():
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    else:
-        return os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-
-PROJECT_ROOT = get_project_root()
-
 class ResearchApp(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -79,7 +44,7 @@ class ResearchApp(tk.Tk):
         self.app_config = self._load_config()
         self.cot_var = tk.BooleanVar(value=False)
         self.ollama_client = None 
-        self.ollama_process = None 
+        self.ollama_server = None
         
         self.title("One Tail Chat app")
         self.geometry("1200x800")
@@ -463,7 +428,9 @@ class ResearchApp(tk.Tk):
         print(f"1. Executable path: {ollama_path}")
         print(f"2. Model folder to be used: {model_folder}")
         try:
-            self.ollama_process = self._start_ollama_server(ollama_path, model_folder)
+            self.ollama_server = OllamaServer(ollama_path, model_folder,
+                                              log_name='ollama_server.log')
+            self.ollama_server.start()
             self.ollama_client = ollama.Client(host='127.0.0.1', timeout=120)
             print("3. Waiting for managed Ollama server to become responsive...")
             self.after(100, lambda: self._check_server_readiness(time.time(), 60))
@@ -486,87 +453,15 @@ class ResearchApp(tk.Tk):
             self.status_label.config(text=f"Waiting... ({int(elapsed_time)}s)")
             self.after(1000, lambda: self._check_server_readiness(start_time, max_wait))
 
-    def _start_ollama_server(self, ollama_path, model_folder):
-        print(f"Attempting to start Ollama server from: {ollama_path}")
-        env = os.environ.copy()
-        if model_folder and os.path.exists(model_folder):
-            env["OLLAMA_MODELS"] = model_folder
-            print(f"Setting OLLAMA_MODELS environment variable to: {model_folder}")
-
-        log_dir = os.path.join(PROJECT_ROOT, "logs")
-        os.makedirs(log_dir, exist_ok=True)
-        ollama_log_path = os.path.join(log_dir, "ollama_server.log")
-        log_file = open(ollama_log_path, "a", encoding="utf-8")
-
-        process = subprocess.Popen(
-            [ollama_path, "serve"],
-            env=env,
-            stdout=log_file,
-            stderr=log_file,
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-        )
-        return process
-
     def _stop_ollama_server(self):
-        if self.ollama_process and self.ollama_process.poll() is None:
-            print("Stopping Ollama server...")
-            self.ollama_process.terminate()
-            try:
-                self.ollama_process.wait(timeout=5)
-                print("Ollama server stopped.")
-            except subprocess.TimeoutExpired:
-                print("Ollama server did not terminate in time. Forcing kill.")
-                self.ollama_process.kill()
+        if self.ollama_server:
+            self.ollama_server.stop()
 
     def _load_config(self):
-        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
-        default_config = {
-            "ollama_path": os.path.join("Portable_AI_Assets", "ollama_main", "ollama.exe"),
-            "model_folder": os.path.join("Portable_AI_Assets", "models"),
-            "vector_cache_dir": os.path.join("Portable_AI_Assets", "vector_cache"),
-            "embedding_model_name": "mxbai-embed-large"
-        }
-        
-        config_from_file = {}
-        if os.path.exists(config_path):
-            try:
-                with open(config_path, 'r') as f:
-                    config_from_file = json.load(f)
-            except (json.JSONDecodeError, IOError):
-                pass
+        # Shared with every other desktop app -- see local_apps/kusanagi_core.py.
+        self.app_config = load_config()
+        print("Info: using configuration: %s" % self.app_config)
 
-        final_config = default_config.copy()
-        final_config.update(config_from_file)
-
-        for key in ["ollama_path", "model_folder", "vector_cache_dir"]:
-            path_value = final_config[key]
-            if not os.path.isabs(path_value):
-                absolute_path = os.path.normpath(os.path.join(PROJECT_ROOT, path_value))
-            else:
-                absolute_path = os.path.normpath(path_value)
-            
-            if not os.path.exists(absolute_path) and key != "vector_cache_dir":
-                default_relative_path = default_config[key]
-                absolute_path = os.path.normpath(os.path.join(PROJECT_ROOT, default_relative_path))
-            
-            final_config[key] = absolute_path
-        
-        return final_config
-
-    def _save_config(self, app_config):
-        config_path = os.path.join(PROJECT_ROOT, "System_Config.json")
-        relative_config = {}
-        for key, value in app_config.items():
-            if isinstance(value, str) and os.path.isabs(value) and key in ["ollama_path", "model_folder", "vector_cache_dir"]:
-                try:
-                    relative_config[key] = os.path.relpath(value, PROJECT_ROOT)
-                except ValueError:
-                    relative_config[key] = value
-            else:
-                relative_config[key] = value
-
-        with open(config_path, 'w') as f:
-            json.dump(relative_config, f, indent=4)
 
 class SettingsWindow(tk.Toplevel):
     def __init__(self, master, current_config, save_callback):

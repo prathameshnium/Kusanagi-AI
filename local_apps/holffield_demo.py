@@ -1,9 +1,7 @@
 import tkinter as tk
-from tkinter import ttk
 import numpy as np
 import math
 import random
-import time
 from datetime import datetime
 
 class HopfieldDemo:
@@ -160,7 +158,6 @@ class HopfieldDemo:
                 w = self.weights[i][j]
                 if abs(w) > 0.1:
                     p1, p2 = self.node_positions[i], self.node_positions[j]
-                    alpha = min(abs(w) / self.N * 10, 0.8)
                     color = self.colors["dot_excite"] if w > 0 else self.colors["dot_inhibit"]
                     self.net_canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=color, width=min(abs(w)/2, 3))
 
@@ -235,8 +232,9 @@ class HopfieldDemo:
         def step():
             indices = list(range(self.N))
             random.shuffle(indices)
-            changed = False
-            
+
+            # Convergence is signalled by falling out of this loop without any
+            # neuron flipping -- a flip returns early and reschedules step().
             for i in indices:
                 # Activation: sign(sum(w_ij * s_j))
                 activation = np.dot(self.weights[i], self.neurons)
@@ -244,7 +242,6 @@ class HopfieldDemo:
                 
                 if new_state != self.neurons[i]:
                     self.neurons[i] = new_state
-                    changed = True
                     self.draw_grid()
                     self.draw_network()
                     self.log_message(f"Neuron {i} flipped.")

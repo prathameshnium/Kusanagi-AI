@@ -3,202 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Orochimaru - Secure Local RAG</title>
-    <link rel="icon" href="https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/logo/Kusanagi-AI.png">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="../static/theme.js"></script>
-    <script src="../static/providers.js"></script>
-    <script src="../static/settings-modal.js"></script>
-    <!-- PDF.js for local parsing (CDN) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <!-- Marked for Markdown (CDN) -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- DOMPurify for XSS Protection (CDN) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+    <!-- worker-src covers the pdf.js worker; blob: is needed because pdf.js
+         instantiates its worker from a blob when loaded as a module.
+         Ollama is reachable on loopback only -- a remote Ollama URL would be
+         blocked here by design. -->
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'none';
+        script-src 'self';
+        style-src 'self';
+        img-src 'self' data: blob:;
+        font-src 'self';
+        worker-src 'self' blob:;
+        child-src blob:;
+        connect-src 'self' blob: https://generativelanguage.googleapis.com https://api.groq.com https://api-inference.huggingface.co http://localhost:11434 http://127.0.0.1:11434;
+        base-uri 'none';
+        form-action 'none';">
+    <title>Orochimaru RAG &mdash; Kusanagi AI</title>
     <meta name="description" content="Orochimaru — a secure document analyst that loads PDFs directly into browser RAM for private Q&A and summarization.">
-
-    <link rel="stylesheet" href="../static/style.css">
-    <script>
-        // Configure PDF.js worker
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    </script>
+    <link rel="icon" href="../static/logo-64.png">
+    <link rel="stylesheet" href="../static/kusanagi.css">
+    <script src="../static/vendor/marked.min.js" defer></script>
+    <script src="../static/vendor/purify.min.js" defer></script>
+    <script src="../static/keys.js" defer></script>
+    <script src="../static/providers.js" defer></script>
+    <script src="../static/dom.js" defer></script>
+    <script src="../static/ui.js" defer></script>
+    <script src="../static/pages/orochimaru.js" defer></script>
 </head>
 <body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden">
-    <a href="../index.html" class="home-button">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
+    <a href="../index.html" class="home-button" aria-label="Back to the Kusanagi AI dashboard">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
     </a>
 
     <div class="flex h-full max-h-screen">
-        
+
         <!-- === Sidebar === -->
-        <aside class="w-72 flex-shrink-0 bg-secondary flex flex-col p-4 border-r border-tertiary overflow-y-auto custom-scrollbar">
-            <!-- Header -->
-            <div class="px-1 mb-6">
-                <h1 class="text-2xl font-bold flex items-center gap-2">
+        <aside class="w-72 flex-shrink-0 bg-secondary flex flex-col p-4 border-r border-tertiary overflow-y-auto">
+            <div class="px-1 mb-6 mt-12">
+                <h1 class="text-xl font-bold flex flex-wrap items-center gap-2">
                     <a href="../index.html" class="hover:underline text-fg-primary">Kusanagi AI</a>
-                    <span class="text-fg-secondary font-normal mx-1">/</span>
+                    <span class="text-fg-secondary font-normal">/</span>
                     <span class="text-accent">Orochimaru</span>
-                    <span class="text-[10px] bg-tertiary text-fg-secondary px-2 py-0.5 rounded border border-tertiary">Local</span>
                 </h1>
-                <p class="text-xs text-fg-secondary mt-1">Secure RAG Environment</p>
+                <p class="text-xs text-fg-secondary mt-1">In-memory RAG over your PDFs</p>
             </div>
 
-            <!-- File Upload -->
             <div class="mb-6">
-                <input type="file" id="pdf-upload" accept=".pdf" class="hidden" onchange="handleFileUpload(this)">
-                <button onclick="document.getElementById('pdf-upload').click()" class="w-full bg-accent text-accent-fg font-bold py-3 px-4 rounded-md hover:bg-yellow-600 transition duration-200 flex items-center justify-center gap-2 shadow-lg">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
-                    Load Document (RAM)
+                <input type="file" id="pdf-upload" accept="application/pdf,.pdf" class="hidden">
+                <button id="load-doc" type="button" class="btn btn-accent w-full py-3 flex items-center justify-center gap-2 shadow-lg">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                    Load document
                 </button>
-                <p class="text-[10px] text-center text-fg-secondary mt-2 opacity-70">Files never leave this device.</p>
+                <p class="text-[10px] text-center text-fg-secondary mt-2 opacity-70">Parsed here. Never uploaded.</p>
             </div>
 
-            <!-- AI Settings Panel -->
             <div class="bg-tertiary/30 rounded-lg p-3 mb-4 border border-tertiary">
-                <h3 class="text-xs font-bold text-fg-secondary uppercase mb-3">AI Settings</h3>
-                
-                <!-- Model Selector -->
+                <h2 class="text-xs font-bold text-fg-secondary uppercase mb-3">AI settings</h2>
                 <div class="mb-3">
-                    <label class="block text-[10px] text-fg-secondary mb-1">Model</label>
-                    <select id="model-select" class="w-full bg-primary text-xs text-fg-primary p-1.5 rounded border border-tertiary focus:border-accent outline-none">
-                        <!-- Options populated by JS -->
-                    </select>
+                    <label for="model-select" class="block text-[10px] text-fg-secondary mb-1">Model</label>
+                    <select id="model-select" class="!bg-primary !text-xs !p-1.5"></select>
                 </div>
-
-                <!-- Temperature Slider -->
                 <div>
                     <div class="flex justify-between text-[10px] text-fg-secondary mb-1">
-                        <label>Temperature</label>
+                        <label for="temp-slider">Temperature</label>
                         <span id="temp-val" class="text-accent font-mono">0.3</span>
                     </div>
-                    <input type="range" id="temp-slider" min="0" max="1" step="0.1" value="0.3" class="w-full h-1 bg-primary rounded-lg appearance-none cursor-pointer">
+                    <input type="range" id="temp-slider" min="0" max="1" step="0.1" value="0.3" class="w-full">
                 </div>
             </div>
 
-            <!-- Status Panel -->
             <div class="bg-tertiary/30 rounded-lg p-3 mb-4 border border-tertiary">
-                <h3 class="text-xs font-bold text-fg-secondary uppercase mb-2 flex justify-between">
-                    System Status
-                    <div class="w-2 h-2 bg-danger rounded-full" id="status-dot"></div>
-                </h3>
-                <div class="space-y-2 text-xs">
-                    <div class="flex justify-between">
-                        <span>AI Link:</span>
-                        <span id="status-ai" class="text-fg-secondary">Disconnected</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span>Document:</span>
-                        <span id="status-doc" class="text-fg-secondary truncate max-w-[100px]">None</span>
-                    </div>
-                    <div class="flex justify-between">
-                        <span>Total Chunks:</span>
-                        <span id="status-chunks" class="text-fg-primary">0</span>
-                    </div>
-                </div>
+                <h2 class="text-xs font-bold text-fg-secondary uppercase mb-2 flex justify-between items-center">
+                    System status
+                    <span class="w-2 h-2 bg-danger rounded-full" id="status-dot" aria-hidden="true"></span>
+                </h2>
+                <dl class="space-y-2 text-xs">
+                    <div class="flex justify-between gap-2"><dt>AI link</dt><dd id="status-ai" class="text-fg-secondary">Disconnected</dd></div>
+                    <div class="flex justify-between gap-2"><dt>Document</dt><dd id="status-doc" class="text-fg-secondary truncate max-w-[110px]">None</dd></div>
+                    <div class="flex justify-between gap-2"><dt>Total chunks</dt><dd id="status-chunks" class="text-fg-primary">0</dd></div>
+                </dl>
             </div>
 
-            <!-- Document List -->
             <div class="mb-4 flex-grow flex flex-col min-h-[150px]">
-                <h3 class="text-xs font-bold text-fg-secondary uppercase mb-2 flex justify-between items-center">
-                    Loaded Documents <span id="doc-count" class="text-accent bg-tertiary px-1.5 rounded">0</span>
-                </h3>
-                <div id="doc-list" class="space-y-1 overflow-y-auto custom-scrollbar pr-1 flex-grow">
-                    <!-- Empty State -->
-                    <div id="empty-docs" class="text-[10px] text-fg-secondary italic p-4 text-center border border-dashed border-tertiary rounded">
-                        No documents in RAM.<br>Load a PDF to begin.
-                    </div>
-                    <!-- Dynamic Items will go here -->
-                </div>
+                <h2 class="text-xs font-bold text-fg-secondary uppercase mb-2 flex justify-between items-center">
+                    Loaded documents
+                    <span id="doc-count" class="text-accent bg-tertiary px-1.5 rounded">0</span>
+                </h2>
+                <div id="doc-list" class="space-y-1 overflow-y-auto pr-1 flex-grow"></div>
             </div>
 
-            <!-- Quick Actions -->
-            <div id="quick-actions" class="space-y-2 opacity-50 pointer-events-none transition-opacity">
-                <button onclick="runQuickAction('summarize')" class="w-full text-left px-3 py-2 rounded hover:bg-tertiary text-sm text-fg-primary border border-transparent hover:border-accent transition flex items-center gap-2">
-                    📝 Summarize All
+            <div id="quick-actions" class="space-y-2 is-dimmed pointer-events-none transition-opacity">
+                <button id="action-summarize" type="button" class="w-full text-left px-3 py-2 rounded hover:bg-tertiary text-sm text-fg-primary border border-transparent hover:border-accent transition">
+                    Summarise all
                 </button>
-                
-                <!-- Review Dropdown Trigger -->
-                <div class="relative">
-                    <button onclick="toggleReviewMenu()" class="w-full text-left px-3 py-2 rounded hover:bg-tertiary text-sm text-fg-primary border border-transparent hover:border-accent transition flex items-center gap-2 justify-between">
-                        <span>🧐 Expert Review</span>
-                        <span class="text-[10px]">▼</span>
+                <div>
+                    <button id="toggle-review" type="button" class="w-full text-left px-3 py-2 rounded hover:bg-tertiary text-sm text-fg-primary border border-transparent hover:border-accent transition flex items-center justify-between" aria-expanded="false" aria-controls="review-menu">
+                        <span>Expert review</span>
+                        <span aria-hidden="true">&#9662;</span>
                     </button>
-                    
-                    <!-- Review Personas (Hidden by default) -->
-                    <div id="review-menu" class="hidden ml-4 mt-1 border-l-2 border-tertiary pl-2 space-y-1 bg-secondary">
-                        <button onclick="runReview('Physicist')" class="w-full text-left px-2 py-1.5 text-xs text-fg-secondary hover:text-accent transition">🔬 Physicist</button>
-                        <button onclick="runReview('Chemist')" class="w-full text-left px-2 py-1.5 text-xs text-fg-secondary hover:text-accent transition">🧪 Chemist</button>
-                        <button onclick="runReview('Editor')" class="w-full text-left px-2 py-1.5 text-xs text-fg-secondary hover:text-accent transition">✍️ Editor</button>
-                    </div>
+                    <div id="review-menu" class="hidden ml-4 mt-1 border-l-2 border-tertiary pl-2 space-y-1"></div>
                 </div>
             </div>
 
-            <div class="mt-auto pt-4 border-t border-tertiary">
-                 <button onclick="settingsApi.open()" class="flex items-center gap-2 text-sm text-fg-secondary hover:text-accent transition w-full">
-                    <span>⚙️</span> Configure API
-                 </button>
+            <div class="mt-auto pt-4 border-t border-tertiary flex gap-2">
+                <button id="open-settings" type="button" class="btn btn-secondary text-xs flex-1">Configure API</button>
+                <button id="purge-btn" type="button" class="btn btn-danger text-xs">Purge</button>
             </div>
         </aside>
 
-        <!-- === Main Area === -->
-        <main class="flex-1 flex flex-col max-h-screen relative bg-primary">
-            <!-- Top Bar -->
-            <header class="flex-shrink-0 h-14 border-b border-tertiary flex items-center justify-between px-4 bg-secondary/50">
-                <div class="flex items-center gap-4">
-                    <div class="flex items-center gap-2">
-                        <div class="w-2 h-2 bg-success rounded-full secure-indicator" title="Encrypted RAM Session"></div>
-                        <span class="text-lg font-bold text-fg-primary" id="chat-header">Secure Workspace</span>
-                    </div>
-                    
-                    <!-- Performance Monitor -->
+        <!-- === Main === -->
+        <main class="flex-1 flex flex-col max-h-screen relative bg-primary min-w-0">
+            <header class="flex-shrink-0 h-14 border-b border-tertiary flex items-center justify-between px-4 bg-secondary/50 gap-3">
+                <div class="flex items-center gap-4 min-w-0">
+                    <span class="text-lg font-bold text-fg-primary truncate">Secure workspace</span>
                     <div class="hidden md:flex items-center gap-3 text-[10px] font-mono text-fg-secondary bg-secondary/80 px-3 py-1 rounded border border-tertiary">
-                         <div title="Browser Memory Usage (Approx)">
-                            <span class="text-accent">RAM:</span> <span id="perf-ram" class="text-fg-primary">--</span>
-                        </div>
-                        <div class="w-[1px] h-3 bg-tertiary"></div>
-                        <div title="Total Tokens Used">
-                            <span class="text-accent">Tokens:</span> <span id="perf-tokens" class="text-fg-primary">0</span>
-                        </div>
-                        <div class="w-[1px] h-3 bg-tertiary"></div>
-                        <div title="Tokens Per Second">
-                            <span class="text-accent">Speed:</span> <span id="perf-speed" class="text-fg-primary">--</span>
-                        </div>
+                        <div><span class="text-accent">RAM:</span> <span id="perf-ram" class="text-fg-primary">--</span></div>
+                        <div class="w-px h-3 bg-tertiary"></div>
+                        <div><span class="text-accent">Tokens:</span> <span id="perf-tokens" class="text-fg-primary">0</span></div>
+                        <div class="w-px h-3 bg-tertiary"></div>
+                        <div><span class="text-accent">Speed:</span> <span id="perf-speed" class="text-fg-primary">--</span></div>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-3">
-                    <!-- TTS Button with ID for logic -->
-                    <button id="tts-btn" onclick="toggleTTS()" class="text-fg-secondary hover:text-accent text-lg" title="Read Aloud">🔊</button>
-                    
-                    <div class="h-4 w-[1px] bg-tertiary"></div>
-                    <button onclick="clearChat()" class="text-fg-secondary hover:text-danger text-sm" title="Clear Chat History">🗑️ Clear</button>
+                <div class="flex items-center gap-3 shrink-0">
+                    <button id="tts-btn" type="button" class="text-fg-secondary hover:text-accent text-sm border border-tertiary rounded px-2 py-1" aria-pressed="false">Read aloud</button>
+                    <button id="clear-chat" type="button" class="text-fg-secondary hover:text-danger text-sm">Clear</button>
                 </div>
             </header>
 
-            <!-- Chat Container -->
-            <div id="chat-history" class="flex-grow overflow-y-auto p-4 space-y-6 custom-scrollbar">
-                <!-- Welcome Message -->
-                <div class="flex items-start space-x-4">
-                    <div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent border border-accent">O</div>
-                    <div class="bg-tertiary p-4 rounded-lg max-w-3xl shadow-md">
-                        <p class="font-bold text-accent mb-1">Orochimaru (Secure Mode)</p>
-                        <p>System is strictly local. Documents loaded here are processed in-memory and vanish upon reload.</p>
-                    </div>
-                </div>
-            </div>
+            <div id="chat-history" class="flex-grow overflow-y-auto p-4 space-y-6" role="log" aria-live="polite" aria-label="Conversation"></div>
 
-            <!-- Input Area -->
             <div class="flex-shrink-0 p-4 bg-primary border-t border-tertiary">
-                <div class="max-w-4xl mx-auto relative">
+                <div class="max-w-4xl mx-auto">
                     <div class="flex bg-tertiary rounded-lg border border-tertiary focus-within:border-accent shadow-lg transition-colors">
-                        <input id="chat-input" type="text" placeholder="Query your private documents..." class="w-full bg-transparent p-3 text-fg-primary placeholder-fg-secondary focus:outline-none" onkeydown="if(event.key === 'Enter') handleSend()" autocomplete="off">
-                        <button onclick="handleSend()" id="send-btn" class="px-4 text-accent hover:text-white transition">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                        <label for="chat-input" class="sr-only">Question</label>
+                        <input id="chat-input" type="text" autocomplete="off" placeholder="Query your documents..." class="!border-0 !bg-transparent !p-3">
+                        <button id="send-btn" type="button" class="px-4 text-accent hover:text-fg-primary transition" aria-label="Send">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                         </button>
                     </div>
                     <div class="text-center mt-2">
-                         <span id="context-indicator" class="text-[10px] text-fg-secondary opacity-0 transition-opacity flex items-center justify-center gap-1">
-                            <svg class="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        <span id="context-indicator" class="text-[10px] text-fg-secondary is-invisible transition-opacity inline-block">
                             Searching local chunks...
                         </span>
                     </div>
@@ -206,465 +151,5 @@
             </div>
         </main>
     </div>
-
-    <script>
-        // --- STATE MANAGEMENT ---
-        const config = {
-            get provider() { return Kusanagi.keys.provider(); },
-            get apiKey() { return Kusanagi.keys.get(Kusanagi.keys.provider()); },
-        };
-
-        // MEMORY-ONLY STORAGE
-        let loadedDocuments = {};
-        let lastAIResponse = "";
-        let sessionTotalTokens = 0;
-        let isSpeaking = false; // Track TTS state
-        let settingsApi;
-
-        const REVIEW_PERSONAS = {
-            "Physicist": "You are a reviewer with expertise in Physics. Focus on the underlying physical principles and models.",
-            "Chemist": "You are a reviewer with expertise in Chemistry. Focus on chemical compositions and reactions.",
-            "Editor": "You are an editor. Review the paper for clarity, grammar, style, and overall structure."
-        };
-        
-        // Warn user on reload/close
-        window.onbeforeunload = function() {
-            if (Object.keys(loadedDocuments).length > 0) {
-                return "All loaded documents will be lost. They are not saved.";
-            }
-        };
-
-        // --- INITIALIZATION ---
-        document.addEventListener('DOMContentLoaded', () => {
-            settingsApi = Kusanagi.mountSettings({
-                providers: ['gemini', 'groq', 'hf', 'ollama'],
-                title: 'Secure Configuration',
-                onSave: () => { checkStatus(); populateModelSelect(config.provider); },
-            });
-            checkStatus();
-            populateModelSelect(config.provider); // Init model list
-
-            // Slider Listener
-            const slider = document.getElementById('temp-slider');
-            const valDisplay = document.getElementById('temp-val');
-            slider.addEventListener('input', (e) => valDisplay.textContent = e.target.value);
-            
-            // Start Memory Monitor
-            setInterval(updatePerfStats, 2000);
-        });
-
-        // --- PERFORMANCE MONITOR ---
-        function updatePerfStats(tokensUsed = 0, speed = 0) {
-            // Update Tokens
-            if (tokensUsed > 0) {
-                sessionTotalTokens += tokensUsed;
-                document.getElementById('perf-tokens').textContent = sessionTotalTokens.toLocaleString();
-            }
-            
-            // Update Speed if provided
-            if (speed > 0) {
-                document.getElementById('perf-speed').textContent = speed.toFixed(1) + " t/s";
-            }
-
-            // Update RAM (Best Effort)
-            const ramEl = document.getElementById('perf-ram');
-            if (performance.memory) {
-                // Chrome/Edge only
-                const usedMB = Math.round(performance.memory.usedJSHeapSize / 1024 / 1024);
-                ramEl.textContent = `${usedMB} MB`;
-            } else {
-                // Fallback: Estimate based on loaded text length
-                let charCount = 0;
-                Object.values(loadedDocuments).forEach(chunks => {
-                    chunks.forEach(c => charCount += c.length);
-                });
-                // Rough estimate: chars * 2 bytes + overhead
-                const estMB = Math.round((charCount * 2) / 1024 / 1024) + 20; // Base overhead
-                ramEl.textContent = `~${estMB} MB`;
-            }
-        }
-
-        // --- SETTINGS & CONFIG ---
-        function populateModelSelect(provider) {
-            const select = document.getElementById('model-select');
-            select.innerHTML = "";
-            const options = Kusanagi.MODELS[provider] || [];
-            options.forEach(m => {
-                const opt = document.createElement('option');
-                opt.value = m.id;
-                opt.textContent = m.name;
-                select.appendChild(opt);
-            });
-        }
-
-        function checkStatus() {
-            const statusEl = document.getElementById('status-ai');
-            const dot = document.getElementById('status-dot');
-            
-            if(config.apiKey) {
-                statusEl.textContent = config.provider === 'ollama' ? "Local (Ollama)" : "Secure Cloud";
-                statusEl.className = "text-success font-bold";
-                dot.classList.remove('bg-danger');
-                dot.classList.add('bg-success');
-            } else {
-                statusEl.textContent = "Keys Missing";
-                statusEl.className = "text-danger";
-                dot.classList.remove('bg-success');
-                dot.classList.add('bg-danger');
-            }
-        }
-
-        // --- DOCUMENT MANAGEMENT ---
-        function updateDocListUI() {
-            const listContainer = document.getElementById('doc-list');
-            const emptyMsg = document.getElementById('empty-docs');
-            const docCount = document.getElementById('doc-count');
-            const quickActions = document.getElementById('quick-actions');
-            const totalChunksEl = document.getElementById('status-chunks');
-
-            const filenames = Object.keys(loadedDocuments);
-            docCount.textContent = filenames.length;
-
-            if (filenames.length === 0) {
-                emptyMsg.classList.remove('hidden');
-                quickActions.classList.add('opacity-50', 'pointer-events-none');
-                listContainer.querySelectorAll('.doc-item').forEach(e => e.remove());
-                totalChunksEl.textContent = "0";
-                return;
-            }
-
-            emptyMsg.classList.add('hidden');
-            quickActions.classList.remove('opacity-50', 'pointer-events-none');
-
-            // Re-render list
-            listContainer.querySelectorAll('.doc-item').forEach(e => e.remove());
-            
-            let totalChunks = 0;
-            filenames.forEach(name => {
-                totalChunks += loadedDocuments[name].length;
-                
-                const div = document.createElement('div');
-                div.className = "doc-item bg-tertiary rounded p-2 flex justify-between items-center group mb-1";
-                div.innerHTML = `
-                    <div class="truncate text-xs text-fg-primary max-w-[180px]" title="${name}">
-                        📄 ${name}
-                    </div>
-                    <button onclick="removeDocument('${name}')" class="text-fg-secondary hover:text-danger transition opacity-50 group-hover:opacity-100" title="Remove from RAM">
-                        🗑️
-                    </button>
-                `;
-                listContainer.appendChild(div);
-            });
-            
-            totalChunksEl.textContent = totalChunks;
-        }
-
-        function removeDocument(name) {
-            if(confirm(`Remove '${name}' from memory? This action cannot be undone.`)) {
-                delete loadedDocuments[name];
-                updateDocListUI();
-                appendSystemMessage(`Dropped document: ${name}`);
-            }
-        }
-
-        // --- PDF PROCESSING (LOCAL) ---
-        async function handleFileUpload(input) {
-            const file = input.files[0];
-            if (!file) return;
-
-            // Fix: Ensure pdfjsLib is available
-            if (typeof pdfjsLib === 'undefined') {
-                alert("PDF Library failed to load. Please check your internet connection or reload.");
-                return;
-            }
-
-            if (file.type !== 'application/pdf') {
-                alert("Please upload a valid PDF file.");
-                return;
-            }
-            
-            if (loadedDocuments[file.name]) {
-                alert("Document already loaded in memory.");
-                return;
-            }
-
-            const statusDoc = document.getElementById('status-doc');
-            if (statusDoc) statusDoc.textContent = "Parsing...";
-            appendSystemMessage(`Reading <strong>${file.name}</strong> into RAM...`);
-
-            try {
-                const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-                
-                let fullText = "";
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const page = await pdf.getPage(i);
-                    const textContent = await page.getTextContent();
-                    fullText += textContent.items.map(item => item.str).join(' ') + "\n";
-                    if (statusDoc) statusDoc.textContent = `${Math.round((i / pdf.numPages) * 100)}%`;
-                }
-
-                if (!fullText.trim()) {
-                    throw new Error("PDF appears to be empty or scanned images (OCR not supported locally).");
-                }
-
-                // Chunking
-                const chunks = chunkText(fullText, 1000, 200);
-                
-                // Save to State
-                loadedDocuments[file.name] = chunks;
-                
-                updateDocListUI();
-                if (statusDoc) statusDoc.textContent = "Ready";
-                appendSystemMessage(`Securely loaded: <strong>${file.name}</strong> (${chunks.length} chunks)`);
-
-            } catch (error) {
-                console.error(error);
-                appendSystemMessage(`Error parsing PDF: ${error.message}`, true);
-                if (statusDoc) statusDoc.textContent = "Error";
-            }
-            input.value = ''; 
-        }
-
-        function chunkText(text, chunkSize, overlap) {
-            const chunks = [];
-            for (let i = 0; i < text.length; i += (chunkSize - overlap)) {
-                chunks.push(text.slice(i, i + chunkSize));
-            }
-            return chunks;
-        }
-
-        // --- LOCAL RETRIEVAL ---
-        function retrieveRelevantChunks(query, limit = 5) {
-            const allChunks = Object.values(loadedDocuments).flat();
-            
-            if (allChunks.length === 0) return [];
-            const queryTerms = query.toLowerCase().split(/\s+/).filter(w => w.length > 3);
-            
-            const scoredChunks = allChunks.map(chunk => {
-                const chunkLower = chunk.toLowerCase();
-                let score = 0;
-                queryTerms.forEach(term => {
-                    score += (chunkLower.match(new RegExp(term, "g")) || []).length;
-                });
-                return { text: chunk, score: score };
-            });
-
-            return scoredChunks.filter(c => c.score > 0).sort((a, b) => b.score - a.score).slice(0, limit).map(c => c.text);
-        }
-
-        // --- CHAT LOGIC ---
-        async function handleSend() {
-            const input = document.getElementById('chat-input');
-            const query = input.value.trim();
-            if (!query) return;
-            
-            if (!config.apiKey) {
-                alert("Please configure your API Key/Endpoint in Settings.");
-                settingsApi.open();
-                return;
-            }
-
-            input.value = '';
-            appendUserMessage(query);
-            const thinkingId = appendThinking();
-            const indicator = document.getElementById('context-indicator');
-
-            try {
-                let context = "";
-                let systemInstruction = "You are Orochimaru. Answer concisely.";
-
-                if (Object.keys(loadedDocuments).length > 0) {
-                    indicator.style.opacity = "1";
-                    const relevantChunks = retrieveRelevantChunks(query);
-                    if (relevantChunks.length > 0) {
-                        context = "CONTEXT FROM LOCAL DOCS:\n" + relevantChunks.join("\n---\n");
-                        systemInstruction += " Use the context provided to answer.";
-                    }
-                }
-
-                const fullPrompt = `${systemInstruction}\n\n${context}\n\nUSER: ${query}`;
-                
-                // Get Selected Model and Temp
-                const selectedModel = document.getElementById('model-select').value;
-                const temperature = parseFloat(document.getElementById('temp-slider').value);
-
-                // Track Start Time
-                const startTime = performance.now();
-
-                const result = await Kusanagi.call(config.provider, {
-                    apiKey: config.apiKey, model: selectedModel, temperature, prompt: fullPrompt,
-                });
-
-                const endTime = performance.now();
-
-                // Calculate Stats
-                const durationSec = (endTime - startTime) / 1000;
-                // Fallback token estimation if API doesn't provide usage
-                const estimatedTokens = result.usage ? (result.usage.total_tokens || 0) : Math.ceil((fullPrompt.length + result.text.length) / 4);
-                const speed = estimatedTokens / durationSec;
-
-                updatePerfStats(estimatedTokens, speed);
-
-                document.getElementById(thinkingId).remove();
-                appendAIMessage(result.text);
-                lastAIResponse = result.text;
-
-            } catch (error) {
-                document.getElementById(thinkingId).remove();
-                appendSystemMessage(`Error: ${error.message}`, true);
-            } finally {
-                indicator.style.opacity = "0";
-            }
-        }
-
-        function toggleReviewMenu() {
-            document.getElementById('review-menu').classList.toggle('hidden');
-        }
-
-        function runReview(role) {
-            if (Object.keys(loadedDocuments).length === 0) return;
-            const systemPrompt = REVIEW_PERSONAS[role] || "You are a helpful assistant.";
-            
-            const relevant = retrieveRelevantChunks("conclusion results methodology abstract", 8); 
-            const context = relevant.join("\n\n");
-            const prompt = `${systemPrompt}\n\nBased on these excerpts from the document(s):\n${context}\n\nProvide a critical review.`;
-            
-            callCustomPrompt(prompt, `Requesting ${role} Review...`);
-        }
-
-        async function runQuickAction(type) {
-            if (Object.keys(loadedDocuments).length === 0) return;
-
-            if (type === 'summarize') {
-                const chunks = retrieveRelevantChunks("abstract summary conclusion introduction", 6);
-                const prompt = "Summarize the following text:\n" + chunks.join("\n");
-                callCustomPrompt(prompt, "Generating Summary...");
-            }
-        }
-
-        async function callCustomPrompt(fullPrompt, userFacingText) {
-            appendUserMessage(userFacingText);
-            const thinkingId = appendThinking();
-            const selectedModel = document.getElementById('model-select').value;
-            const temperature = parseFloat(document.getElementById('temp-slider').value);
-            
-            const startTime = performance.now();
-
-            try {
-                const result = await Kusanagi.call(config.provider, {
-                    apiKey: config.apiKey, model: selectedModel, temperature, prompt: fullPrompt,
-                });
-
-                const endTime = performance.now();
-                const durationSec = (endTime - startTime) / 1000;
-                const estimatedTokens = result.usage ? (result.usage.total_tokens || 0) : Math.ceil((fullPrompt.length + result.text.length) / 4);
-                const speed = estimatedTokens / durationSec;
-                updatePerfStats(estimatedTokens, speed);
-
-                document.getElementById(thinkingId).remove();
-                appendAIMessage(result.text);
-                lastAIResponse = result.text;
-            } catch (error) {
-                document.getElementById(thinkingId).remove();
-                appendSystemMessage(error.message, true);
-            }
-        }
-
-        // --- TTS (Text-to-Speech) with Stop Logic ---
-        function toggleTTS() {
-            const btn = document.getElementById('tts-btn');
-            
-            if (isSpeaking) {
-                // STOP action
-                window.speechSynthesis.cancel();
-                isSpeaking = false;
-                resetTTSButton(btn);
-            } else {
-                // START action
-                if (!lastAIResponse) return;
-                
-                // Cancel any background speech just in case
-                window.speechSynthesis.cancel();
-
-                const utterance = new SpeechSynthesisUtterance(lastAIResponse);
-                
-                utterance.onstart = () => {
-                    isSpeaking = true;
-                    btn.innerHTML = "⏹️"; // Stop icon
-                    btn.title = "Stop Speaking";
-                    btn.classList.add("text-accent", "animate-pulse");
-                };
-
-                utterance.onend = () => {
-                    isSpeaking = false;
-                    resetTTSButton(btn);
-                };
-
-                utterance.onerror = () => {
-                    isSpeaking = false;
-                    resetTTSButton(btn);
-                };
-
-                window.speechSynthesis.speak(utterance);
-            }
-        }
-
-        function resetTTSButton(btn) {
-            btn.innerHTML = "🔊";
-            btn.title = "Read Aloud";
-            btn.classList.remove("text-accent", "animate-pulse");
-        }
-
-        // --- UI HELPERS ---
-        function appendUserMessage(text) {
-            const div = document.createElement('div');
-            div.className = "flex items-start space-x-4 justify-end";
-            div.innerHTML = `<div class="bg-accent text-accent-fg p-3 rounded-lg max-w-2xl shadow-md"><p class="text-sm">${text}</p></div>`;
-            document.getElementById('chat-history').appendChild(div);
-            scrollToBottom();
-        }
-
-        function appendAIMessage(text) {
-            const div = document.createElement('div');
-            div.className = "flex items-start space-x-4";
-            const cleanHtml = DOMPurify.sanitize(marked.parse(text));
-            div.innerHTML = `<div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent border border-accent">O</div><div class="bg-tertiary p-4 rounded-lg max-w-3xl shadow-md prose prose-invert text-sm text-fg-primary">${cleanHtml}</div>`;
-            document.getElementById('chat-history').appendChild(div);
-            scrollToBottom();
-        }
-
-        function appendSystemMessage(text, isError = false) {
-            const div = document.createElement('div');
-            div.className = "flex justify-center my-2";
-            div.innerHTML = `<span class="text-xs px-3 py-1 rounded-full ${isError ? 'bg-danger/20 text-danger' : 'bg-primary border border-tertiary text-fg-secondary'}">${text}</span>`;
-            document.getElementById('chat-history').appendChild(div);
-            scrollToBottom();
-        }
-
-        function appendThinking() {
-            const id = 'thinking-' + Date.now();
-            const div = document.createElement('div');
-            div.id = id;
-            div.className = "flex items-start space-x-4";
-            div.innerHTML = `<div class="flex-shrink-0 w-10 h-10 bg-tertiary rounded-full flex items-center justify-center font-bold text-accent border border-accent animate-pulse">...</div><div class="bg-tertiary p-3 rounded-lg text-fg-secondary italic text-sm">Thinking...</div>`;
-            document.getElementById('chat-history').appendChild(div);
-            scrollToBottom();
-            return id;
-        }
-
-        function scrollToBottom() {
-            const el = document.getElementById('chat-history');
-            el.scrollTop = el.scrollHeight;
-        }
-
-        function clearChat() {
-            document.getElementById('chat-history').innerHTML = '';
-            sessionTotalTokens = 0; // Reset stats on clear
-            updatePerfStats(0, 0); // Reset UI
-            appendSystemMessage("Chat history cleared from RAM.");
-        }
-
-    </script>
 </body>
 </html>
