@@ -35,7 +35,8 @@
     var searching = false;
     var ui = {};
 
-    function provider() { return K.keys.provider(); }
+    // The saved provider, narrowed to the ones this page offers (see mountSettings).
+    function provider() { return settings.provider(); }
     function apiKey() { return K.keys.get(provider()); }
 
     /* ------------------------------------------------------------ data sources */
@@ -261,8 +262,7 @@
         return K.callJson(provider(), {
             apiKey: apiKey(), model: ui.model.value, temperature: 0.5, prompt: prompt,
         }).then(function (parsed) {
-            var list = Array.isArray(parsed) ? parsed : (parsed && parsed.queries);
-            var clean = (list || []).filter(function (s) { return typeof s === 'string' && s.trim(); });
+            var clean = K.listFrom(parsed, 'queries').filter(function (s) { return typeof s === 'string' && s.trim(); });
             return clean.length ? clean.slice(0, 5) : [query];
         }).catch(function () {
             return [query];
@@ -417,7 +417,7 @@
         };
 
         settings = K.ui.mountSettings({
-            providers: ['gemini', 'hf', 'openrouter'],
+            providers: ['gemini', 'anthropic', 'hf', 'openrouter'],
             onSave: function () { K.ui.fillModelSelect(ui.model, provider()); },
         });
         K.ui.fillModelSelect(ui.model, provider());

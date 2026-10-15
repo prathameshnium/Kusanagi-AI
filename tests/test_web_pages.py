@@ -23,6 +23,7 @@ PAGES_DIR = os.path.join(ROOT, "static", "pages")
 # the providers it actually offers.
 PROVIDER_ORIGINS = {
     "gemini": ["https://generativelanguage.googleapis.com"],
+    "anthropic": ["https://api.anthropic.com"],
     "hf": ["https://router.huggingface.co"],
     "openrouter": ["https://openrouter.ai"],
     "ollama": ["http://localhost:11434", "http://127.0.0.1:11434"],

@@ -17,7 +17,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STATIC = os.path.join(ROOT, "static")
 PAGES = os.path.join(STATIC, "pages")
 
-SUPPORTED = {"gemini", "hf", "openrouter", "ollama"}
+SUPPORTED = {"gemini", "anthropic", "hf", "openrouter", "ollama"}
 RETIRED = {"groq"}
 
 
@@ -203,6 +203,46 @@ def test_keys_are_never_written_to_a_url(providers_js):
 def test_requests_are_time_bounded(providers_js):
     assert "AbortController" in providers_js
     assert "DEFAULT_TIMEOUT_MS" in providers_js
+
+
+def test_anthropic_request_carries_the_documented_headers(providers_js):
+    """Bearer auth (x-api-key is the documented legacy fallback), a pinned
+    API version, and never the key in a URL."""
+    match = re.search(r"function callAnthropic\(.*?\n    \}\n", providers_js, re.S)
+    assert match, "providers.js has no callAnthropic"
+    body = match.group(0)
+    assert "Authorization: 'Bearer ' + apiKey" in body
+    assert "'x-api-key'" not in body
+    assert "'anthropic-version': ANTHROPIC_VERSION" in body
+    assert "var ANTHROPIC_VERSION = '2023-06-01'" in providers_js
+    providers_code = strip_js_comments(providers_js)
+    # Without this header Anthropic rejects the browser's CORS preflight.
+    assert "'anthropic-dangerous-direct-browser-access': 'true'" in providers_code
+
+
+def test_anthropic_requests_send_no_sampling_parameters(providers_js):
+    """Current Claude models answer a non-default temperature with a 400."""
+    match = re.search(r"function callAnthropic\(.*?\n    \}\n", providers_js, re.S)
+    assert match, "providers.js has no callAnthropic"
+    assert "body.temperature" not in match.group(0)
+    assert "temperature:" not in match.group(0)
+
+
+def test_keys_pasted_under_the_wrong_provider_are_refused(keys_js):
+    """A key saved under the wrong provider is sent to a company that never issued it."""
+    assert "belongsElsewhere" in keys_js
+    for prefix in ("AIza", "sk-ant-", "hf_", "sk-or-"):
+        assert "'%s'" % prefix in keys_js
+    for path in (os.path.join(STATIC, "ui.js"), os.path.join(PAGES, "index.js")):
+        assert "belongsElsewhere(" in io.open(path, encoding="utf-8").read(), path
+
+
+def test_pages_resolve_the_provider_against_their_own_list():
+    """A page must never use a provider it does not offer: its CSP would block it."""
+    for name, source in page_scripts().items():
+        if name == "index.js":
+            continue
+        assert "function provider() { return settings.provider(); }" in source, name
 
 
 # --------------------------------------------------------------------------

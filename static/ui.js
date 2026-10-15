@@ -55,14 +55,14 @@ window.Kusanagi = window.Kusanagi || {};
     var settingsApi = null;
 
     /**
-     * mountSettings({providers, title, onSave}) -> {open, close, refresh}
+     * mountSettings({providers, title, onSave}) -> {open, close, refresh, provider}
      *
      * Idempotent: repeated calls return the dialog already on the page.
      */
     function mountSettings(options) {
         if (settingsApi) return settingsApi;
         var opts = options || {};
-        var providers = opts.providers || ['gemini', 'hf', 'openrouter'];
+        var providers = opts.providers || ['gemini', 'anthropic', 'hf', 'openrouter'];
         var title = opts.title || 'System Config';
 
         var providerSelect = el('select', { id: 'settings-provider-select' },
@@ -234,6 +234,14 @@ window.Kusanagi = window.Kusanagi || {};
                 keyInput.focus();
                 return;
             }
+            var owner = window.Kusanagi.keys.belongsElsewhere(provider, value);
+            if (owner) {
+                toast('That looks like a ' + window.Kusanagi.providerLabel(owner)
+                    + ' key. Not saved, so it is not sent to '
+                    + window.Kusanagi.providerLabel(provider) + '.', 'error');
+                keyInput.focus();
+                return;
+            }
             window.Kusanagi.keys.setProvider(provider);
             window.Kusanagi.keys.set(provider, value, persistBox.checked);
             window.Kusanagi.prefs.setModelFallback(fallbackBox.checked);
@@ -248,7 +256,7 @@ window.Kusanagi = window.Kusanagi || {};
 
         function open() {
             lastFocused = document.activeElement;
-            providerSelect.value = window.Kusanagi.keys.provider();
+            providerSelect.value = activeProvider();
             refresh();
             modal.classList.remove('hidden');
             keyInput.focus();
@@ -275,7 +283,12 @@ window.Kusanagi = window.Kusanagi || {};
             if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
         });
 
-        settingsApi = { open: open, close: close, refresh: refresh };
+        /** The provider this page should use: the saved choice, if this page offers it. */
+        function activeProvider() {
+            return window.Kusanagi.keys.provider(providers);
+        }
+
+        settingsApi = { open: open, close: close, refresh: refresh, provider: activeProvider };
         return settingsApi;
     }
 

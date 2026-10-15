@@ -20,7 +20,7 @@ window.Kusanagi = window.Kusanagi || {};
     'use strict';
 
     var NS = 'k_';
-    var PROVIDERS = ['gemini', 'hf', 'openrouter', 'ollama'];
+    var PROVIDERS = ['gemini', 'anthropic', 'hf', 'openrouter', 'ollama'];
 
     // Two generations of key names predate this file: a global set and three
     // per-app prefixes that in practice only ever held a Gemini key.
@@ -100,8 +100,32 @@ window.Kusanagi = window.Kusanagi || {};
         local.set(NS + 'migrated', '1');
     }
 
+    /* Published key prefixes. Used only to catch a key pasted under the wrong
+       provider, which would otherwise be sent to a company that never issued it. */
+    var KEY_PREFIXES = {
+        gemini: 'AIza',
+        anthropic: 'sk-ant-',
+        hf: 'hf_',
+        openrouter: 'sk-or-',
+    };
+
     var keys = {
         providers: PROVIDERS.slice(),
+
+        /**
+         * If `value` carries another provider's key prefix, return that
+         * provider's id; otherwise ''. Callers refuse to save on a match.
+         */
+        belongsElsewhere: function (provider, value) {
+            var v = String(value || '');
+            var others = Object.keys(KEY_PREFIXES);
+            for (var i = 0; i < others.length; i++) {
+                if (others[i] !== provider && v.indexOf(KEY_PREFIXES[others[i]]) === 0) {
+                    return others[i];
+                }
+            }
+            return '';
+        },
 
         /** Current key for a provider, or '' if none. Session wins over persisted. */
         get: function (provider) {
@@ -130,10 +154,22 @@ window.Kusanagi = window.Kusanagi || {};
             return !!local.get(keyName(provider));
         },
 
-        /** Selected provider. Not a secret, so it persists. */
-        provider: function () {
+        /**
+         * Selected provider. Not a secret, so it persists.
+         *
+         * Pass `allowed` (the providers a page can actually reach) and a
+         * selection outside it resolves to the first allowed provider that has a
+         * key, else the first allowed one. Without this, picking Ollama on the
+         * dashboard sent every Ollama-less page to a provider its CSP blocks.
+         */
+        provider: function (allowed) {
             var p = local.get(NS + 'provider') || 'gemini';
-            return PROVIDERS.indexOf(p) === -1 ? 'gemini' : p;
+            if (PROVIDERS.indexOf(p) === -1) p = 'gemini';
+            if (!allowed || !allowed.length || allowed.indexOf(p) !== -1) return p;
+            for (var i = 0; i < allowed.length; i++) {
+                if (this.get(allowed[i])) return allowed[i];
+            }
+            return allowed[0];
         },
 
         setProvider: function (p) {

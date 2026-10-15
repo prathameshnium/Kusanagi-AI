@@ -2,15 +2,20 @@
  *
  * One call() for every app. Requires keys.js.
  *
- * Providers: Google Gemini, Hugging Face, OpenRouter, and a local Ollama.
- * Hugging Face and OpenRouter both speak the OpenAI chat-completions format, so
- * they share a handler.
+ * Providers: Google Gemini, Anthropic (Claude), Hugging Face, OpenRouter, and a
+ * local Ollama. Hugging Face and OpenRouter both speak the OpenAI
+ * chat-completions format, so they share a handler.
  *
  * Security notes:
  *   - Gemini keys go in the x-goog-api-key header, not the query string. A key in
  *     a URL ends up in browser history, in Referer on any redirect, and in
  *     whatever proxy logs sit in between; a header does not.
- *   - Everything else uses Authorization: Bearer.
+ *   - Anthropic refuses browser CORS requests unless they carry
+ *     anthropic-dangerous-direct-browser-access, the opt-in its docs require
+ *     for browser use. The name warns that page script can see the key, which
+ *     is already this app's threat model (see keys.js); the dashboard tells
+ *     users to make a dedicated, expiring, spend-limited key for it.
+ *   - Everything except Gemini uses Authorization: Bearer.
  *   - OpenRouter's optional HTTP-Referer / X-Title headers are deliberately not
  *     sent: they exist for its public leaderboard and would announce which page
  *     a researcher is using.
@@ -29,9 +34,13 @@ window.Kusanagi = window.Kusanagi || {};
 
     var DEFAULT_TIMEOUT_MS = 120000;
     var OLLAMA_DEFAULT = 'http://localhost:11434';
+    // Claude models think before answering, which can take a while.
+    var ANTHROPIC_TIMEOUT_MS = 300000;
+    var ANTHROPIC_VERSION = '2023-06-01';
 
     var ENDPOINTS = {
         gemini: 'https://generativelanguage.googleapis.com/v1beta/models/',
+        anthropic: 'https://api.anthropic.com/v1/messages',
         // The old api-inference.huggingface.co/models/<id> route is legacy; the
         // router is OpenAI-compatible and handles provider selection itself.
         hf: 'https://router.huggingface.co/v1/chat/completions',
@@ -45,6 +54,11 @@ window.Kusanagi = window.Kusanagi || {};
             { id: 'gemini-3.5-flash-lite', name: 'Gemini 3.5 Flash Lite (cheapest)' },
             { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
             { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+        ],
+        anthropic: [
+            { id: 'claude-opus-5-5', name: 'Claude Opus 5.5' },
+            { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5' },
+            { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5 (cheapest)' },
         ],
         hf: [
             { id: 'openai/gpt-oss-120b', name: 'GPT-OSS 120B' },
@@ -71,6 +85,7 @@ window.Kusanagi = window.Kusanagi || {};
 
     var LABELS = {
         gemini: 'Google Gemini',
+        anthropic: 'Anthropic (Claude)',
         hf: 'Hugging Face',
         openrouter: 'OpenRouter',
         ollama: 'Ollama (local)',
@@ -254,6 +269,90 @@ window.Kusanagi = window.Kusanagi || {};
         };
     }
 
+    /* Models that accept the server-side refusal fallback. Haiku has none. */
+    var ANTHROPIC_REFUSAL_FALLBACK = ['claude-opus-5-5', 'claude-sonnet-5-5'];
+
+    /**
+     * Anthropic Messages API.
+     *
+     *   - System turns move to the top-level `system` field.
+     *   - The conversation must open with a user turn, so leading assistant
+     *     turns are dropped.
+     *   - No `temperature`: current Claude models reject non-default sampling
+     *     parameters with a 400, so the slider does not apply here.
+     *   - No JSON-mode flag: the prompts already ask for bare JSON, and
+     *     callJson() tolerates fences and surrounding prose.
+     */
+    function callAnthropic(messages, modelId, apiKey, temperature, opts) {
+        var system = [];
+        var turns = [];
+        messages.forEach(function (m) {
+            if (m.role === 'system') { system.push(m.content); return; }
+            var role = m.role === 'assistant' ? 'assistant' : 'user';
+            if (!turns.length && role === 'assistant') return;
+            turns.push({ role: role, content: m.content });
+        });
+        if (!turns.length) return Promise.reject(new Error('Nothing to send.'));
+
+        var body = { model: modelId, max_tokens: 16000, messages: turns };
+        if (system.length) body.system = system.join('\n\n');
+
+        var headers = {
+            'Content-Type': 'application/json',
+            // Anthropic's docs list Authorization: Bearer as the primary scheme
+            // and x-api-key as a legacy fallback.
+            Authorization: 'Bearer ' + apiKey,
+            'anthropic-version': ANTHROPIC_VERSION,
+            'anthropic-dangerous-direct-browser-access': 'true',
+        };
+        if (ANTHROPIC_REFUSAL_FALLBACK.indexOf(modelId) !== -1) {
+            // On a safety refusal Anthropic re-runs the request on another Claude
+            // model inside the same call. Same provider, so this stays within
+            // the line callWithFallback() draws.
+            headers['anthropic-beta'] = 'server-side-fallback-2026-07-01';
+            body.fallbacks = 'default';
+        }
+
+        return request(ENDPOINTS.anthropic, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(body),
+        }, (opts && opts.timeoutMs) || ANTHROPIC_TIMEOUT_MS).then(function (resp) {
+            return readJson(resp).then(function (data) {
+                if (!resp.ok) throw providerError(data, resp, 'Anthropic');
+
+                if (data.stop_reason === 'refusal') {
+                    var category = data.stop_details && data.stop_details.category;
+                    var refused = new Error('Claude declined to answer'
+                        + (category ? ' (' + category + ').' : '.'));
+                    refused.retryable = true;
+                    throw refused;
+                }
+
+                // Content can include thinking blocks; only text is the answer.
+                var text = (data.content || [])
+                    .filter(function (b) { return b && b.type === 'text'; })
+                    .map(function (b) { return b.text; })
+                    .join('');
+                if (!text) {
+                    var blank = new Error('Anthropic returned no text.');
+                    blank.retryable = true;
+                    throw blank;
+                }
+
+                var u = data.usage;
+                return {
+                    text: text,
+                    usage: u ? {
+                        prompt_tokens: u.input_tokens,
+                        completion_tokens: u.output_tokens,
+                        total_tokens: (u.input_tokens || 0) + (u.output_tokens || 0),
+                    } : null,
+                };
+            });
+        });
+    }
+
     /* For Ollama the "key" field holds the base URL instead. */
     function callOllama(messages, modelId, baseUrl, temperature, opts) {
         var root = String(baseUrl || OLLAMA_DEFAULT).replace(/\/+$/, '');
@@ -286,6 +385,7 @@ window.Kusanagi = window.Kusanagi || {};
 
     var HANDLERS = {
         gemini: callGemini,
+        anthropic: callAnthropic,
         hf: openAiCompatible(ENDPOINTS.hf, 'Hugging Face'),
         openrouter: openAiCompatible(ENDPOINTS.openrouter, 'OpenRouter'),
         ollama: callOllama,
@@ -311,10 +411,19 @@ window.Kusanagi = window.Kusanagi || {};
         }
         if (!p.model) return Promise.reject(new Error('No model selected.'));
 
+        // Save-time checks do not cover keys stored before they existed, so
+        // refuse here too rather than send one provider's key to another.
+        var owner = window.Kusanagi.keys && window.Kusanagi.keys.belongsElsewhere(provider, p.apiKey);
+        if (owner) {
+            return Promise.reject(new Error('The key saved for ' + label(provider)
+                + ' looks like a ' + label(owner) + ' key, so it was not sent. '
+                + 'Re-enter it in Settings.'));
+        }
+
         var messages = toMessages(p);
         if (!messages.length) return Promise.reject(new Error('Nothing to send.'));
 
-        var temp = typeof p.temperature === 'number' ? p.temperature : 0.5;
+        var temp = Number.isFinite(p.temperature) ? p.temperature : 0.5;
         return handler(messages, p.model, p.apiKey, temp, p);
     }
 
@@ -389,9 +498,36 @@ window.Kusanagi = window.Kusanagi || {};
             try {
                 return JSON.parse(text);
             } catch (e) {
+                // Models without a JSON mode sometimes wrap the payload in prose.
+                var inner = extractJson(text);
+                if (inner !== undefined) return inner;
                 throw new Error('Model did not return valid JSON.');
             }
         });
+    }
+
+    /** Parse the outermost [...] or {...} in a string; undefined if there is none. */
+    function extractJson(text) {
+        var start = text.search(/[[{]/);
+        var end = Math.max(text.lastIndexOf(']'), text.lastIndexOf('}'));
+        if (start === -1 || end <= start) return undefined;
+        try { return JSON.parse(text.slice(start, end + 1)); } catch (e) { return undefined; }
+    }
+
+    /**
+     * The list a JSON answer carries. The prompts ask for a bare array, but
+     * OpenAI-style JSON mode only permits an object, so models wrap the array
+     * under whatever key they like. Prefer `key`, then any array property.
+     */
+    function listFrom(parsed, key) {
+        if (Array.isArray(parsed)) return parsed;
+        if (!parsed || typeof parsed !== 'object') return [];
+        if (key && Array.isArray(parsed[key])) return parsed[key];
+        var names = Object.keys(parsed);
+        for (var i = 0; i < names.length; i++) {
+            if (Array.isArray(parsed[names[i]])) return parsed[names[i]];
+        }
+        return [];
     }
 
     function label(provider) { return LABELS[provider] || provider; }
@@ -406,6 +542,7 @@ window.Kusanagi = window.Kusanagi || {};
         call: call,
         callWithFallback: callWithFallback,
         callJson: callJson,
+        listFrom: listFrom,
         models: models,
         providerLabel: label,
     });

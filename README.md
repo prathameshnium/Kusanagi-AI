@@ -102,7 +102,7 @@ All five share `local_apps/kusanagi_core.py`, which owns the project paths, the
 colour palette, `System_Config.json` loading and the Ollama process manager.
 
 **Browser (your own API key, nothing installed).** The pages in `web_apps/` run
-against Gemini, Hugging Face, OpenRouter or a local Ollama. Open
+against Gemini, Anthropic (Claude), Hugging Face, OpenRouter or a local Ollama. Open
 [the dashboard](https://prathameshnium.github.io/Kusanagi-AI/index.html), or serve
 them locally:
 
@@ -240,7 +240,7 @@ Kusanagi-AI/
 ├── web_apps/                   The five browser apps
 ├── static/
 │   ├── keys.js                 API-key store (session-scoped by default)
-│   ├── providers.js            Gemini / HF / OpenRouter / Ollama
+│   ├── providers.js            Gemini / Anthropic / HF / OpenRouter / Ollama
 │   ├── dom.js                  Safe DOM construction + Markdown sanitising
 │   ├── prompts.js              Shared system prompts (rigour + citation rules)
 │   ├── ui.js                   Settings dialog, toasts, result cards
@@ -330,7 +330,8 @@ to say so rather than quietly filling gaps from general knowledge.
 
 What the web apps actually guarantee, and what they do not.
 
-**Providers.** Google Gemini, Hugging Face, OpenRouter, or a local Ollama.
+**Providers.** Google Gemini, Anthropic (Claude), Hugging Face, OpenRouter, or a
+local Ollama.
 If a model is retired, rate-limited or overloaded, the app falls back to the
 next model from the *same* provider and tells you which one answered. It never
 switches provider on its own — silently re-sending your question, or your
@@ -345,7 +346,13 @@ server: requests go from your browser straight to the provider. Gemini keys are
 sent in the `x-goog-api-key` header rather than the query string, so they do not
 end up in browser history or in proxy logs; the others use `Authorization:
 Bearer`. OpenRouter's optional `HTTP-Referer`/`X-Title` headers are deliberately
-not sent, since they feed a public leaderboard. *Purge all keys* clears both stores.
+not sent, since they feed a public leaderboard. Anthropic only accepts browser
+requests that opt in with `anthropic-dangerous-direct-browser-access`, and warns
+that a key used this way is visible to the page: give Kusanagi a dedicated key
+with an expiry, in a workspace with a spend limit. A key whose prefix belongs to a
+different provider is refused, at save time and again before any request, so a
+mis-pasted key is never sent to the wrong company. *Purge all keys* clears both
+stores.
 
 **Your documents.** PDFs opened in Orochimaru are parsed in the browser and held
 in memory. They are never uploaded. Excerpts retrieved for a question are sent to

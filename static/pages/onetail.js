@@ -20,7 +20,8 @@
     var busy = false;
     var ui = {};
 
-    function provider() { return K.keys.provider(); }
+    // The saved provider, narrowed to the ones this page offers (see mountSettings).
+    function provider() { return settings.provider(); }
     function apiKey() { return K.keys.get(provider()); }
 
     /* ------------------------------------------------------------------ render */
@@ -129,8 +130,13 @@
 
         // The rigour preamble rides in front of the conversation rather than in
         // `history`, so it is never trimmed away by MAX_TURNS.
+        //
+        // `history` is already bounded by trimHistory(), which keeps an even
+        // count so it always opens on a user turn. Slicing it again here (to
+        // MAX_TURNS, with the new question making it odd) cut off that opening
+        // user turn and led with an assistant one, which Anthropic rejects.
         var messages = [{ role: 'system', content: K.prompts.chatSystemPrompt() }]
-            .concat(history.slice(-MAX_TURNS));
+            .concat(history);
 
         K.callWithFallback(provider(), {
             apiKey: apiKey(),
@@ -220,7 +226,7 @@
         };
 
         settings = K.ui.mountSettings({
-            providers: ['gemini', 'hf', 'openrouter'],
+            providers: ['gemini', 'anthropic', 'hf', 'openrouter'],
             onSave: function () {
                 K.ui.fillModelSelect(ui.model, provider());
                 checkStatus();

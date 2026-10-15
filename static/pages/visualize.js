@@ -9,11 +9,13 @@
     var DEBOUNCE_MS = 1500;   // the free tiers rate-limit hard; do not lower this
     var debounceTimer = null;
     var inFlight = false;
+    var rerun = false;
     var settings = null;
 
     var ui = {};
 
-    function provider() { return K.keys.provider(); }
+    // The saved provider, narrowed to the ones this page offers (see mountSettings).
+    function provider() { return settings.provider(); }
     function apiKey() { return K.keys.get(provider()); }
 
     /* ------------------------------------------------------------------ render */
@@ -68,8 +70,7 @@
 
     /** Coerce whatever the model returned into [{token, prob}]. */
     function normalise(raw) {
-        var list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.tokens) ? raw.tokens : []);
-        return list
+        return K.listFrom(raw, 'tokens')
             .filter(function (p) { return p && p.token !== undefined && p.token !== null; })
             .map(function (p) {
                 return { token: String(p.token), prob: Number(p.prob) || 0 };
@@ -85,9 +86,15 @@
             placeholder('Set an API key to start.');
             return;
         }
-        if (inFlight) return;
+        if (inFlight) {
+            // The text changed while a request was out. Dropping this call left
+            // predictions for the old text on screen; run again when it lands.
+            rerun = true;
+            return;
+        }
 
         inFlight = true;
+        rerun = false;
         ui.loading.classList.remove('hidden');
 
         var topK = ui.topk.value;
@@ -95,9 +102,11 @@
         K.callJson(provider(), {
             apiKey: apiKey(),
             model: (K.models(provider())[0] || {}).id,
-            temperature: 0.1,
+            // The sidebar slider used to be read by nothing; this was fixed at 0.1.
+            temperature: parseFloat(ui.temp.value),
             prompt: K.prompts.tokenProbabilities(text, topK),
         }).then(function (raw) {
+            if (ui.input.value !== text) return;   // stale: a rerun is queued
             renderPredictions(normalise(raw).slice(0, Number(topK)));
         }).catch(function (err) {
             dom.replace(ui.list, el('p', {
@@ -108,6 +117,7 @@
         }).then(function () {
             inFlight = false;
             ui.loading.classList.add('hidden');
+            if (rerun) predict();
         });
     }
 
@@ -157,7 +167,7 @@
         };
 
         settings = K.ui.mountSettings({
-            providers: ['gemini', 'hf', 'openrouter'],
+            providers: ['gemini', 'anthropic', 'hf', 'openrouter'],
             onSave: function () { checkStatus(); predict(); },
         });
 

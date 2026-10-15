@@ -207,6 +207,13 @@
     // Weights: N x N matrix
     let weights = Array.from({ length: N }, () => new Array(N).fill(0));
     let storedPatterns = 0;
+    // Learn, forget and run animate over many frames. Letting another action
+    // start meanwhile interleaved two updates to the same weights/neurons.
+    let busy = false;
+    function setBusy(state) {
+        busy = state;
+        document.querySelectorAll('.controls button').forEach(b => { b.disabled = state; });
+    }
 
     // --- DOM ---
     const gridCtx = document.getElementById('gridCanvas').getContext('2d');
@@ -344,16 +351,20 @@
     // --- INTERACTION ---
 
     document.getElementById('gridCanvas').addEventListener('mousedown', (e) => {
-        const rect = e.target.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
+        if (busy) return;
+        const canvas = e.currentTarget;
+        const rect = canvas.getBoundingClientRect();
+        // Measure from the drawing surface, not the border box, and scale in case
+        // CSS ever sizes the canvas differently from its backing store.
+        const x = (e.clientX - rect.left - canvas.clientLeft) * (canvas.width / canvas.clientWidth);
+        const y = (e.clientY - rect.top - canvas.clientTop) * (canvas.height / canvas.clientHeight);
         const cellSize = CANVAS_GRID_SIZE / N_SIDE;
-        
+
         const col = Math.floor(x / cellSize);
         const row = Math.floor(y / cellSize);
         const idx = row * N_SIDE + col;
-        
-        if (idx >= 0 && idx < N) {
+
+        if (col >= 0 && col < N_SIDE && row >= 0 && row < N_SIDE) {
             neurons[idx] *= -1;
             drawGrid();
             drawNetwork();
@@ -369,7 +380,7 @@
         // Animate the "tuning" process
         let i = 0;
         const btn = document.querySelector('.btn-learn');
-        btn.disabled = true;
+        setBusy(true);
         btn.innerText = "Tuning...";
         logMessage("Starting Hebbian learning for current pattern...");
 
@@ -390,7 +401,7 @@
             } else {
                 storedPatterns++;
                 countEl.innerText = storedPatterns;
-                btn.disabled = false;
+                setBusy(false);
                 btn.innerText = "1. Learn Pattern";
                 logMessage(`Pattern learned. Total patterns stored: ${storedPatterns}.`);
                 stableEl.innerText = "Yes (Learned)";
@@ -409,7 +420,7 @@
 
         let i = 0;
         const btn = document.querySelector('.btn-forget');
-        btn.disabled = true;
+        setBusy(true);
         btn.innerText = "Forgetting...";
         logMessage("Starting anti-learning to forget current pattern...");
 
@@ -428,7 +439,7 @@
             } else {
                 storedPatterns--;
                 countEl.innerText = storedPatterns;
-                btn.disabled = false;
+                setBusy(false);
                 btn.innerText = "2. Forget Pattern";
                 logMessage(`Pattern forgotten. Total patterns remaining: ${storedPatterns}.`);
             }
@@ -437,6 +448,7 @@
     }
 
     function addNoise() {
+        if (busy) return;
         // Flip 20% of bits
         let flippedCount = 0;
         for (let i = 0; i < N; i++) {
@@ -452,6 +464,7 @@
     }
 
     function clearGrid() {
+        if (busy) return;
         neurons.fill(-1);
         drawGrid();
         drawNetwork();
@@ -461,7 +474,7 @@
 
     async function recover(delay) {
         const btn = document.querySelector('.btn-run');
-        btn.disabled = true;
+        setBusy(true);
         btn.innerText = "Running...";
         logMessage(`Starting recovery process with ${delay}ms delay...`);
         
@@ -501,7 +514,7 @@
             iter++;
         }
         
-        btn.disabled = false;
+        setBusy(false);
         btn.innerText = "5. Run";
         const endState = stable ? "Converged" : "Stopped";
         stableEl.innerText = endState;

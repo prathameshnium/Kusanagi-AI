@@ -10,6 +10,10 @@
     var PROVIDERS = [
         { id: 'gemini', placeholder: 'AIza...', signup: 'https://aistudio.google.com/app/apikey',
           note: 'Generous free tier. Good default.' },
+        { id: 'anthropic', placeholder: 'sk-ant-...', signup: 'https://platform.claude.com/settings/keys',
+          note: 'Claude models, billed per token. Anthropic warns that a key used in a browser '
+              + 'is visible to the page: create one just for this, with an expiry, in a '
+              + 'workspace with a spend limit.' },
         { id: 'hf', placeholder: 'hf_...', signup: 'https://huggingface.co/settings/tokens',
           note: 'Open-weight models through one token. Needs the "Inference Providers" scope.' },
         { id: 'openrouter', placeholder: 'sk-or-v1-...', signup: 'https://openrouter.ai/keys',
@@ -18,17 +22,19 @@
           note: 'Fully local. Enter your server URL, not a key.' },
     ];
 
+    // `providers` mirrors each page's mountSettings() list: the ones its CSP admits.
+    var CLOUD = ['gemini', 'anthropic', 'hf', 'openrouter'];
     var TOOLS = [
-        { name: 'Kakashi Search', href: 'web_apps/Kakashi_Search.html',
-          blurb: 'Agentic web search across Wikipedia, OpenAlex, arXiv, HN and DuckDuckGo, with a synthesised answer.' },
+        { name: 'Kakashi Search', href: 'web_apps/Kakashi_Search.html', providers: CLOUD,
+          blurb: 'Agentic web search across Wikipedia, OpenAlex, Crossref, HN and DuckDuckGo, with a synthesised answer.' },
         { name: 'Orochimaru RAG', href: 'web_apps/Orochimaru_Web_Research_Assistent.html',
-          blurb: 'Load PDFs into memory and chat with them. Parsing happens in the browser.',
-          ollama: true },
-        { name: 'Neji Scholar', href: 'web_apps/Neji_Search.html',
+          providers: CLOUD.concat('ollama'),
+          blurb: 'Load PDFs into memory and chat with them. Parsing happens in the browser.' },
+        { name: 'Neji Scholar', href: 'web_apps/Neji_Search.html', providers: CLOUD,
           blurb: 'Academic paper discovery over OpenAlex, with an incognito mode that skips the model entirely.' },
-        { name: 'OneTail Chat', href: 'web_apps/OneTail_Web_Chatapp.html',
+        { name: 'OneTail Chat', href: 'web_apps/OneTail_Web_Chatapp.html', providers: CLOUD,
           blurb: 'Straightforward multi-provider chat. Nothing is written to disk.' },
-        { name: 'AI Visualizer', href: 'web_apps/Visualize_AI_Web.html',
+        { name: 'AI Visualizer', href: 'web_apps/Visualize_AI_Web.html', providers: CLOUD,
           blurb: 'Inspect next-token probabilities as you type.' },
     ];
 
@@ -82,6 +88,13 @@
             if (!value && isOllama) value = K.OLLAMA_DEFAULT;
             if (!value) {
                 K.ui.toast('Enter a value for ' + K.providerLabel(spec.id) + ' first.', 'error');
+                input.focus();
+                return;
+            }
+            var owner = K.keys.belongsElsewhere(spec.id, value);
+            if (owner) {
+                K.ui.toast('That looks like a ' + K.providerLabel(owner) + ' key. Not saved, '
+                    + 'so it is not sent to ' + K.providerLabel(spec.id) + '.', 'error');
                 input.focus();
                 return;
             }
@@ -140,11 +153,11 @@
 
     function renderTools() {
         var host = document.getElementById('tool-grid');
-        var active = K.keys.provider();
-        var configured = !!K.keys.get(active);
-
         dom.replace(host, TOOLS.map(function (tool) {
-            var ready = configured || (tool.ollama && !!K.keys.get('ollama'));
+            // Same resolution the page itself will do. Previously an Ollama
+            // default marked every tool "ready", though only Orochimaru can
+            // reach Ollama.
+            var ready = !!K.keys.get(K.keys.provider(tool.providers));
 
             return el('div', {
                 class: 'glass-card rounded-xl p-5 flex flex-col',

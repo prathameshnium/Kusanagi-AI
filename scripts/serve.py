@@ -55,9 +55,16 @@ def main():
     args = ap.parse_args()
 
     handler = functools.partial(Handler, directory=ROOT)
-    socketserver.TCPServer.allow_reuse_address = True
 
-    with socketserver.TCPServer(("127.0.0.1", args.port), handler) as httpd:
+    # Threaded: a single-threaded TCPServer serves one socket at a time, and a
+    # browser's speculative preconnect that never sends a request holds that
+    # slot forever, so every page load hung. Still bound to loopback only.
+    class Server(socketserver.ThreadingMixIn, http.server.HTTPServer):
+        # SO_REUSEADDR on Windows lets another local process bind the same port.
+        allow_reuse_address = False
+        daemon_threads = True
+
+    with Server(("127.0.0.1", args.port), handler) as httpd:
         url = "http://localhost:%d/index.html" % args.port
         print("Kusanagi AI suite -> %s" % url)
         print("Serving %s (Ctrl-C to stop)\n" % ROOT)

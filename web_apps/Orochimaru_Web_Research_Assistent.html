@@ -2,6 +2,9 @@
 <html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
+    <!-- GitHub Pages sends no Referrer-Policy header; without this, every
+         provider request would carry this page's URL in Referer. -->
+    <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- worker-src covers the pdf.js worker; blob: is needed because pdf.js
          instantiates its worker from a blob when loaded as a module.
@@ -15,7 +18,7 @@
         font-src 'self';
         worker-src 'self' blob:;
         child-src blob:;
-        connect-src 'self' blob: https://generativelanguage.googleapis.com https://router.huggingface.co https://openrouter.ai http://localhost:11434 http://127.0.0.1:11434;
+        connect-src 'self' blob: https://generativelanguage.googleapis.com https://api.anthropic.com https://router.huggingface.co https://openrouter.ai http://localhost:11434 http://127.0.0.1:11434;
         base-uri 'none';
         form-action 'none';">
     <title>Orochimaru RAG &mdash; Kusanagi AI</title>

@@ -121,10 +121,20 @@ def test_onetail_sends_the_rigour_preamble_as_a_system_message():
 
 
 def test_system_prompt_is_not_trimmed_away_by_history_limits():
-    """Prepending it to the trimmed slice keeps it present on long chats."""
+    """Prepending it to the (already trimmed) history keeps it present on long chats."""
     source = strip_js_comments(read("static", "pages", "onetail.js"))
-    assert re.search(r"\[\{ role: 'system'.*\}\]\s*\n?\s*\.concat\(history\.slice",
+    assert re.search(r"\[\{ role: 'system'.*\}\]\s*\n?\s*\.concat\(history\)",
                      source, re.S)
+
+
+def test_chat_history_sent_to_the_model_opens_on_a_user_turn():
+    """Re-slicing the odd-length history to MAX_TURNS dropped the opening user
+    turn, and Anthropic rejects a conversation that starts with the assistant."""
+    source = strip_js_comments(read("static", "pages", "onetail.js"))
+    assert ".concat(history.slice(" not in source
+    assert "history = history.slice(-MAX_TURNS)" in source
+    assert re.search(r"MAX_TURNS = (\d+)", source) and \
+        int(re.search(r"MAX_TURNS = (\d+)", source).group(1)) % 2 == 0
 
 
 def test_prompts_js_is_loaded_by_every_page_that_uses_it(page_sources):

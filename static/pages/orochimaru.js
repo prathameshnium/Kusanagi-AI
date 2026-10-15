@@ -25,6 +25,7 @@
     function vendorUrl(relative) { return new URL(relative, HERE).href; }
 
     var documents = Object.create(null);   // filename -> [chunk, ...]
+    var parsing = Object.create(null);     // filename -> true while being read
     var lastAnswer = '';
     var sessionTokens = 0;
     var speaking = false;
@@ -33,7 +34,8 @@
     var pdfjsPromise = null;
     var ui = {};
 
-    function provider() { return K.keys.provider(); }
+    // The saved provider, narrowed to the ones this page offers (see mountSettings).
+    function provider() { return settings.provider(); }
     function apiKey() { return K.keys.get(provider()); }
     function docNames() { return Object.keys(documents); }
 
@@ -87,11 +89,14 @@
             K.ui.toast('That PDF is larger than 64 MB and would exhaust the tab.', 'error');
             return;
         }
-        if (documents[file.name]) {
+        if (documents[file.name] || parsing[file.name]) {
             K.ui.toast('That document is already loaded.', 'error');
             return;
         }
 
+        // Parsing is async; without this, choosing the same file again before
+        // the first parse finished loaded it twice.
+        parsing[file.name] = true;
         ui.statusDoc.textContent = 'Parsing...';
         addSystem('Reading ' + file.name + ' into memory...');
 
@@ -128,7 +133,8 @@
             .catch(function (err) {
                 ui.statusDoc.textContent = 'Error';
                 addSystem(err.message, true);
-            });
+            })
+            .then(function () { delete parsing[file.name]; });
     }
 
     function collectPage(pdf, pageNumber, sink) {
@@ -480,7 +486,7 @@
         };
 
         settings = K.ui.mountSettings({
-            providers: ['gemini', 'hf', 'openrouter', 'ollama'],
+            providers: ['gemini', 'anthropic', 'hf', 'openrouter', 'ollama'],
             title: 'Secure configuration',
             onSave: function () {
                 checkStatus();
