@@ -1,4 +1,11 @@
-/* Orochimaru -- in-memory RAG over PDFs the user loads locally.
+/* Orochimaru -- research chat, with in-memory RAG over PDFs loaded locally.
+ *
+ * This is also where OneTail went: with no documents loaded it is a plain
+ * multi-turn chat; with documents loaded it answers from them, either strictly
+ * ("Documents only") or documents-first with labelled background.
+ *
+ * The conversation lives in `history` and `transcript` and nowhere else: not
+ * localStorage, not sessionStorage, not a server. Reloading loses it.
  *
  * Documents live in `documents` and nowhere else. Filenames are attacker-controlled
  * for our purposes (a PDF can be named anything), so they are rendered as text and
@@ -10,6 +17,11 @@
     var K = window.Kusanagi;
     var dom = K.dom;
     var el = dom.el;
+
+    // Keep the prompt bounded so a long session does not silently blow the
+    // context window (and the bill) one turn at a time. Even, so the history
+    // sent to the model always opens on a user turn.
+    var MAX_TURNS = 20;
 
     var CHUNK_SIZE = 1000;
     var CHUNK_OVERLAP = 200;
@@ -27,8 +39,9 @@
     var documents = Object.create(null);   // filename -> [chunk, ...]
     var parsing = Object.create(null);     // filename -> true while being read
     var lastAnswer = '';
+    var transcript = [];                   // every turn, for "Copy chat"; memory only
+    var history = [];                      // turns sent back to the model, trimmed
     var sessionTokens = 0;
-    var speaking = false;
     var busy = false;
     var settings = null;
     var pdfjsPromise = null;
@@ -206,9 +219,13 @@
     }
 
     function addUser(text) {
+        transcript.push({ who: 'You', text: text });
         ui.log.appendChild(el('div', { class: 'flex items-start gap-4 justify-end' }, [
-            el('div', { class: 'bg-accent text-accent-fg p-3 rounded-lg max-w-2xl shadow-md' }, [
-                el('p', { class: 'text-sm whitespace-pre-wrap break-words', text: text }),
+            el('div', { class: 'flex flex-col items-end gap-1 max-w-2xl' }, [
+                el('div', { class: 'bg-accent text-accent-fg p-3 rounded-lg shadow-md' }, [
+                    el('p', { class: 'text-sm whitespace-pre-wrap break-words', text: text }),
+                ]),
+                K.ui.copyButton(function () { return text; }),
             ]),
         ]));
         scrollDown();
@@ -216,13 +233,38 @@
 
     function addAI(text) {
         var body = el('div', {
-            class: 'bg-tertiary p-4 rounded-lg max-w-3xl shadow-md prose prose-invert '
+            class: 'bg-tertiary p-4 rounded-lg shadow-md prose prose-invert '
                 + 'text-sm text-fg-primary break-words',
         });
         dom.markdown(body, text);
-        ui.log.appendChild(el('div', { class: 'flex items-start gap-4' },
-            [orochiAvatar(), body]));
+        // `node` lets "Read chat aloud" speak the rendered answer, not raw Markdown.
+        transcript.push({ who: 'Orochimaru', text: text, node: body });
+        ui.log.appendChild(el('div', { class: 'flex items-start gap-4' }, [
+            orochiAvatar(),
+            el('div', { class: 'flex flex-col items-start gap-1 max-w-3xl min-w-0' }, [
+                body,
+                el('div', { class: 'flex gap-2' }, [
+                    K.ui.copyButton(function () { return text; }),
+                    K.ui.speakButton(function () { return K.ui.speakableText(body); }),
+                ]),
+            ]),
+        ]));
         scrollDown();
+    }
+
+    /** The whole conversation as speech: who said it, then what was said. */
+    function chatAsSpeech() {
+        return transcript.map(function (turn) {
+            var said = turn.node ? K.ui.speakableText(turn.node) : turn.text;
+            return turn.who + ' said: ' + said;
+        }).join(' ');
+    }
+
+    /** The whole conversation as Markdown, ready to paste. */
+    function chatAsMarkdown() {
+        return transcript.map(function (turn) {
+            return '**' + turn.who + ':**\n\n' + turn.text;
+        }).join('\n\n---\n\n');
     }
 
     /** System notices. Filenames land here, so this is text -- the old version
@@ -258,11 +300,13 @@
             orochiAvatar(),
             el('div', { class: 'bg-tertiary p-4 rounded-lg max-w-3xl shadow-md' }, [
                 el('p', { class: 'font-bold text-accent mb-1', text: 'Orochimaru' }),
-                el('p', {
-                    class: 'text-sm',
-                    text: 'Documents are parsed in this tab and held in memory only. '
-                        + 'Reloading the page discards them.',
-                }),
+                el('ul', { class: 'list-disc ml-5 mt-1 text-sm opacity-90 space-y-1' }, [
+                    el('li', { text: 'Ask anything, or load PDFs to ask about them.' }),
+                    el('li', { text: '"Answer from" chooses documents only, or documents '
+                        + 'plus labelled general knowledge.' }),
+                    el('li', { text: 'Documents and messages are held in memory only. '
+                        + 'Reloading the page discards them.' }),
+                ]),
             ]),
         ]));
     }
@@ -329,7 +373,19 @@
         ui.input.disabled = state;
     }
 
-    function ask(prompt, userFacing) {
+    function trimHistory() {
+        if (history.length > MAX_TURNS) history = history.slice(-MAX_TURNS);
+    }
+
+    /** "Documents only" is on. */
+    function strictMode() { return ui.mode.value === 'strict'; }
+
+    /**
+     * Send `messages` and show the reply. `userFacing` is what the chat shows,
+     * and what is kept in history for later turns, in place of whatever
+     * one-shot prompt a quick action built.
+     */
+    function ask(messages, userFacing) {
         if (busy) return;
         if (!apiKey()) {
             K.ui.toast('Configure a provider first.', 'error');
@@ -347,7 +403,7 @@
             model: ui.model.value,
             temperature: parseFloat(ui.temp.value),
             fallback: K.prefs.modelFallback(),
-            prompt: prompt,
+            messages: messages,
         }).then(function (res) {
             thinking.remove();
             if (res.model !== ui.model.value) {
@@ -356,10 +412,13 @@
             }
             addAI(res.text);
             lastAnswer = res.text;
+            history.push({ role: 'user', content: userFacing },
+                { role: 'assistant', content: res.text });
+            trimHistory();
 
             var secs = (performance.now() - started) / 1000;
             var tokens = (res.usage && res.usage.total_tokens)
-                || Math.ceil((prompt.length + res.text.length) / 4);
+                || Math.ceil((JSON.stringify(messages).length + res.text.length) / 4);
             sessionTokens += tokens;
             ui.tokens.textContent = sessionTokens.toLocaleString();
             if (secs > 0) ui.speed.textContent = (tokens / secs).toFixed(1) + ' t/s';
@@ -378,60 +437,32 @@
         if (!query) return;
         ui.input.value = '';
 
-        var chunks = [];
+        // With documents loaded, retrieve for the newest question and rebuild
+        // the system prompt around those excerpts; without, it is plain chat.
+        var system;
         if (docNames().length) {
             ui.indicator.classList.remove('is-invisible');
-            chunks = retrieve(query, 5);
+            system = K.prompts.documentChatPrompt(retrieve(query, 5), docNames(), strictMode());
+        } else {
+            system = K.prompts.chatSystemPrompt();
         }
 
-        ask(K.prompts.documentQa(query, chunks, docNames()), query);
+        ask([{ role: 'system', content: system }]
+            .concat(history, [{ role: 'user', content: query }]), query);
     }
 
     function runReview(role) {
         if (!docNames().length) return;
         var chunks = retrieve('conclusion results methodology abstract', 8);
-        ask(K.prompts.review(role, REVIEW_PERSONAS[role], chunks),
+        ask([{ role: 'user', content: K.prompts.review(role, REVIEW_PERSONAS[role], chunks) }],
             role + ' review of the loaded documents');
     }
 
     function runSummary() {
         if (!docNames().length) return;
         var chunks = retrieve('abstract summary conclusion introduction', 6);
-        ask(K.prompts.summarise(chunks), 'Summarise the loaded documents');
-    }
-
-    /* ------------------------------------------------------------------- TTS */
-
-    function stopSpeaking() {
-        window.speechSynthesis.cancel();
-        speaking = false;
-        ui.tts.textContent = 'Read aloud';
-        ui.tts.setAttribute('aria-pressed', 'false');
-        ui.tts.classList.remove('text-accent');
-    }
-
-    function toggleTTS() {
-        if (!('speechSynthesis' in window)) {
-            K.ui.toast('This browser has no speech synthesis.', 'error');
-            return;
-        }
-        if (speaking) { stopSpeaking(); return; }
-        if (!lastAnswer) {
-            K.ui.toast('Nothing to read yet.');
-            return;
-        }
-
-        window.speechSynthesis.cancel();
-        var utterance = new SpeechSynthesisUtterance(lastAnswer);
-        utterance.onstart = function () {
-            speaking = true;
-            ui.tts.textContent = 'Stop';
-            ui.tts.setAttribute('aria-pressed', 'true');
-            ui.tts.classList.add('text-accent');
-        };
-        utterance.onend = stopSpeaking;
-        utterance.onerror = stopSpeaking;
-        window.speechSynthesis.speak(utterance);
+        ask([{ role: 'user', content: K.prompts.summarise(chunks) }],
+            'Summarise the loaded documents');
     }
 
     /* ---------------------------------------------------------------- status */
@@ -468,6 +499,7 @@
             send: document.getElementById('send-btn'),
             model: document.getElementById('model-select'),
             temp: document.getElementById('temp-slider'),
+            mode: document.getElementById('answer-mode'),
             tempOut: document.getElementById('temp-val'),
             docList: document.getElementById('doc-list'),
             docCount: document.getElementById('doc-count'),
@@ -534,8 +566,11 @@
         document.getElementById('clear-chat').addEventListener('click', function () {
             sessionTokens = 0;
             lastAnswer = '';
+            transcript = [];
+            history = [];
             ui.tokens.textContent = '0';
             ui.speed.textContent = '--';
+            K.ui.stopSpeech();
             greeting();
             addSystem('Chat history cleared.');
         });
@@ -543,7 +578,9 @@
             settings.open();
         });
         document.getElementById('purge-btn').addEventListener('click', K.ui.purgeAll);
-        ui.tts.addEventListener('click', toggleTTS);
+        K.ui.bindCopy(document.getElementById('copy-chat'), chatAsMarkdown);
+        // Per-answer buttons read one answer; this one reads the whole chat.
+        K.ui.bindSpeak(ui.tts, chatAsSpeech);
 
         // Only nag about leaving when there is actually something to lose.
         window.addEventListener('beforeunload', function (e) {

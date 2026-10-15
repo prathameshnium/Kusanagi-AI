@@ -1,125 +1,30 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- GitHub Pages sends no Referrer-Policy header; without this, every
-         provider request would carry this page's URL in Referer. -->
     <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Neji was merged into Kakashi as its Academic mode. This page only
+         forwards old links and bookmarks: no script, no requests. -->
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'none';
         script-src 'self';
         style-src 'self';
-        img-src 'self' data:;
+        img-src 'self';
         font-src 'self';
-        connect-src https://generativelanguage.googleapis.com https://api.anthropic.com https://router.huggingface.co https://openrouter.ai https://api.openalex.org;
         base-uri 'none';
         form-action 'none';">
-    <title>Neji Scholar &mdash; Kusanagi AI</title>
-    <meta name="description" content="Neji Scholar — academic paper discovery over OpenAlex, with an incognito mode that never contacts a model.">
+    <meta http-equiv="refresh" content="0; url=Kakashi_Search.html?mode=academic">
+    <meta name="robots" content="noindex">
+    <title>Neji moved to Kakashi &mdash; Kusanagi AI</title>
     <link rel="icon" href="../static/logo-64.png">
     <link rel="stylesheet" href="../static/kusanagi.css">
-    <script src="../static/keys.js" defer></script>
-    <script src="../static/providers.js" defer></script>
-    <script src="../static/dom.js" defer></script>
-    <script src="../static/ui.js" defer></script>
-    <script src="../static/prompts.js" defer></script>
-    <script src="../static/pages/neji.js" defer></script>
 </head>
-<body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden flex flex-col items-center relative">
-    <a href="../index.html" class="home-button" aria-label="Back to the Kusanagi AI dashboard">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-    </a>
-
-    <div class="absolute top-4 right-4 flex items-center gap-3 text-xs text-fg-secondary bg-secondary px-4 py-2 rounded-lg shadow-md z-50">
-        <span id="api-status-dot" class="w-2 h-2 rounded-full bg-danger" aria-hidden="true"></span>
-        <span id="api-status-text">Setup required</span>
-        <span class="text-tertiary">|</span>
-        <button id="open-settings" type="button" class="hover:text-accent underline decoration-dotted">Configure AI</button>
-    </div>
-
-    <div class="flex w-full h-full max-w-7xl mx-auto relative overflow-hidden">
-
-        <!-- LEFT: strategy + filters -->
-        <aside id="strategy-sidebar" class="w-0 opacity-0 transition-all duration-500 flex-shrink-0 bg-secondary/30 border-r border-tertiary flex flex-col overflow-y-auto">
-            <div class="p-4 min-w-[300px] space-y-6">
-                <div id="filter-section" class="hidden">
-                    <h3 class="text-accent font-bold uppercase text-xs tracking-wider mb-3">Result filters</h3>
-                    <div class="space-y-3 bg-secondary p-3 rounded border border-tertiary">
-                        <div>
-                            <label for="filter-year" class="text-xs text-fg-secondary block mb-1">Published after</label>
-                            <input type="number" id="filter-year" class="!text-xs !p-2" placeholder="e.g. 2020">
-                        </div>
-                        <div>
-                            <label for="filter-sort" class="text-xs text-fg-secondary block mb-1">Sort by</label>
-                            <select id="filter-sort" class="!text-xs !p-2">
-                                <option value="citations">Most cited</option>
-                                <option value="newest">Newest first</option>
-                                <option value="relevance">Relevance</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <div>
-                    <h3 class="text-accent font-bold uppercase text-xs tracking-wider mb-4">AI search strategy</h3>
-                    <div id="strategy-list" class="space-y-4 text-sm"></div>
-                </div>
-            </div>
-        </aside>
-
-        <!-- CENTER -->
-        <main class="flex-1 flex flex-col p-6 z-10 overflow-y-auto relative transition-all duration-500">
-
-            <div id="search-container" class="w-full max-w-2xl mx-auto mt-[20vh] transition-all duration-500">
-                <div class="text-center mb-8" id="branding">
-                    <h1 class="text-5xl font-extrabold text-fg-primary mb-2 tracking-tight">
-                        <a href="../index.html" class="hover:underline">Kusanagi AI</a>
-                        <span class="text-fg-secondary font-normal">/</span>
-                        <span class="text-accent">Neji</span>
-                    </h1>
-                    <p class="text-fg-secondary text-lg">Autonomous research agent</p>
-                </div>
-
-                <div class="w-full bg-secondary rounded-2xl shadow-2xl transition-all duration-300 border border-tertiary focus-within:border-accent">
-                    <div class="flex items-center p-2 gap-1">
-                        <button id="privacy-toggle" type="button" class="pl-3 pr-2 text-fg-secondary hover:text-success transition flex items-center shrink-0" aria-pressed="false" title="Incognito mode: search databases directly, never contact a model">
-                            <svg id="privacy-icon" class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"></svg>
-                            <span class="sr-only">Toggle incognito mode</span>
-                        </button>
-
-                        <div class="h-8 w-px bg-tertiary mx-1" aria-hidden="true"></div>
-
-                        <label for="search-input" class="sr-only">Research topic</label>
-                        <input type="text" id="search-input" autocomplete="off"
-                               placeholder="Enter a research topic..."
-                               class="!border-0 !bg-transparent text-lg !p-4 font-medium" autofocus>
-
-                        <button id="search-btn" type="button" class="btn btn-accent px-6 py-3 shrink-0">Research</button>
-                    </div>
-                </div>
-
-                <div class="mt-6 flex flex-wrap justify-center gap-3" id="pills-section"></div>
-
-                <div id="privacy-badge" class="hidden mt-4 text-center">
-                    <span class="bg-success/10 text-success text-xs border border-success/40 px-3 py-1 rounded-full">
-                        Incognito: AI disabled, direct database search only.
-                    </span>
-                </div>
-            </div>
-
-            <div id="results-area" class="hidden w-full max-w-4xl mx-auto mt-8">
-                <div class="flex justify-between items-end mb-4 border-b border-tertiary pb-2 gap-3">
-                    <div>
-                        <h2 class="text-xl font-bold text-fg-primary">Direct results</h2>
-                        <p class="text-xs text-fg-secondary" id="results-count">Aggregated from OpenAlex</p>
-                    </div>
-                    <button id="reset-search" type="button" class="text-sm text-accent hover:underline shrink-0">New search</button>
-                </div>
-
-                <div id="paper-list" class="space-y-4"></div>
-            </div>
-        </main>
-    </div>
+<body class="min-h-screen flex items-center justify-center p-6 text-center">
+    <p class="text-fg-secondary">
+        Neji Scholar is now
+        <a class="text-accent hover:underline" href="Kakashi_Search.html?mode=academic">Kakashi in Academic mode</a>.
+        Taking you there&hellip;
+    </p>
 </body>
 </html>

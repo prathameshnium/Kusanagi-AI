@@ -321,10 +321,28 @@ and Hacker News, then passes those results into the prompt and requires inline
 `[n]` citations resolving to a Sources list of real links. Previously the search
 and the answer ran independently — the model answered from memory while results
 appeared beside it — so nothing it cited could be checked against what was found.
+Neji was merged into it as **Academic mode** (the old Neji address forwards
+there): papers only, from OpenAlex and Crossref, shown with authors, year,
+citations and abstract, filterable by year and sortable by date or citations,
+with the answer written as a short literature review. **No AI**, in either mode,
+searches the raw query without contacting any model, so it needs no key and
+nothing is sent to an AI provider.
 
-**Orochimaru is stricter still**, since grounding is the whole point of a RAG
-tool: it answers from the retrieved excerpts, cites them by number, and is told
-to say so rather than quietly filling gaps from general knowledge.
+**Orochimaru** (the web chat; OneTail was merged into it, and the old OneTail
+address forwards there) is a multi-turn research chat. With no documents loaded
+it answers from general knowledge, citing papers it recalls with a DOI only when
+certain and otherwise a Google Scholar search for the exact title, so a link can
+never point at an invented record. Once PDFs are loaded, **Answer from** picks
+the grounding: *Documents only* answers from the retrieved excerpts and refuses
+anything they do not cover; *Documents + general knowledge* uses the excerpts
+first and labels every sentence that comes from outside them. Retrieved text is
+fenced and the model is told never to follow instructions inside it.
+
+**Formatting.** Every prose answer is Markdown with all mathematics, symbols and
+chemical formulas in LaTeX, typeset in the page by the vendored KaTeX (with
+`trust` off, so TeX cannot create links). Each answer has **Copy** (the Markdown
+source, LaTeX intact) and **Read aloud** buttons; the chat header has **Copy
+chat** and **Read chat aloud**.
 
 ## Security and privacy
 
@@ -339,10 +357,16 @@ document excerpts, to a different company is not a decision a retry should
 make. Turn it off in Settings.
 
 **Your keys.** A key you enter is held in `sessionStorage` and disappears when the
-tab closes. Ticking *Remember on this device* moves it to `localStorage`, where it
-persists until purged — convenient on your own machine, and readable by anything
-that can read your browser profile, so the dialog says so. There is no Kusanagi
-server: requests go from your browser straight to the provider. Gemini keys are
+tab closes. Ticking *Remember on this device* stores it **encrypted**: the browser
+derives a key from a password you choose (PBKDF2-SHA-256, 600,000 rounds, random
+salt) and seals your keys with AES-256-GCM. Only that ciphertext is written to
+`localStorage`. The password is never stored and never sent anywhere; you type it
+once per tab session to unlock, and if it is lost the keys cannot be recovered —
+purge and re-enter them. Keys an older version saved unencrypted are flagged on the
+dashboard with a one-click *Encrypt them*. Nothing in the key store makes a network
+request: the only place a key ever travels is the request to the provider that
+issued it. There is no Kusanagi server: requests go from your browser straight to
+the provider. Gemini keys are
 sent in the `x-goog-api-key` header rather than the query string, so they do not
 end up in browser history or in proxy logs; the others use `Authorization:
 Bearer`. OpenRouter's optional `HTTP-Referer`/`X-Title` headers are deliberately

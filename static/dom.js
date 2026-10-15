@@ -183,7 +183,8 @@ window.Kusanagi = window.Kusanagi || {};
         }
 
         initPurify();
-        var html = marked.parse(source, { breaks: true, gfm: true });
+        var math = protectMath(source);
+        var html = marked.parse(math.text, { breaks: true, gfm: true });
         target.innerHTML = DOMPurify.sanitize(html, {
             // No inline styles: the CSP blocks them anyway, and they are a
             // well-trodden route to UI redressing.
@@ -191,7 +192,72 @@ window.Kusanagi = window.Kusanagi || {};
             FORBID_TAGS: ['style', 'form', 'input', 'button'],
             ALLOW_DATA_ATTR: false,
         });
+        restoreMath(target, math.pieces);
+        typesetMath(target);
         return target;
+    }
+
+    /* ------------------------------------------------------------------ math */
+
+    // Placeholder made only of letters and digits, so Markdown leaves it alone.
+    var MATH_TOKEN = /KMATHX(\d+)XKMATH/g;
+
+    /**
+     * Pull LaTeX out before Markdown sees it. Otherwise $\mathrm{Cr_2O_3}$ loses
+     * its underscores to emphasis and \\ line breaks to escaping. Code spans
+     * and fences are skipped, so a $ in code stays a dollar sign.
+     */
+    function protectMath(source) {
+        var pieces = [];
+        var parts = source.split(/(```[\s\S]*?```|`[^`\n]*`)/);
+        // Inline $...$ must hug its content ("$5 and $10" stays money). Written
+        // without lookbehind, which Safari before 16.4 cannot parse at all.
+        var math = /\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$(?=\S)[^$\n]*?[^\s$]\$(?!\d)/g;
+        for (var i = 0; i < parts.length; i += 2) {   // odd indices are code
+            parts[i] = parts[i].replace(math, function (m) {
+                pieces.push(m);
+                return 'KMATHX' + (pieces.length - 1) + 'XKMATH';
+            });
+        }
+        return { text: parts.join(''), pieces: pieces };
+    }
+
+    /** Put the TeX back as plain text nodes -- never as markup. */
+    function restoreMath(root, pieces) {
+        if (!pieces.length) return;
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        var nodes = [];
+        while (walker.nextNode()) nodes.push(walker.currentNode);
+        nodes.forEach(function (node) {
+            if (node.nodeValue.indexOf('KMATHX') === -1) return;
+            node.nodeValue = node.nodeValue.replace(MATH_TOKEN, function (_, n) {
+                return pieces[Number(n)] || '';
+            });
+        });
+    }
+
+    /**
+     * Typeset TeX with the vendored KaTeX, when the page loads it. KaTeX builds
+     * nodes and sets styles through the CSSOM, which a strict style-src allows.
+     * trust stays false, so \href, \url and friends cannot make links.
+     */
+    function typesetMath(root) {
+        if (typeof window.renderMathInElement !== 'function') return;
+        try {
+            window.renderMathInElement(root, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '\\[', right: '\\]', display: true },
+                    { left: '\\(', right: '\\)', display: false },
+                    { left: '$', right: '$', display: false },
+                ],
+                ignoredTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+                throwOnError: false,
+                trust: false,
+            });
+        } catch (e) {
+            // A malformed formula must not take out the whole answer.
+        }
     }
 
     /** Render Markdown into a fresh element. */

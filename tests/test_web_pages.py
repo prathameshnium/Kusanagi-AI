@@ -215,6 +215,8 @@ def test_self_hosted_faces_declare_unicode_ranges(repo_root):
 
 def test_every_page_loads_a_page_script(page_sources):
     for name, html in page_sources.items():
+        if 'http-equiv="refresh"' in html:
+            continue   # a retired page that only forwards old links
         script_name, _ = page_script_for(name, html)
         assert script_name, "%s loads no static/pages script" % name
 
@@ -239,7 +241,7 @@ def test_shared_modules_are_loaded_before_the_page_script(page_sources):
     for name, html in page_sources.items():
         order = re.findall(r'src="[^"]*static/(?:pages/)?([a-z-]+\.js)"', html)
         if "index.js" in order or any(o.endswith(".js") and o in
-                                      ("kakashi.js", "neji.js", "onetail.js",
+                                      ("kakashi.js",
                                        "orochimaru.js", "visualize.js") for o in order):
             page_script = order[-1]
             for dependency in ("keys.js", "providers.js", "dom.js", "ui.js"):

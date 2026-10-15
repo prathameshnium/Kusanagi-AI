@@ -1,120 +1,30 @@
 <!DOCTYPE html>
-<html lang="en" class="h-full">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- GitHub Pages sends no Referrer-Policy header; without this, every
-         provider request would carry this page's URL in Referer. -->
     <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- OneTail was merged into Orochimaru. This page only forwards old links
+         and bookmarks: no script, no requests, nothing to allow. -->
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'none';
         script-src 'self';
         style-src 'self';
-        img-src 'self' data:;
+        img-src 'self';
         font-src 'self';
-        connect-src https://generativelanguage.googleapis.com https://api.anthropic.com https://router.huggingface.co https://openrouter.ai;
         base-uri 'none';
         form-action 'none';">
-    <title>OneTail Chat &mdash; Kusanagi AI</title>
-    <meta name="description" content="OneTail — a private multi-provider AI chat. Nothing is written to disk.">
+    <meta http-equiv="refresh" content="0; url=Orochimaru_Web_Research_Assistent.html">
+    <meta name="robots" content="noindex">
+    <title>OneTail moved to Orochimaru &mdash; Kusanagi AI</title>
     <link rel="icon" href="../static/logo-64.png">
     <link rel="stylesheet" href="../static/kusanagi.css">
-    <script src="../static/vendor/marked.min.js" defer></script>
-    <script src="../static/vendor/purify.min.js" defer></script>
-    <script src="../static/keys.js" defer></script>
-    <script src="../static/providers.js" defer></script>
-    <script src="../static/dom.js" defer></script>
-    <script src="../static/ui.js" defer></script>
-    <script src="../static/prompts.js" defer></script>
-    <script src="../static/pages/onetail.js" defer></script>
 </head>
-<body class="h-full bg-primary text-fg-primary font-sans antialiased overflow-hidden">
-    <a href="../index.html" class="home-button" aria-label="Back to the Kusanagi AI dashboard">
-        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
-    </a>
-
-    <div class="flex h-full max-h-screen">
-
-        <!-- === Sidebar === -->
-        <aside class="w-64 flex-shrink-0 bg-secondary flex flex-col p-4 border-r border-tertiary">
-            <div class="px-1 mt-12">
-                <h1 class="text-xl font-bold">
-                    <a href="../index.html" class="hover:underline text-fg-primary">Kusanagi AI</a>
-                    <span class="text-fg-secondary font-normal">/</span>
-                    <span class="text-accent">OneTail</span>
-                </h1>
-                <p class="text-xs text-fg-secondary mt-1">Nothing is written to disk</p>
-            </div>
-
-            <div class="flex items-center gap-2 px-1 mt-4">
-                <span id="status-light" class="w-2.5 h-2.5 rounded-full bg-danger inline-block" aria-hidden="true"></span>
-                <span id="status-label" class="text-sm text-fg-primary">No API key</span>
-            </div>
-
-            <hr class="border-tertiary my-4">
-
-            <div class="px-1 space-y-3">
-                <div>
-                    <label for="model-selector" class="text-sm font-semibold text-fg-primary">Chat model</label>
-                    <select id="model-selector" class="mt-1 text-sm"></select>
-                </div>
-                <div>
-                    <label for="temperature-slider" class="text-sm font-semibold text-fg-primary flex justify-between">
-                        <span>Temperature</span>
-                        <span id="temp-value" class="font-mono text-accent">0.7</span>
-                    </label>
-                    <input id="temperature-slider" type="range" min="0" max="1" step="0.1" value="0.7" class="w-full mt-1">
-                </div>
-            </div>
-
-            <hr class="border-tertiary my-4">
-
-            <div class="flex-grow flex flex-col overflow-hidden">
-                <div class="flex-shrink-0 flex justify-between items-center mb-2">
-                    <h2 class="text-base font-semibold">Session</h2>
-                    <button id="new-chat-btn" type="button" class="btn btn-accent text-xs">New chat</button>
-                </div>
-                <div class="bg-tertiary rounded-md p-2">
-                    <p class="text-xs text-fg-primary">In-memory only</p>
-                    <p class="text-[10px] text-fg-secondary mt-1">
-                        <span id="turn-count">0</span> turns held for context
-                    </p>
-                </div>
-            </div>
-        </aside>
-
-        <!-- === Main === -->
-        <main class="flex-1 flex flex-col max-h-screen p-2 relative min-w-0">
-            <header class="flex-shrink-0 flex justify-between items-center gap-3 p-2 bg-secondary/50 rounded-t-lg mx-2 mt-2 border-b border-tertiary">
-                <div class="flex items-center gap-2 text-accent">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5" aria-hidden="true">
-                        <path fill-rule="evenodd" d="M12 1.5a5.25 5.25 0 00-5.25 5.25v3a3 3 0 00-3 3v6.75a3 3 0 003 3h10.5a3 3 0 003-3v-6.75a3 3 0 00-3-3v-3c0-2.9-2.35-5.25-5.25-5.25zm3.75 8.25v-3a3.75 3.75 0 10-7.5 0v3h7.5z" clip-rule="evenodd" />
-                    </svg>
-                    <span class="text-xs font-bold hidden sm:inline">Direct to provider</span>
-                </div>
-
-                <div class="flex items-center gap-4 text-xs font-mono text-fg-secondary bg-tertiary/30 px-3 py-1 rounded-full border border-tertiary">
-                    <div><span class="text-accent">Tokens:</span> <span id="token-display" class="text-fg-primary">0</span></div>
-                    <div class="w-px h-3 bg-fg-secondary/30"></div>
-                    <div><span class="text-accent">Speed:</span> <span id="speed-display" class="text-fg-primary">0 t/s</span></div>
-                </div>
-
-                <div class="flex items-center gap-2">
-                    <button id="purge-btn" type="button" class="btn btn-danger text-xs">Purge keys</button>
-                    <button id="open-settings" type="button" class="btn btn-secondary text-xs">Settings</button>
-                </div>
-            </header>
-
-            <div id="chat-history" class="flex-grow p-4 overflow-y-auto space-y-6 bg-primary mx-2 mb-2" role="log" aria-live="polite" aria-label="Conversation"></div>
-
-            <div class="flex-shrink-0 p-2">
-                <div class="flex bg-tertiary rounded-md p-1.5 border border-tertiary focus-within:border-accent transition-colors shadow-lg">
-                    <label for="chat-input" class="sr-only">Message</label>
-                    <input id="chat-input" type="text" autocomplete="off" placeholder="Type your message..." class="w-full bg-transparent !border-0 !p-2 text-lg text-fg-primary placeholder-fg-secondary focus:outline-none">
-                    <button id="send-button" type="button" class="btn btn-accent ml-2 px-4" aria-label="Send message">Send</button>
-                </div>
-            </div>
-        </main>
-    </div>
+<body class="min-h-screen flex items-center justify-center p-6 text-center">
+    <p class="text-fg-secondary">
+        OneTail chat is now part of
+        <a class="text-accent hover:underline" href="Orochimaru_Web_Research_Assistent.html">Orochimaru</a>.
+        Taking you there&hellip;
+    </p>
 </body>
 </html>

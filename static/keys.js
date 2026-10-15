@@ -8,8 +8,13 @@
  *   - Default is sessionStorage, so a key is gone when the tab closes. It is not
  *     readable by another tab, and it does not sit on disk waiting for the next thing
  *     that reads localStorage.
- *   - Persisting to localStorage is opt-in per provider, and the settings UI shows
- *     which providers are being remembered.
+ *   - Remembering a key between sessions is opt-in, and only ever encrypted: the
+ *     vault below seals keys with AES-256-GCM under a key derived from the
+ *     user's password (PBKDF2-SHA-256, 600k iterations). Only the ciphertext,
+ *     salt and IV are written to localStorage. The password and the derived key
+ *     are never stored, and nothing in this file makes a network request.
+ *   - Keys an older build remembered in plain text still work, and are flagged
+ *     (plaintextProviders) so the UI can offer to encrypt them.
  *   - Nothing here logs a key. Callers must not either.
  *
  * Load before providers.js.
@@ -70,21 +75,27 @@ window.Kusanagi = window.Kusanagi || {};
         });
     }
 
-    /* Keys written under the old scheme are already on disk. Silently dropping them
-       would look like the app forgetting the user's key, so they are imported as
-       "remembered" -- which is the behaviour those users already had -- and the old
-       names are cleared. The settings dialog then shows the box ticked, so it is
-       visible and can be turned off. */
+    /* Keys written under older schemes are already on disk in plain text. They
+       are never copied or rewritten -- that would put the secret on disk again.
+       They are read where they lie (legacyKey) and reported by
+       plaintextProviders(), so the dashboard can encrypt them into the vault or
+       delete them. Only the non-secret provider choice is migrated here. */
+    function legacyKey(provider) {
+        var names = [keyName(provider)].concat(LEGACY[provider] || []);
+        for (var i = 0; i < names.length; i++) {
+            var found = local.get(names[i]);
+            if (found) return found;
+        }
+        return '';
+    }
+
+    function dropLegacyKey(provider) {
+        local.del(keyName(provider));
+        (LEGACY[provider] || []).forEach(local.del);
+    }
+
     function migrateLegacy() {
         if (local.get(NS + 'migrated')) return;
-
-        Object.keys(LEGACY).forEach(function (provider) {
-            if (local.get(keyName(provider))) return;
-            for (var i = 0; i < LEGACY[provider].length; i++) {
-                var found = local.get(LEGACY[provider][i]);
-                if (found) { local.set(keyName(provider), found); break; }
-            }
-        });
 
         if (!local.get(NS + 'provider')) {
             for (var j = 0; j < LEGACY_PROVIDER.length; j++) {
@@ -93,12 +104,205 @@ window.Kusanagi = window.Kusanagi || {};
             }
         }
 
-        Object.keys(LEGACY).forEach(function (provider) {
-            LEGACY[provider].forEach(local.del);
-        });
         LEGACY_PROVIDER.forEach(local.del);
         local.set(NS + 'migrated', '1');
     }
+
+    /* ----------------------------------------------------------------- vault */
+
+    var VAULT = NS + 'vault';              // localStorage: the sealed blob
+    var VAULT_OPEN = NS + 'vault_open';    // sessionStorage: providers unlocked here
+    var VAULT_ITERATIONS = 600000;         // OWASP's current figure for PBKDF2-SHA-256
+    var VAULT_MIN_PASSWORD = 12;
+    // Binds the ciphertext to this purpose, so it cannot be replayed as another blob.
+    var VAULT_AAD = new TextEncoder().encode('kusanagi-key-vault-v1');
+
+    function toB64(bytes) {
+        var s = '';
+        for (var i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+        return btoa(s);
+    }
+
+    function fromB64(text) {
+        var s = atob(text);
+        var out = new Uint8Array(s.length);
+        for (var i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+        return out;
+    }
+
+    function subtle() {
+        // WebCrypto only exists in a secure context (https or localhost).
+        if (!window.crypto || !window.crypto.subtle) {
+            throw new Error('Encrypted storage needs a secure page (https or localhost).');
+        }
+        return window.crypto.subtle;
+    }
+
+    /** Password -> non-extractable AES-GCM key. The password goes nowhere else. */
+    function deriveKey(password, salt, iterations) {
+        var s = subtle();
+        return s.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false,
+            ['deriveKey'])
+            .then(function (base) {
+                return s.deriveKey(
+                    { name: 'PBKDF2', salt: salt, iterations: iterations, hash: 'SHA-256' },
+                    base,
+                    { name: 'AES-GCM', length: 256 },
+                    false,
+                    ['encrypt', 'decrypt']);
+            });
+    }
+
+    function readBlob() {
+        try {
+            var blob = JSON.parse(local.get(VAULT) || 'null');
+            return blob && blob.v === 1 ? blob : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /** Decrypt the vault to {provider: key}. Rejects on a wrong password. */
+    function openBlob(password) {
+        var blob = readBlob();
+        if (!blob) return Promise.resolve({});
+        // The count comes from storage. Lowering it gains an attacker nothing
+        // (the derived key would not decrypt), but a huge value would hang the
+        // tab, so only the range this code writes is accepted.
+        if (!(blob.iter >= VAULT_ITERATIONS && blob.iter <= 5000000)) {
+            return Promise.reject(new Error('The saved keys are damaged. Purge them and '
+                + 'enter your keys again.'));
+        }
+        return Promise.resolve()
+            .then(function () { return deriveKey(password, fromB64(blob.salt), blob.iter); })
+            .then(function (key) {
+                return subtle().decrypt(
+                    { name: 'AES-GCM', iv: fromB64(blob.iv), additionalData: VAULT_AAD },
+                    key, fromB64(blob.ct));
+            })
+            .then(function (plain) {
+                return JSON.parse(new TextDecoder().decode(plain));
+            }, function (err) {
+                // GCM authentication failure: wrong password or a tampered blob.
+                if (err && err.name === 'OperationError') {
+                    throw new Error('Wrong password.');
+                }
+                throw err;
+            });
+    }
+
+    /** Encrypt {provider: key} under a fresh salt and IV, and write it. */
+    function sealBlob(password, entries) {
+        var salt = crypto.getRandomValues(new Uint8Array(16));
+        var iv = crypto.getRandomValues(new Uint8Array(12));
+        return Promise.resolve()
+            .then(function () { return deriveKey(password, salt, VAULT_ITERATIONS); })
+            .then(function (key) {
+                return subtle().encrypt(
+                    { name: 'AES-GCM', iv: iv, additionalData: VAULT_AAD },
+                    key, new TextEncoder().encode(JSON.stringify(entries)));
+            })
+            .then(function (ct) {
+                var ok = local.set(VAULT, JSON.stringify({
+                    v: 1, kdf: 'PBKDF2-SHA256', iter: VAULT_ITERATIONS,
+                    salt: toB64(salt), iv: toB64(iv), ct: toB64(new Uint8Array(ct)),
+                }));
+                if (!ok) throw new Error('This browser would not save the encrypted keys.');
+            });
+    }
+
+    /** Copy decrypted keys into this tab, as if typed in. */
+    function loadIntoSession(entries) {
+        var names = Object.keys(entries).filter(function (p) {
+            return PROVIDERS.indexOf(p) !== -1 && typeof entries[p] === 'string';
+        });
+        names.forEach(function (p) {
+            session.set(keyName(p), entries[p]);
+            dropLegacyKey(p);   // any plain-text copy is now redundant
+        });
+        session.set(VAULT_OPEN, JSON.stringify(names));
+        return names;
+    }
+
+    function openList() {
+        try { return JSON.parse(session.get(VAULT_OPEN) || 'null'); } catch (e) { return null; }
+    }
+
+    var vault = {
+        MIN_PASSWORD: VAULT_MIN_PASSWORD,
+
+        /** An encrypted vault exists in this browser. */
+        exists: function () { return !!readBlob(); },
+
+        /** The vault has been unlocked in this tab. */
+        isOpen: function () { return !!openList(); },
+
+        /**
+         * A vault exists but is not unlocked here. Changing a key in this state
+         * is refused by the UI: the vault's copy would come back on the next
+         * unlock and silently undo the change.
+         */
+        isLocked: function () { return !!readBlob() && !openList(); },
+
+        /** True if `provider` is in the vault (known once unlocked). */
+        contains: function (provider) {
+            var list = openList();
+            return !!list && list.indexOf(provider) !== -1;
+        },
+
+        /** Unlock: decrypt and load the keys into this tab. -> provider ids. */
+        unlock: function (password) {
+            if (!password) return Promise.reject(new Error('Enter your password.'));
+            return openBlob(password).then(loadIntoSession);
+        },
+
+        /**
+         * Remember keys, encrypted. `entries` is {provider: key}. Creates the
+         * vault on first use, which is why the password rule is checked here.
+         * Other entries already in the vault are kept.
+         */
+        store: function (entries, password) {
+            if (!password) return Promise.reject(new Error('Enter your password.'));
+            var creating = !readBlob();
+            if (creating && password.length < VAULT_MIN_PASSWORD) {
+                return Promise.reject(new Error('Use a password of at least '
+                    + VAULT_MIN_PASSWORD + ' characters.'));
+            }
+            return openBlob(password).then(function (current) {
+                Object.keys(entries).forEach(function (p) {
+                    if (PROVIDERS.indexOf(p) !== -1 && entries[p]) current[p] = entries[p];
+                });
+                return sealBlob(password, current).then(function () {
+                    return loadIntoSession(current);
+                });
+            });
+        },
+
+        /** Remove one provider's key from the vault (and this tab). */
+        discard: function (provider, password) {
+            if (!password) return Promise.reject(new Error('Enter your password.'));
+            return openBlob(password).then(function (current) {
+                delete current[provider];
+                session.del(keyName(provider));
+                var done = Object.keys(current).length
+                    ? sealBlob(password, current)
+                    : Promise.resolve(local.del(VAULT));
+                return done.then(function () { return loadIntoSession(current); });
+            });
+        },
+
+        /** Lock: drop the decrypted copies from this tab. The vault stays. */
+        lock: function () {
+            (openList() || []).forEach(function (p) { session.del(keyName(p)); });
+            session.del(VAULT_OPEN);
+        },
+
+        /** Delete the vault outright. */
+        destroy: function () {
+            this.lock();
+            local.del(VAULT);
+        },
+    };
 
     /* Published key prefixes. Used only to catch a key pasted under the wrong
        provider, which would otherwise be sent to a company that never issued it. */
@@ -129,29 +333,38 @@ window.Kusanagi = window.Kusanagi || {};
 
         /** Current key for a provider, or '' if none. Session wins over persisted. */
         get: function (provider) {
-            return session.get(keyName(provider)) || local.get(keyName(provider)) || '';
+            return session.get(keyName(provider)) || legacyKey(provider) || '';
         },
 
         /**
-         * Store a key. Session-only unless persist is true.
-         * Passing an empty value clears the key from both stores.
+         * Hold a key for this tab only. Never writes plain text to disk; to
+         * remember a key, use vault.store().
+         * Passing an empty value clears the key from this tab.
          */
-        set: function (provider, value, persist) {
+        set: function (provider, value) {
             var name = keyName(provider);
-            if (!value) { this.remove(provider); return; }
+            if (!value) { session.del(name); return; }
             session.set(name, value);
-            if (persist) local.set(name, value);
-            else local.del(name);
+            // A plain-text copy left by an older build is superseded; drop it.
+            dropLegacyKey(provider);
         },
 
+        /** Forget a key in this tab, and any plain-text copy on disk. The
+            encrypted vault copy needs the password: vault.discard(). */
         remove: function (provider) {
             session.del(keyName(provider));
-            local.del(keyName(provider));
+            dropLegacyKey(provider);
         },
 
-        /** True if this provider's key is being kept on disk between sessions. */
+        /** True if this provider's key is remembered, encrypted, in the vault.
+            Known only once the vault has been unlocked in this tab. */
         isPersisted: function (provider) {
-            return !!local.get(keyName(provider));
+            return vault.contains(provider);
+        },
+
+        /** Providers whose key an older build left on disk unencrypted. */
+        plaintextProviders: function () {
+            return PROVIDERS.filter(function (p) { return !!legacyKey(p); });
         },
 
         /**
@@ -184,6 +397,7 @@ window.Kusanagi = window.Kusanagi || {};
             });
             local.del(NS + 'provider');
             local.del(NS + 'migrated');
+            vault.destroy();
             forgetRetired();
             Object.keys(LEGACY).forEach(function (provider) {
                 LEGACY[provider].forEach(local.del);
@@ -208,6 +422,7 @@ window.Kusanagi = window.Kusanagi || {};
 
     migrateLegacy();
     forgetRetired();
+    keys.vault = vault;
     window.Kusanagi.keys = keys;
     window.Kusanagi.prefs = prefs;
 })();

@@ -21,12 +21,15 @@
         connect-src 'self' blob: https://generativelanguage.googleapis.com https://api.anthropic.com https://router.huggingface.co https://openrouter.ai http://localhost:11434 http://127.0.0.1:11434;
         base-uri 'none';
         form-action 'none';">
-    <title>Orochimaru RAG &mdash; Kusanagi AI</title>
-    <meta name="description" content="Orochimaru — a secure document analyst that loads PDFs directly into browser RAM for private Q&A and summarization.">
+    <title>Orochimaru &mdash; Kusanagi AI</title>
+    <meta name="description" content="Orochimaru — a private research chat that can also answer from PDFs parsed in your browser and held only in memory.">
     <link rel="icon" href="../static/logo-64.png">
     <link rel="stylesheet" href="../static/kusanagi.css">
+    <link rel="stylesheet" href="../static/vendor/katex/katex.min.css">
     <script src="../static/vendor/marked.min.js" defer></script>
     <script src="../static/vendor/purify.min.js" defer></script>
+    <script src="../static/vendor/katex/katex.min.js" defer></script>
+    <script src="../static/vendor/katex/auto-render.min.js" defer></script>
     <script src="../static/keys.js" defer></script>
     <script src="../static/providers.js" defer></script>
     <script src="../static/dom.js" defer></script>
@@ -49,7 +52,7 @@
                     <span class="text-fg-secondary font-normal">/</span>
                     <span class="text-accent">Orochimaru</span>
                 </h1>
-                <p class="text-xs text-fg-secondary mt-1">In-memory RAG over your PDFs</p>
+                <p class="text-xs text-fg-secondary mt-1">Research chat, with RAG over your PDFs</p>
             </div>
 
             <div class="mb-6">
@@ -66,6 +69,13 @@
                 <div class="mb-3">
                     <label for="model-select" class="block text-[10px] text-fg-secondary mb-1">Model</label>
                     <select id="model-select" class="!bg-primary !text-xs !p-1.5"></select>
+                </div>
+                <div class="mb-3">
+                    <label for="answer-mode" class="block text-[10px] text-fg-secondary mb-1">Answer from (when documents are loaded)</label>
+                    <select id="answer-mode" class="!bg-primary !text-xs !p-1.5">
+                        <option value="strict" selected>Documents only (strict)</option>
+                        <option value="normal">Documents + general knowledge</option>
+                    </select>
                 </div>
                 <div>
                     <div class="flex justify-between text-[10px] text-fg-secondary mb-1">
@@ -130,7 +140,8 @@
                 </div>
 
                 <div class="flex items-center gap-3 shrink-0">
-                    <button id="tts-btn" type="button" class="text-fg-secondary hover:text-accent text-sm border border-tertiary rounded px-2 py-1" aria-pressed="false">Read aloud</button>
+                    <button id="copy-chat" type="button" class="text-fg-secondary hover:text-accent text-sm border border-tertiary rounded px-2 py-1">Copy chat</button>
+                    <button id="tts-btn" type="button" class="text-fg-secondary hover:text-accent text-sm border border-tertiary rounded px-2 py-1" aria-pressed="false">Read chat aloud</button>
                     <button id="clear-chat" type="button" class="text-fg-secondary hover:text-danger text-sm">Clear</button>
                 </div>
             </header>
@@ -141,7 +152,7 @@
                 <div class="max-w-4xl mx-auto">
                     <div class="flex bg-tertiary rounded-lg border border-tertiary focus-within:border-accent shadow-lg transition-colors">
                         <label for="chat-input" class="sr-only">Question</label>
-                        <input id="chat-input" type="text" autocomplete="off" placeholder="Query your documents..." class="!border-0 !bg-transparent !p-3">
+                        <input id="chat-input" type="text" autocomplete="off" placeholder="Ask anything, or about your documents..." class="!border-0 !bg-transparent !p-3">
                         <button id="send-btn" type="button" class="px-4 text-accent hover:text-fg-primary transition" aria-label="Send">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                         </button>

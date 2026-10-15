@@ -18,7 +18,7 @@
         base-uri 'none';
         form-action 'none';">
     <title>Kakashi Search &mdash; Kusanagi AI</title>
-    <meta name="description" content="Kakashi Search — an agentic search engine that breaks queries into sub-tasks and searches Wikipedia, papers, and the web in parallel.">
+    <meta name="description" content="Kakashi Search — agentic search over the open web, or over peer-reviewed papers in Academic mode, with a cited answer or no AI at all.">
     <link rel="icon" href="../static/logo-64.png">
     <link rel="stylesheet" href="../static/kusanagi.css">
     <link rel="stylesheet" href="../static/vendor/katex/katex.min.css">
@@ -64,6 +64,16 @@
                 <div class="w-px h-3 bg-tertiary"></div>
                 <div><span class="text-accent">Spd:</span> <span id="header-speed">--</span></div>
             </div>
+            <div class="flex items-center gap-2 text-xs">
+                <label for="search-mode" class="sr-only">Search mode</label>
+                <select id="search-mode" class="!w-auto !py-1 !px-2 !text-xs" title="Normal: the open web. Academic: peer-reviewed papers.">
+                    <option value="normal">Normal</option>
+                    <option value="academic">Academic</option>
+                </select>
+                <label for="no-ai" class="flex items-center gap-1 text-fg-secondary cursor-pointer whitespace-nowrap" title="Search without contacting any AI model. No key needed.">
+                    <input type="checkbox" id="no-ai"> No AI
+                </label>
+            </div>
             <button id="purge-btn" type="button" class="btn btn-danger text-xs">Purge keys</button>
             <button id="open-settings" type="button" class="btn btn-secondary text-xs">Settings</button>
         </div>
@@ -83,18 +93,15 @@
                         <button id="home-go" type="button" class="p-4 bg-accent hover:bg-accent-hover text-secondary font-bold transition shrink-0">GO</button>
                     </div>
                 </div>
-                <div class="flex flex-wrap justify-center gap-4 text-xs text-fg-secondary">
-                    <span>Agentic query expansion</span>
-                    <span>Five open databases</span>
-                    <span>Keys never leave the browser</span>
-                </div>
+                <p id="mode-hint" class="text-xs text-fg-secondary text-center max-w-xl mb-4"></p>
+                <div id="example-pills" class="flex flex-wrap justify-center gap-2"></div>
             </div>
 
             <div id="results-feed" class="hidden p-4 md:p-6 space-y-4">
                 <div class="border-b border-tertiary pb-4 mb-4">
                     <h2 id="query-display" class="text-2xl font-bold text-fg-primary mb-2"></h2>
                     <div class="flex justify-between items-end gap-3">
-                        <h3 class="text-sm font-bold text-accent uppercase tracking-wider">Organic results</h3>
+                        <h3 id="results-heading" class="text-sm font-bold text-accent uppercase tracking-wider">Results</h3>
                         <span id="result-stats" class="text-[10px] text-fg-secondary font-mono">Searching...</span>
                     </div>
                 </div>
@@ -104,6 +111,18 @@
                         <p class="text-[10px] text-fg-secondary font-bold uppercase mb-2">Agentic strategy</p>
                         <div id="strategy-list" class="space-y-3"></div>
                     </div>
+                </div>
+
+                <!-- Academic mode: filter the papers already fetched. -->
+                <div id="filter-section" class="hidden flex flex-wrap items-center gap-3 text-xs bg-secondary/50 border border-tertiary rounded p-2">
+                    <label for="filter-year" class="text-fg-secondary">From year</label>
+                    <input id="filter-year" type="number" min="1900" max="2100" placeholder="any" class="!w-24 !py-1 !px-2 !text-xs">
+                    <label for="filter-sort" class="text-fg-secondary">Sort</label>
+                    <select id="filter-sort" class="!w-auto !py-1 !px-2 !text-xs">
+                        <option value="relevance">Relevance</option>
+                        <option value="newest">Newest</option>
+                        <option value="citations">Most cited</option>
+                    </select>
                 </div>
 
                 <div id="organic-container" class="space-y-3"></div>

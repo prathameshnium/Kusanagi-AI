@@ -87,6 +87,44 @@ window.Kusanagi = window.Kusanagi || {};
             class: 'text-[11px] text-fg-secondary mt-1',
         });
 
+        var vault = window.Kusanagi.keys.vault;
+
+        function passwordInput(id, placeholder) {
+            return el('input', {
+                type: 'password', id: id, placeholder: placeholder,
+                autocomplete: 'off', spellcheck: 'false', class: 'mt-2',
+            });
+        }
+
+        // Shown while remembering is ticked: the password that seals the key.
+        var vaultPassword = passwordInput('settings-vault-password', 'Vault password');
+        var vaultConfirm = passwordInput('settings-vault-confirm', 'Repeat the new password');
+        var vaultFields = el('div', { class: 'hidden' }, [vaultPassword, vaultConfirm]);
+
+        // Shown while a vault exists but is locked in this tab.
+        var unlockPassword = passwordInput('settings-unlock-password', 'Vault password');
+        var unlockBox = el('div', {
+            class: 'hidden mb-5 p-3 rounded border border-accent/40 bg-accent/10',
+        }, [
+            el('label', {
+                class: 'block text-xs font-bold text-accent uppercase tracking-wide',
+                for: 'settings-unlock-password',
+                text: 'Unlock saved keys',
+            }),
+            el('p', {
+                class: 'text-[11px] text-fg-secondary mt-1',
+                text: 'Your remembered keys are encrypted. The password is checked in '
+                    + 'this browser only and is never stored or sent anywhere.',
+            }),
+            el('div', { class: 'flex gap-2 items-start' }, [
+                el('div', { class: 'flex-1' }, [unlockPassword]),
+                el('button', {
+                    class: 'btn btn-accent text-xs mt-2', type: 'button', text: 'Unlock',
+                    on: { click: function () { unlock(); } },
+                }),
+            ]),
+        ]);
+
         var hint = el('p', { class: 'text-[10px] text-fg-secondary mt-1 hidden' });
 
         var fallbackBox = el('input', {
@@ -120,6 +158,8 @@ window.Kusanagi = window.Kusanagi || {};
                 + 'By default they are cleared when you close the tab.',
             ]),
 
+            unlockBox,
+
             el('div', { class: 'mb-4' }, [
                 el('label', {
                     class: 'block text-xs font-bold text-fg-secondary uppercase tracking-wide mb-2',
@@ -143,8 +183,11 @@ window.Kusanagi = window.Kusanagi || {};
                 el('label', {
                     class: 'flex items-start gap-2 text-xs text-fg-primary cursor-pointer',
                     for: 'settings-persist',
-                }, [persistBox, el('span', { text: 'Remember this key on this device' })]),
+                }, [persistBox, el('span', {
+                    text: 'Remember this key on this device (encrypted with a password)',
+                })]),
                 persistNote,
+                vaultFields,
             ]),
 
             el('div', { class: 'mb-2 pt-3 border-t border-tertiary/60' }, [
@@ -219,10 +262,34 @@ window.Kusanagi = window.Kusanagi || {};
 
             fallbackBox.checked = window.Kusanagi.prefs.modelFallback();
             persistBox.checked = window.Kusanagi.keys.isPersisted(provider);
+            unlockBox.classList.toggle('hidden', !(vault.exists() && !vault.isOpen()));
+            describePersist();
+        }
+
+        function describePersist() {
+            var creating = !vault.exists();
+            vaultFields.classList.toggle('hidden', !persistBox.checked);
+            vaultConfirm.classList.toggle('hidden', !creating);
+            vaultPassword.placeholder = creating
+                ? 'New vault password (at least ' + vault.MIN_PASSWORD + ' characters)'
+                : 'Vault password';
             persistNote.textContent = persistBox.checked
-                ? 'Stored on disk until you purge it. Anything that can read this '
-                    + 'browser profile can read the key.'
+                ? 'Encrypted in this browser (AES-256-GCM) with your password. Only the '
+                    + 'encrypted copy is saved; the password is never stored or sent.'
                 : 'Kept in memory for this tab only, and cleared when the tab closes.';
+        }
+
+        function unlock() {
+            vault.unlock(unlockPassword.value).then(function (names) {
+                unlockPassword.value = '';
+                refresh();
+                toast('Unlocked ' + names.length + ' saved key'
+                    + (names.length === 1 ? '' : 's') + ' for this tab.', 'success');
+                if (opts.onSave) opts.onSave(currentProvider(), '');
+            }, function (err) {
+                toast(err.message, 'error');
+                unlockPassword.select();
+            });
         }
 
         function save() {
@@ -242,14 +309,45 @@ window.Kusanagi = window.Kusanagi || {};
                 keyInput.focus();
                 return;
             }
-            window.Kusanagi.keys.setProvider(provider);
-            window.Kusanagi.keys.set(provider, value, persistBox.checked);
-            window.Kusanagi.prefs.setModelFallback(fallbackBox.checked);
-            close();
-            toast('Saved ' + window.Kusanagi.providerLabel(provider) + ' key'
-                + (persistBox.checked ? ' (remembered on this device).' : ' for this tab.'),
-                'success');
-            if (opts.onSave) opts.onSave(provider, value);
+            if (vault.isLocked()) {
+                toast('Unlock your saved keys first, so this change is not undone '
+                    + 'by the saved copy.', 'error');
+                unlockPassword.focus();
+                return;
+            }
+            var remember = persistBox.checked;
+            var wasRemembered = window.Kusanagi.keys.isPersisted(provider);
+            var password = vaultPassword.value;
+            if (remember && !vault.exists() && password !== vaultConfirm.value) {
+                toast('The two passwords do not match.', 'error');
+                vaultConfirm.focus();
+                return;
+            }
+
+            var label = window.Kusanagi.providerLabel(provider);
+            var entry = {};
+            entry[provider] = value;
+            var stored = remember
+                ? vault.store(entry, password)
+                : (wasRemembered ? vault.discard(provider, password) : Promise.resolve());
+
+            stored.then(function () {
+                window.Kusanagi.keys.setProvider(provider);
+                window.Kusanagi.keys.set(provider, value);
+                window.Kusanagi.prefs.setModelFallback(fallbackBox.checked);
+                close();
+                toast('Saved ' + label + ' key'
+                    + (remember ? ', encrypted on this device.' : ' for this tab.'), 'success');
+                if (opts.onSave) opts.onSave(provider, value);
+            }, function (err) {
+                // Unticking a remembered key needs the password to rewrite the vault.
+                if (!remember && wasRemembered) {
+                    vaultFields.classList.remove('hidden');
+                    vaultConfirm.classList.add('hidden');
+                }
+                toast(err.message, 'error');
+                vaultPassword.focus();
+            });
         }
 
         var lastFocused = null;
@@ -259,25 +357,28 @@ window.Kusanagi = window.Kusanagi || {};
             providerSelect.value = activeProvider();
             refresh();
             modal.classList.remove('hidden');
-            keyInput.focus();
+            (unlockBox.classList.contains('hidden') ? keyInput : unlockPassword).focus();
         }
 
         function close() {
             modal.classList.add('hidden');
-            // Do not leave the key sitting in a detached input.
+            // Do not leave secrets sitting in detached inputs.
             keyInput.value = '';
+            vaultPassword.value = '';
+            vaultConfirm.value = '';
+            unlockPassword.value = '';
             if (lastFocused && lastFocused.focus) lastFocused.focus();
         }
 
         providerSelect.addEventListener('change', refresh);
-        persistBox.addEventListener('change', function () {
-            persistNote.textContent = persistBox.checked
-                ? 'Stored on disk until you purge it. Anything that can read this '
-                    + 'browser profile can read the key.'
-                : 'Kept in memory for this tab only, and cleared when the tab closes.';
+        persistBox.addEventListener('change', describePersist);
+        [keyInput, vaultPassword, vaultConfirm].forEach(function (input) {
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') { e.preventDefault(); save(); }
+            });
         });
-        keyInput.addEventListener('keydown', function (e) {
-            if (e.key === 'Enter') { e.preventDefault(); save(); }
+        unlockPassword.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') { e.preventDefault(); unlock(); }
         });
         document.addEventListener('keydown', function (e) {
             if (e.key === 'Escape' && !modal.classList.contains('hidden')) close();
@@ -289,6 +390,13 @@ window.Kusanagi = window.Kusanagi || {};
         }
 
         settingsApi = { open: open, close: close, refresh: refresh, provider: activeProvider };
+
+        // Saved keys are locked and this page has nothing to work with: ask for
+        // the password straight away rather than failing on the first request.
+        if (vault.exists() && !vault.isOpen()
+            && !window.Kusanagi.keys.get(activeProvider())) {
+            setTimeout(open, 0);
+        }
         return settingsApi;
     }
 
@@ -423,7 +531,159 @@ window.Kusanagi = window.Kusanagi || {};
         );
     }
 
+    /**
+     * A small "Copy" button. `getText` is called on click, so it copies what
+     * is current then. Copies the Markdown source, which keeps the LaTeX and
+     * the links intact when pasted elsewhere.
+     */
+    function copyButton(getText, label) {
+        var name = label || 'Copy';
+        return bindCopy(el('button', {
+            type: 'button',
+            class: 'text-[11px] font-bold text-fg-secondary hover:text-accent transition '
+                + 'border border-tertiary rounded px-2 py-0.5',
+            text: name,
+            'aria-label': name,
+        }), getText);
+    }
+
+    /** Make an existing button copy `getText()` and flash "Copied". */
+    function bindCopy(button, getText) {
+        var name = button.textContent;
+        function copied() {
+            button.textContent = 'Copied';
+            setTimeout(function () { button.textContent = name; }, 1500);
+        }
+        function failed() {
+            toast('This browser blocked copying. Select the text and press Ctrl+C.', 'error');
+        }
+        button.addEventListener('click', function () {
+            var text = String(getText() || '');
+            if (!text) { toast('Nothing to copy yet.', 'error'); return; }
+            if (!navigator.clipboard) {
+                if (legacyCopy(text)) copied(); else failed();
+                return;
+            }
+            navigator.clipboard.writeText(text).then(copied, function () {
+                // Permission-gated in some browsers and embedded views.
+                if (legacyCopy(text)) copied(); else failed();
+            });
+        });
+        return button;
+    }
+
+    /** Copy through a hidden, off-screen textarea; works where the async
+        Clipboard API is refused. Positioned through the CSSOM, which the CSP allows. */
+    function legacyCopy(text) {
+        var area = el('textarea', { 'aria-hidden': 'true', tabindex: '-1' });
+        area.value = text;
+        area.readOnly = true;
+        area.style.position = 'fixed';
+        area.style.left = '-9999px';
+        area.style.top = '0';
+        document.body.appendChild(area);
+        var active = document.activeElement;
+        area.select();
+        var ok = false;
+        try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+        document.body.removeChild(area);
+        if (active && active.focus) active.focus();
+        return ok;
+    }
+
+    /* ------------------------------------------------------------ read aloud */
+
+    // One voice at a time across the page; this is the button now speaking.
+    var speaking = null;
+
+    function resetSpeakButton(button) {
+        button.textContent = button.getAttribute('data-label');
+        button.setAttribute('aria-pressed', 'false');
+        button.classList.remove('text-accent');
+    }
+
+    function stopSpeech() {
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+        if (speaking) resetSpeakButton(speaking);
+        speaking = null;
+    }
+
+    /* Chrome stops a single long utterance after roughly 15 seconds, so speech
+       is queued as sentence-sized pieces. */
+    function speechPieces(text) {
+        var sentences = text.match(/[^.!?\n]+[.!?]*\s*/g) || [text];
+        var pieces = [];
+        var current = '';
+        sentences.forEach(function (s) {
+            if ((current + s).length > 220 && current) { pieces.push(current); current = ''; }
+            current += s;
+        });
+        if (current.trim()) pieces.push(current);
+        return pieces;
+    }
+
+    /**
+     * Visible text of a rendered answer, as it should be spoken: KaTeX's
+     * visual layer and TeX annotations dropped (its MathML text reads far
+     * better than "\mathrm{...}"), buttons left out.
+     */
+    function speakableText(node) {
+        var copy = node.cloneNode(true);
+        copy.querySelectorAll('.katex-html, annotation, button').forEach(function (n) {
+            n.parentNode.removeChild(n);
+        });
+        return copy.textContent.replace(/\s+/g, ' ').trim();
+    }
+
+    /** Make a button read `getText()` aloud, and stop on a second click. */
+    function bindSpeak(button, getText) {
+        button.setAttribute('data-label', button.textContent);
+        button.setAttribute('aria-pressed', 'false');
+        button.addEventListener('click', function () {
+            if (!('speechSynthesis' in window)) {
+                toast('This browser has no speech synthesis.', 'error');
+                return;
+            }
+            if (speaking === button) { stopSpeech(); return; }
+            stopSpeech();
+            var text = String(getText() || '').trim();
+            if (!text) { toast('Nothing to read yet.'); return; }
+
+            speaking = button;
+            button.textContent = 'Stop';
+            button.setAttribute('aria-pressed', 'true');
+            button.classList.add('text-accent');
+
+            var pieces = speechPieces(text);
+            pieces.forEach(function (piece, i) {
+                var u = new SpeechSynthesisUtterance(piece);
+                if (i === pieces.length - 1) {
+                    u.onend = function () { if (speaking === button) stopSpeech(); };
+                }
+                u.onerror = function () { if (speaking === button) stopSpeech(); };
+                window.speechSynthesis.speak(u);
+            });
+        });
+        return button;
+    }
+
+    /** A small per-answer "Read aloud" button, styled like copyButton. */
+    function speakButton(getText) {
+        return bindSpeak(el('button', {
+            type: 'button',
+            class: 'text-[11px] font-bold text-fg-secondary hover:text-accent transition '
+                + 'border border-tertiary rounded px-2 py-0.5',
+            text: 'Read aloud',
+        }), getText);
+    }
+
     window.Kusanagi.ui = {
+        bindSpeak: bindSpeak,
+        speakButton: speakButton,
+        speakableText: speakableText,
+        stopSpeech: stopSpeech,
+        copyButton: copyButton,
+        bindCopy: bindCopy,
         toast: toast,
         mountSettings: mountSettings,
         purgeAll: purgeAll,

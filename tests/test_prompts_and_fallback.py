@@ -18,7 +18,7 @@ STATIC = os.path.join(ROOT, "static")
 PAGES = os.path.join(STATIC, "pages")
 
 # Pages that actually send a prompt to a model.
-MODEL_PAGES = ["kakashi.js", "neji.js", "onetail.js", "orochimaru.js", "visualize.js"]
+MODEL_PAGES = ["kakashi.js", "orochimaru.js", "visualize.js"]
 
 
 def read(*parts):
@@ -102,35 +102,36 @@ def test_kakashi_grounds_its_answer_in_retrieved_results():
     """The search used to run alongside the answer without feeding it, so any
     citation the model produced was unverifiable."""
     source = strip_js_comments(read("static", "pages", "kakashi.js"))
-    assert "K.prompts.deepResearch(query, sources)" in source
+    assert "K.prompts.deepResearch(query, sources, isAcademic)" in source
     assert "function synthesise(query, results)" in source
     assert "return unique;" in source, "runSearches must hand its results back"
 
 
 def test_orochimaru_passes_retrieved_chunks_to_the_prompt():
     source = strip_js_comments(read("static", "pages", "orochimaru.js"))
-    assert "K.prompts.documentQa(query, chunks, docNames())" in source
+    assert "K.prompts.documentChatPrompt(retrieve(query, 5), docNames(), strictMode())" in source
     assert "K.prompts.review(" in source
     assert "K.prompts.summarise(" in source
 
 
-def test_onetail_sends_the_rigour_preamble_as_a_system_message():
-    source = strip_js_comments(read("static", "pages", "onetail.js"))
+def test_chat_sends_the_rigour_preamble_as_a_system_message():
+    """OneTail was merged into Orochimaru: with no documents it is plain chat."""
+    source = strip_js_comments(read("static", "pages", "orochimaru.js"))
     assert "K.prompts.chatSystemPrompt()" in source
     assert "role: 'system'" in source
 
 
 def test_system_prompt_is_not_trimmed_away_by_history_limits():
     """Prepending it to the (already trimmed) history keeps it present on long chats."""
-    source = strip_js_comments(read("static", "pages", "onetail.js"))
-    assert re.search(r"\[\{ role: 'system'.*\}\]\s*\n?\s*\.concat\(history\)",
+    source = strip_js_comments(read("static", "pages", "orochimaru.js"))
+    assert re.search(r"\[\{ role: 'system', content: system \}\]\s*\n?\s*\.concat\(history,",
                      source, re.S)
 
 
 def test_chat_history_sent_to_the_model_opens_on_a_user_turn():
     """Re-slicing the odd-length history to MAX_TURNS dropped the opening user
     turn, and Anthropic rejects a conversation that starts with the assistant."""
-    source = strip_js_comments(read("static", "pages", "onetail.js"))
+    source = strip_js_comments(read("static", "pages", "orochimaru.js"))
     assert ".concat(history.slice(" not in source
     assert "history = history.slice(-MAX_TURNS)" in source
     assert re.search(r"MAX_TURNS = (\d+)", source) and \
@@ -201,7 +202,7 @@ def test_fallback_reports_which_model_answered(providers_code):
     assert "attempts" in body
 
 
-@pytest.mark.parametrize("page", ["kakashi.js", "onetail.js", "orochimaru.js"])
+@pytest.mark.parametrize("page", ["kakashi.js", "orochimaru.js"])
 def test_answer_paths_use_the_fallback_chain(page):
     source = strip_js_comments(read("static", "pages", page))
     assert "K.callWithFallback(" in source, "%s does not use the fallback" % page
@@ -209,7 +210,7 @@ def test_answer_paths_use_the_fallback_chain(page):
         "%s ignores the user's fallback preference" % page
 
 
-@pytest.mark.parametrize("page", ["kakashi.js", "onetail.js", "orochimaru.js"])
+@pytest.mark.parametrize("page", ["kakashi.js", "orochimaru.js"])
 def test_pages_tell_the_user_when_a_different_model_answered(page):
     source = strip_js_comments(read("static", "pages", page))
     assert "res.model !== ui.model.value" in source, \

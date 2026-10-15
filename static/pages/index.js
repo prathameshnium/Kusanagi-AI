@@ -26,14 +26,12 @@
     var CLOUD = ['gemini', 'anthropic', 'hf', 'openrouter'];
     var TOOLS = [
         { name: 'Kakashi Search', href: 'web_apps/Kakashi_Search.html', providers: CLOUD,
-          blurb: 'Agentic web search across Wikipedia, OpenAlex, Crossref, HN and DuckDuckGo, with a synthesised answer.' },
-        { name: 'Orochimaru RAG', href: 'web_apps/Orochimaru_Web_Research_Assistent.html',
+          blurb: 'Agentic search with a cited answer. Normal mode searches the open web; '
+              + 'Academic mode searches papers. "No AI" searches without any model or key.' },
+        { name: 'Orochimaru Chat', href: 'web_apps/Orochimaru_Web_Research_Assistent.html',
           providers: CLOUD.concat('ollama'),
-          blurb: 'Load PDFs into memory and chat with them. Parsing happens in the browser.' },
-        { name: 'Neji Scholar', href: 'web_apps/Neji_Search.html', providers: CLOUD,
-          blurb: 'Academic paper discovery over OpenAlex, with an incognito mode that skips the model entirely.' },
-        { name: 'OneTail Chat', href: 'web_apps/OneTail_Web_Chatapp.html', providers: CLOUD,
-          blurb: 'Straightforward multi-provider chat. Nothing is written to disk.' },
+          blurb: 'Research chat with LaTeX answers and linked references. Load PDFs to answer '
+              + 'from them, strictly or with labelled background. Parsed in your browser.' },
         { name: 'AI Visualizer', href: 'web_apps/Visualize_AI_Web.html', providers: CLOUD,
           blurb: 'Inspect next-token probabilities as you type.' },
     ];
@@ -74,7 +72,10 @@
         function refresh() {
             var has = !!K.keys.get(spec.id);
             var kept = K.keys.isPersisted(spec.id);
-            status.textContent = has ? (kept ? 'saved on device' : 'this tab only') : 'not set';
+            var plain = K.keys.plaintextProviders().indexOf(spec.id) !== -1;
+            status.textContent = has
+                ? (kept ? 'saved, encrypted' : plain ? 'saved UNENCRYPTED' : 'this tab only')
+                : (vault.exists() && !vault.isOpen() ? 'locked' : 'not set');
             status.className = 'text-[10px] font-bold px-2 py-0.5 rounded shrink-0 '
                 + (has ? 'bg-success/15 text-success' : 'bg-tertiary text-fg-secondary');
             persist.checked = kept;
@@ -98,18 +99,37 @@
                 input.focus();
                 return;
             }
-            K.keys.set(spec.id, value, persist.checked);
-            refresh();
-            renderTools();
-            K.ui.toast(K.providerLabel(spec.id) + ' saved'
-                + (persist.checked ? ' on this device.' : ' for this tab.'), 'success');
+            if (refuseWhileLocked()) return;
+            var remember = persist.checked;
+            var wasRemembered = K.keys.isPersisted(spec.id);
+            var entry = {};
+            entry[spec.id] = value;
+            var stored = remember
+                ? vaultPassword(true).then(function (pw) { return vault.store(entry, pw); })
+                : wasRemembered
+                    ? vaultPassword(false).then(function (pw) { return vault.discard(spec.id, pw); })
+                    : Promise.resolve();
+
+            stored.then(function () {
+                K.keys.set(spec.id, value);
+                clearVaultInputs();
+                refreshAll();
+                K.ui.toast(K.providerLabel(spec.id) + ' saved'
+                    + (remember ? ', encrypted on this device.' : ' for this tab.'), 'success');
+            }, vaultError);
         });
 
         clearBtn.addEventListener('click', function () {
-            K.keys.remove(spec.id);
-            refresh();
-            renderTools();
-            K.ui.toast(K.providerLabel(spec.id) + ' cleared.');
+            if (refuseWhileLocked()) return;
+            var done = K.keys.isPersisted(spec.id)
+                ? vaultPassword(false).then(function (pw) { return vault.discard(spec.id, pw); })
+                : Promise.resolve();
+            done.then(function () {
+                K.keys.remove(spec.id);
+                clearVaultInputs();
+                refreshAll();
+                K.ui.toast(K.providerLabel(spec.id) + ' cleared.');
+            }, vaultError);
         });
 
         input.addEventListener('keydown', function (e) {
@@ -136,17 +156,178 @@
             el('label', {
                 class: 'flex items-center gap-2 text-xs text-fg-secondary mt-2 cursor-pointer w-fit',
                 for: persistId,
-            }, [persist, el('span', { text: 'Remember on this device (writes to disk)' })]),
+            }, [persist, el('span', {
+                text: 'Remember on this device (encrypted with your vault password)',
+            })]),
         ]);
     }
 
     function renderProviders() {
         var host = document.getElementById('provider-rows');
+        host.parentNode.insertBefore(buildVaultPanel(), host);
         dom.replace(host, PROVIDERS.map(providerRow));
+        renderVault();
     }
 
     function refreshAllRows() {
         rowRefs.forEach(function (fn) { fn(); });
+    }
+
+    function refreshAll() {
+        refreshAllRows();
+        renderVault();
+        renderTools();
+    }
+
+    /* ------------------------------------------------------------------- vault */
+
+    var vault = K.keys.vault;
+    var vaultUi = {};
+
+    /**
+     * The password typed in the vault panel. Rejects with a prompt to type it
+     * when empty, and checks the confirmation when this creates the vault.
+     */
+    function vaultPassword(creatingAllowed) {
+        var pw = vaultUi.password.value;
+        if (!pw) {
+            vaultUi.password.focus();
+            return Promise.reject(new Error('Type your vault password in the '
+                + '"Saved keys" box above first.'));
+        }
+        if (!vault.exists()) {
+            if (!creatingAllowed) return Promise.reject(new Error('No vault exists yet.'));
+            if (pw !== vaultUi.confirm.value) {
+                vaultUi.confirm.focus();
+                return Promise.reject(new Error('The two passwords do not match.'));
+            }
+        }
+        return Promise.resolve(pw);
+    }
+
+    /* Changing a key while the vault is locked would be undone by the saved
+       copy on the next unlock, so ask for the unlock first. */
+    function refuseWhileLocked() {
+        if (!vault.isLocked()) return false;
+        K.ui.toast('Unlock your saved keys first (box above), so this change is not '
+            + 'undone by the saved copy.', 'error');
+        vaultUi.password.focus();
+        return true;
+    }
+
+    function vaultError(err) {
+        K.ui.toast(err.message, 'error');
+    }
+
+    function clearVaultInputs() {
+        vaultUi.password.value = '';
+        vaultUi.confirm.value = '';
+    }
+
+    function renderVault() {
+        var exists = vault.exists();
+        var open = vault.isOpen();
+        var plain = K.keys.plaintextProviders();
+        var one = plain.length === 1;
+
+        vaultUi.status.textContent = !exists
+            ? 'No saved keys yet. Set a password the first time you tick "Remember".'
+            : open
+                ? 'Unlocked in this tab. Closing the tab locks it again.'
+                : 'Locked. Enter your password to load your saved keys into this tab.';
+        vaultUi.confirm.classList.toggle('hidden', exists);
+        vaultUi.password.placeholder = exists
+            ? 'Vault password'
+            : 'New vault password (at least ' + vault.MIN_PASSWORD + ' characters)';
+        vaultUi.unlock.classList.toggle('hidden', !exists || open);
+        vaultUi.lock.classList.toggle('hidden', !exists || !open);
+
+        vaultUi.plain.classList.toggle('hidden', !plain.length);
+        vaultUi.plainText.textContent = plain.length
+            ? plain.map(K.providerLabel).join(', ') + (one ? ' is' : ' are')
+                + ' stored on this device UNENCRYPTED by an older version. Encrypt '
+                + (one ? 'it' : 'them') + ' with your vault password, or delete '
+                + (one ? 'it' : 'them') + '.'
+            : '';
+    }
+
+    function buildVaultPanel() {
+        function pwInput(id) {
+            return el('input', { type: 'password', id: id, autocomplete: 'off',
+                spellcheck: 'false' });
+        }
+        vaultUi.password = pwInput('vault-password');
+        vaultUi.confirm = pwInput('vault-confirm');
+        vaultUi.confirm.placeholder = 'Repeat the new password';
+        vaultUi.status = el('p', { class: 'text-xs text-fg-secondary mb-2' });
+        vaultUi.unlock = el('button', { type: 'button', class: 'btn btn-accent text-xs shrink-0',
+            text: 'Unlock' });
+        vaultUi.lock = el('button', { type: 'button', class: 'btn btn-secondary text-xs shrink-0',
+            text: 'Lock now' });
+        vaultUi.plainText = el('p', { class: 'text-xs mb-2' });
+        var encryptBtn = el('button', { type: 'button', class: 'btn btn-accent text-xs',
+            text: 'Encrypt them' });
+        var deleteBtn = el('button', { type: 'button', class: 'btn btn-danger text-xs',
+            text: 'Delete them' });
+        vaultUi.plain = el('div', {
+            class: 'hidden mt-3 p-3 rounded border border-danger/40 bg-danger/10 text-danger',
+        }, [vaultUi.plainText, el('div', { class: 'flex gap-2' }, [encryptBtn, deleteBtn])]);
+
+        vaultUi.unlock.addEventListener('click', function () {
+            vaultPassword(false).then(vault.unlock).then(function (names) {
+                clearVaultInputs();
+                refreshAll();
+                K.ui.toast('Unlocked ' + names.length + ' saved key'
+                    + (names.length === 1 ? '' : 's') + '.', 'success');
+            }, vaultError);
+        });
+        vaultUi.lock.addEventListener('click', function () {
+            vault.lock();
+            refreshAll();
+            K.ui.toast('Locked. Saved keys were removed from this tab.');
+        });
+        vaultUi.password.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' && vault.exists() && !vault.isOpen()) {
+                e.preventDefault();
+                vaultUi.unlock.click();
+            }
+        });
+        encryptBtn.addEventListener('click', function () {
+            var entries = {};
+            K.keys.plaintextProviders().forEach(function (p) { entries[p] = K.keys.get(p); });
+            vaultPassword(true).then(function (pw) { return vault.store(entries, pw); })
+                .then(function () {
+                    clearVaultInputs();
+                    refreshAll();
+                    K.ui.toast('Encrypted. No key is stored in plain text any more.', 'success');
+                }, vaultError);
+        });
+        deleteBtn.addEventListener('click', function () {
+            K.keys.plaintextProviders().forEach(K.keys.remove);
+            refreshAll();
+            K.ui.toast('Unencrypted keys deleted.', 'success');
+        });
+
+        return el('div', { class: 'mb-6 pb-5 border-b border-tertiary' }, [
+            el('label', { class: 'block font-bold text-fg-primary mb-1', for: 'vault-password',
+                text: 'Saved keys (encrypted)' }),
+            vaultUi.status,
+            el('div', { class: 'flex flex-wrap gap-2 items-center' }, [
+                el('div', { class: 'flex-1 min-w-[200px]' }, [vaultUi.password]),
+                el('div', { class: 'flex-1 min-w-[200px]' }, [vaultUi.confirm]),
+                vaultUi.unlock,
+                vaultUi.lock,
+            ]),
+            el('p', {
+                class: 'text-[11px] text-fg-secondary mt-2',
+                text: 'Keys you choose to remember are encrypted here with AES-256-GCM, '
+                    + 'using a key derived from this password (PBKDF2, 600,000 rounds). '
+                    + 'Only the encrypted copy is saved. The password is never stored and '
+                    + 'never leaves this browser, and it cannot be recovered: if you '
+                    + 'forget it, purge and re-enter your keys.',
+            }),
+            vaultUi.plain,
+        ]);
     }
 
     /* -------------------------------------------------------------- tool cards */
@@ -243,9 +424,8 @@
             if (!window.confirm('Wipe every saved API key from this browser? This cannot be undone.')) {
                 return;
             }
-            K.keys.purge();
-            refreshAllRows();
-            renderTools();
+            K.keys.purge();   // includes the encrypted vault
+            refreshAll();
             document.getElementById('default-provider').value = K.keys.provider();
             K.ui.toast('All keys purged.', 'success');
         });
