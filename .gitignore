@@ -30,3 +30,5 @@ vector_cache/
 # This one line ignores everything inside this folder,
 # including AI-models, text_embedding_model, and ollama_main
 Portable_AI_Assets/
+# Local Claude Code settings (preview server config); machine-specific.
+.claude/
