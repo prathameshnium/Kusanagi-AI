@@ -31,6 +31,12 @@
 }
 
 @layer base {
+    /* Selected text: the accent orange, with dark text so it stays readable. */
+    ::selection {
+        background-color: var(--accent);
+        color: var(--secondary);
+    }
+
     body {
         font-family: 'Inter', sans-serif;
         background-color: var(--secondary);
@@ -259,75 +265,6 @@
     .settings-modal-content {
         background-color: var(--secondary);
         border: 1px solid var(--border);
-    }
-
-    /* ------------------------------------------------- Landing page (index) */
-    .glass {
-        background: rgba(30, 41, 59, 0.7);
-        backdrop-filter: blur(12px);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-    }
-
-    .glass-card {
-        background: linear-gradient(145deg, #1e293b, #172033);
-        border: 1px solid var(--border);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    .glass-card:hover,
-    .glass-card:focus-within {
-        border-color: var(--accent);
-        transform: translateY(-5px);
-        box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.5);
-    }
-
-    .path-card.selected {
-        border-color: var(--accent);
-        background: linear-gradient(145deg, #1e293b, #2a3649);
-        box-shadow: 0 0 20px rgba(255, 171, 64, 0.2);
-    }
-
-    .step-line {
-        position: absolute;
-        left: 50%;
-        top: 0;
-        bottom: 0;
-        width: 2px;
-        background: var(--border);
-        transform: translateX(-50%);
-        z-index: -1;
-    }
-
-    .step-number {
-        background: #1e293b;
-        border: 2px solid var(--border);
-        color: #94a3b8;
-        width: 40px;
-        height: 40px;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: bold;
-        position: relative;
-        z-index: 1;
-        transition: all 0.3s ease;
-    }
-
-    .active-step .step-number {
-        border-color: var(--accent);
-        color: var(--accent);
-        box-shadow: 0 0 15px rgba(255, 171, 64, 0.3);
-    }
-
-    .typewriter-cursor {
-        display: inline-block;
-        width: 4px;
-        height: 1em;
-        background-color: var(--accent);
-        margin-left: 5px;
-        vertical-align: bottom;
-        animation: blink 1s infinite;
     }
 
     /* --------------------------------------------------- Visualizer bar chart */

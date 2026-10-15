@@ -31,10 +31,10 @@
 <body class="min-h-screen flex flex-col">
 
     <!-- ===================== Hero ===================== -->
-    <header class="text-center pt-20 pb-12 px-6">
+    <header class="text-center pt-16 pb-10 px-6">
         <!-- The sword, drawn in SVG rather than shipped as an image. Colours are
              SVG presentation attributes, not inline styles, so the strict CSP allows them. -->
-        <svg class="mx-auto mb-6 animate-float" width="160" height="160" viewBox="0 0 200 200"
+        <svg class="mx-auto mb-4 animate-float" width="112" height="112" viewBox="0 0 200 200"
              aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
             <defs>
                 <linearGradient id="sword-blade" x1="0" y1="0" x2="1" y2="0">
@@ -86,120 +86,69 @@
                 </g>
             </g>
         </svg>
-        <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-4">Kusanagi AI</h1>
-        <p class="text-xl md:text-2xl font-bold text-accent tracking-wide mb-6 min-h-[2rem]">
-            <span id="tagline">For researchers in physics &amp; material science</span><span id="tagline-cursor" class="typewriter-cursor" aria-hidden="true"></span>
+        <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight">Kusanagi AI</h1>
+        <p class="mt-3 text-fg-secondary max-w-md mx-auto">
+            Research tools for physics and materials science. Bring your own AI key;
+            there is no server in between.
         </p>
-        <p class="text-base md:text-lg text-fg-secondary max-w-2xl mx-auto leading-relaxed">
-            Agentic search, RAG over your own PDFs, and model inspection tools.
-            Run them in this browser with your own API key, or install the desktop
-            suite and run everything offline.
-        </p>
-        <div class="flex flex-wrap justify-center gap-3 mt-8">
-            <a href="#providers" class="btn btn-accent px-6 py-3">Connect a provider</a>
-            <a href="#offline" class="btn btn-secondary px-6 py-3">Run it offline instead</a>
-        </div>
     </header>
 
-    <main class="flex-1 px-6 pb-20 max-w-6xl mx-auto w-full">
+    <main class="flex-1 px-6 pb-16 max-w-2xl mx-auto w-full space-y-14">
 
-        <!-- ===================== 1. Providers ===================== -->
-        <section id="providers" class="mb-20 scroll-mt-8">
-            <div class="flex items-center gap-3 mb-2">
-                <span class="step-number shrink-0" aria-hidden="true">1</span>
-                <h2 class="text-2xl font-bold">Connect a provider</h2>
-            </div>
-            <p class="text-sm text-fg-secondary mb-6 max-w-3xl">
-                Keys are held in this tab only and sent straight to the provider you
-                pick &mdash; there is no Kusanagi server in the path. Tick
-                <em>Remember</em> only on a machine you control; it writes the key to
-                disk, where anything that can read this browser profile can read it.
+        <!-- 01: a key. One provider form at a time. -->
+        <section id="start" class="scroll-mt-8" aria-labelledby="start-title">
+            <h2 id="start-title" class="flex items-baseline gap-3 text-lg font-bold">
+                <span class="text-accent font-mono text-sm">01</span> Add an AI key
+            </h2>
+            <p class="text-sm text-fg-secondary mt-1 mb-5">
+                Pick a provider and paste its key. It stays in this tab unless you
+                choose to remember it.
             </p>
-
-            <div class="glass-card rounded-xl p-5 md:p-6">
-                <ul id="provider-rows" class="space-y-5"></ul>
-
-                <div class="flex flex-wrap justify-between items-center gap-3 mt-6 pt-5 border-t border-tertiary">
-                    <button id="purge-keys" type="button" class="btn btn-danger text-xs">
-                        Purge all keys
-                    </button>
-                    <p class="text-xs text-fg-secondary">
-                        Default provider for the tools:
-                        <select id="default-provider" class="!w-auto !inline-block !py-1 !px-2 ml-1 text-xs" aria-label="Default provider"></select>
-                    </p>
-                </div>
-            </div>
+            <div id="vault-bar"></div>
+            <div id="provider-tabs" class="flex flex-wrap gap-2 mb-4" role="tablist" aria-label="AI provider"></div>
+            <div id="provider-form"></div>
         </section>
 
-        <!-- ===================== 2. Tools ===================== -->
-        <section id="tools" class="mb-20 scroll-mt-8">
-            <div class="flex items-center gap-3 mb-2">
-                <span class="step-number shrink-0" aria-hidden="true">2</span>
-                <h2 class="text-2xl font-bold">Launch a tool</h2>
-            </div>
-            <p class="text-sm text-fg-secondary mb-6">
-                Each card shows whether the provider it needs is configured.
-            </p>
-            <div id="tool-grid" class="grid md:grid-cols-2 lg:grid-cols-3 gap-5"></div>
+        <!-- 02: the tools, with whether each is ready. -->
+        <section id="tools" class="scroll-mt-8" aria-labelledby="tools-title">
+            <h2 id="tools-title" class="flex items-baseline gap-3 text-lg font-bold mb-3">
+                <span class="text-accent font-mono text-sm">02</span> Open a tool
+            </h2>
+            <div id="tool-list" class="divide-y divide-tertiary border-y border-tertiary"></div>
         </section>
 
-        <!-- ===================== 3. Offline ===================== -->
+        <!-- Offline: tucked away until wanted. -->
         <section id="offline" class="scroll-mt-8">
-            <div class="flex items-center gap-3 mb-2">
-                <span class="step-number shrink-0" aria-hidden="true">3</span>
-                <h2 class="text-2xl font-bold">Or run the whole suite offline</h2>
-            </div>
-            <p class="text-sm text-fg-secondary mb-6 max-w-3xl">
-                The desktop apps run against a local <a class="text-accent hover:underline" href="https://ollama.com/" target="_blank" rel="noopener noreferrer">Ollama</a>
-                model. No API key, no network, nothing leaves the machine &mdash; which
-                is the configuration to use for unpublished data.
-            </p>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div class="glass-card rounded-xl p-5">
-                    <h3 class="font-bold text-lg mb-3">Install</h3>
-                    <pre id="install-cmd" class="bg-secondary border border-tertiary rounded-lg p-3 text-xs font-mono overflow-x-auto text-fg-secondary whitespace-pre">git clone https://github.com/prathameshnium/Kusanagi-AI.git
+            <details>
+                <summary class="cursor-pointer text-sm text-fg-secondary hover:text-fg-primary">
+                    Run everything offline instead
+                </summary>
+                <div class="mt-4 space-y-3 text-sm text-fg-secondary">
+                    <p>
+                        The desktop apps use a local
+                        <a class="text-accent hover:underline" href="https://ollama.com/" target="_blank" rel="noopener noreferrer">Ollama</a>
+                        model: no key, no network, nothing leaves your machine.
+                    </p>
+                    <pre id="install-cmd" class="bg-secondary border border-tertiary rounded-lg p-3 text-xs font-mono overflow-x-auto whitespace-pre">git clone https://github.com/prathameshnium/Kusanagi-AI.git
 cd Kusanagi-AI
 pip install -r requirements.txt
 python local_apps/launcher.py</pre>
-                    <button id="copy-install" type="button" class="btn btn-secondary text-xs mt-3">
-                        Copy commands
-                    </button>
+                    <button id="copy-install" type="button" class="btn btn-secondary text-xs">Copy commands</button>
+                    <p class="text-xs">
+                        To use these web pages offline, run
+                        <code class="text-accent font-mono">python scripts/serve.py</code>
+                        and open <code class="text-accent font-mono">http://localhost:8000</code>.
+                    </p>
                 </div>
-
-                <div class="glass-card rounded-xl p-5">
-                    <h3 class="font-bold text-lg mb-3">What you get</h3>
-                    <ul class="text-sm text-fg-secondary space-y-2">
-                        <li><strong class="text-fg-primary">Orochimaru Local</strong> &mdash; RAG over your PDFs with local embeddings.</li>
-                        <li><strong class="text-fg-primary">OneTail Desktop</strong> &mdash; multi-model chat against Ollama.</li>
-                        <li><strong class="text-fg-primary">Visualize AI</strong> &mdash; token probability inspector.</li>
-                        <li><strong class="text-fg-primary">Hopfield demo</strong> &mdash; associative memory playground.</li>
-                    </ul>
-                </div>
-            </div>
-
-            <div class="glass-card rounded-xl p-5 mt-5">
-                <h3 class="font-bold text-lg mb-2">Running the web apps offline</h3>
-                <p class="text-sm text-fg-secondary">
-                    Serve them rather than opening the files directly &mdash; the
-                    pages carry a strict Content-Security-Policy, and
-                    <code class="text-accent font-mono text-xs">file://</code> is not an
-                    origin it can grant anything to. Run
-                    <code class="text-accent font-mono text-xs">python scripts/serve.py</code>
-                    from the repo root and the whole suite works with no network at
-                    <code class="text-accent font-mono text-xs">http://localhost:8000</code>.
-                </p>
-            </div>
+            </details>
         </section>
     </main>
 
-    <footer class="border-t border-tertiary py-8 px-6 text-center text-xs text-fg-secondary">
-        <p class="mb-2">
-            Kusanagi AI &mdash; MIT licensed.
-            <a class="text-accent hover:underline" href="https://github.com/prathameshnium/Kusanagi-AI" target="_blank" rel="noopener noreferrer">Source</a> &middot;
-            <a class="text-accent hover:underline" href="https://github.com/prathameshnium/Kusanagi-AI/issues" target="_blank" rel="noopener noreferrer">Report an issue</a>
-        </p>
-        <p>Your keys and documents stay in your browser. Nothing is sent to this site.</p>
+    <footer class="py-8 px-6 text-center text-xs text-fg-secondary space-x-3">
+        <span>MIT licensed</span>
+        <a class="hover:text-accent" href="https://github.com/prathameshnium/Kusanagi-AI" target="_blank" rel="noopener noreferrer">Source</a>
+        <a class="hover:text-accent" href="https://github.com/prathameshnium/Kusanagi-AI/issues" target="_blank" rel="noopener noreferrer">Report an issue</a>
+        <button id="purge-keys" type="button" class="hover:text-danger">Forget all keys</button>
     </footer>
 
 </body>

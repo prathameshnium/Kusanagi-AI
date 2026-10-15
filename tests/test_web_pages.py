@@ -441,7 +441,7 @@ def test_compiled_css_carries_the_self_hosted_fonts(repo_root):
 
 @pytest.mark.parametrize("cls", ["btn", "btn-accent", "btn-secondary", "btn-danger",
                                  "home-button", "settings-modal", "prob-bar-fill",
-                                 "glass-card", "step-number", "is-dimmed", "is-invisible"])
+                                 "is-dimmed", "is-invisible"])
 def test_component_classes_survived_compilation(repo_root, cls):
     css = io.open(os.path.join(repo_root, "static", "kusanagi.css"),
                   encoding="utf-8").read()
