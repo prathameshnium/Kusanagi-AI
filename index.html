@@ -32,7 +32,60 @@
 
     <!-- ===================== Hero ===================== -->
     <header class="text-center pt-20 pb-12 px-6">
-        <img src="static/logo-180.png" alt="" width="72" height="64" class="mx-auto mb-6 animate-float">
+        <!-- The sword, drawn in SVG rather than shipped as an image. Colours are
+             SVG presentation attributes, not inline styles, so the strict CSP allows them. -->
+        <svg class="mx-auto mb-6 animate-float" width="160" height="160" viewBox="0 0 200 200"
+             aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <linearGradient id="sword-blade" x1="0" y1="0" x2="1" y2="0">
+                    <stop offset="0" stop-color="#e6f8ff"/>
+                    <stop offset="0.45" stop-color="#7fd4ff"/>
+                    <stop offset="1" stop-color="#1f6fd6"/>
+                </linearGradient>
+                <linearGradient id="sword-gold" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#f7dc8a"/>
+                    <stop offset="1" stop-color="#a8761f"/>
+                </linearGradient>
+                <radialGradient id="sword-gem" cx="0.35" cy="0.35" r="0.7">
+                    <stop offset="0" stop-color="#b9ffd6"/>
+                    <stop offset="1" stop-color="#16a35a"/>
+                </radialGradient>
+                <filter id="sword-glow" x="-60%" y="-60%" width="220%" height="220%">
+                    <feGaussianBlur stdDeviation="4" result="blur"/>
+                    <feMerge>
+                        <feMergeNode in="blur"/>
+                        <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                </filter>
+            </defs>
+
+            <!-- Drawn upright, point down, then turned so the point sits lower-left. -->
+            <g transform="rotate(45 100 100)">
+                <!-- Blade -->
+                <g filter="url(#sword-glow)">
+                    <polygon points="93,60 107,60 106,164 100,188 94,164" fill="url(#sword-blade)"/>
+                    <line x1="100" y1="62" x2="100" y2="184" stroke="#ffffff" stroke-opacity="0.7" stroke-width="1"/>
+                    <circle cx="100" cy="188" r="2.5" fill="#ffffff"/>
+                </g>
+                <!-- Code etched along the fuller -->
+                <text transform="translate(103.5 68) rotate(90)" font-family="JetBrains Mono, monospace"
+                      font-size="5.6" fill="#0b3a75" fill-opacity="0.75" letter-spacing="0.4">01001011 &lt;/&gt; {AI}</text>
+
+                <!-- Guard and gem -->
+                <path d="M78 55 Q100 47 122 55 L120 61 Q100 56 80 61 Z" fill="url(#sword-gold)"/>
+                <circle cx="100" cy="57" r="4.5" fill="url(#sword-gem)" stroke="#0d5c33" stroke-width="0.8"/>
+
+                <!-- Grip, wrapped -->
+                <rect x="96" y="25" width="8" height="28" rx="2" fill="#1b2533"/>
+                <path d="M96 30 L104 34 M96 36 L104 40 M96 42 L104 46" stroke="#5a6b80" stroke-width="1.2"/>
+
+                <!-- Pommel and its spark -->
+                <circle cx="100" cy="22" r="4" fill="url(#sword-gold)"/>
+                <g filter="url(#sword-glow)">
+                    <circle cx="100" cy="12" r="3" fill="#bff0ff"/>
+                </g>
+            </g>
+        </svg>
         <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-4">Kusanagi AI</h1>
         <p class="text-xl md:text-2xl font-bold text-accent tracking-wide mb-6 min-h-[2rem]">
             <span id="tagline">For researchers in physics &amp; material science</span><span id="tagline-cursor" class="typewriter-cursor" aria-hidden="true"></span>
