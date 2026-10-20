@@ -121,7 +121,7 @@ def test_csp_allows_no_third_party_fonts_or_images(page_sources):
 def test_no_inline_script_blocks(page_sources):
     """An inline <script> would be dead under script-src 'self' anyway."""
     for name, html in page_sources.items():
-        assert not re.search(r"<script(?![^>]*\bsrc=)[^>]*>", html), name
+        assert not re.search(r"<script\b(?![^>]*\bsrc\s*=)[^>]*>", html, re.I), name
 
 
 def test_no_inline_event_handlers(page_sources):
@@ -133,7 +133,7 @@ def test_no_inline_event_handlers(page_sources):
 
 def test_no_inline_style_attributes(page_sources):
     for name, html in page_sources.items():
-        assert not re.search(r'\sstyle\s*=\s*"', html), name
+        assert not re.search(r'\sstyle\s*=\s*"', html, re.I), name
 
 
 def test_no_inline_style_blocks(page_sources):

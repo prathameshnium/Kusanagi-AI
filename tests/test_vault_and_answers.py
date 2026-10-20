@@ -136,8 +136,11 @@ def test_json_prompts_do_not_carry_the_prose_format():
 
 def test_chat_references_are_linked_without_invented_dois():
     block = PROMPTS.split("var REFERENCES_FROM_MEMORY")[1].split("].join")[0]
-    assert "https://doi.org/" in block and "only if you are certain" in block
-    assert "scholar.google.com/scholar?q=" in block
+    # Match the whole instruction, not a bare URL substring: this checks prompt
+    # wording, it does not sanitise a URL.
+    assert re.search(r"then a link: https://doi\.org/<DOI>", block)
+    assert "only if you are certain" in block
+    assert re.search(r"\]\(https://scholar\.google\.com/scholar\?q=", block)
     assert "REFERENCES_FROM_MEMORY" in PROMPTS.split("function chatSystemPrompt")[1]
 
 
