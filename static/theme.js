@@ -53,16 +53,26 @@ window.Kusanagi = window.Kusanagi || {};
         var button = document.createElement('button');
         button.type = 'button';
         button.className = 'theme-toggle' + (document.querySelector('.home-button') ? '' : ' is-first');
+        var label = document.createElement('span');
         button.appendChild(moon());
+        button.appendChild(label);
         function sync() {
             var on = isBlack();
             button.setAttribute('aria-pressed', String(on));
-            button.setAttribute('aria-label', on ? 'Black mode on. Switch to blue' : 'Switch to black mode');
-            button.title = on ? 'Black mode: on' : 'Black mode: off';
+            label.textContent = on ? 'Black mode: on' : 'Black mode: off';
+            button.title = on ? 'Switch back to the blue theme' : 'Switch to a true-black background';
         }
         button.addEventListener('click', function () { set(!isBlack()); sync(); });
         sync();
-        document.body.appendChild(button);
+        // A page with a crowded top-left gives the toggle a place in its own
+        // header; everywhere else it floats beside the home button.
+        var slot = document.getElementById('theme-slot');
+        if (slot) {
+            button.classList.add('is-inline');
+            slot.appendChild(button);
+        } else {
+            document.body.appendChild(button);
+        }
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);

@@ -346,6 +346,7 @@ window.Kusanagi = window.Kusanagi || {};
                         class: 'cite', href: '#' + citeId(answerNo, n),
                         text: '[' + answerNo + ':' + n + ']',
                         'aria-label': 'Source ' + n + ' of answer ' + answerNo,
+                        dataset: { target: citeId(answerNo, n) },
                     });
                     anchor.addEventListener('click', function (e) {
                         var target = document.getElementById(citeId(answerNo, n));
@@ -390,10 +391,14 @@ window.Kusanagi = window.Kusanagi || {};
         return unlinkDangling(root);
     }
 
-    /** A marker with nothing to point at stays a label, not a dead link. */
+    /** A marker with nothing to point at stays a label, not a dead link.
+     *  The target comes from a data attribute, not a.hash: on a page opened
+     *  from file:// the hash can come back empty, and '#' alone is not a
+     *  valid selector, which used to throw and lose the whole answer. */
     function unlinkDangling(root) {
         Array.prototype.forEach.call(root.querySelectorAll('a.cite'), function (a) {
-            if (root.querySelector('#' + a.hash.slice(1))) return;
+            var id = a.getAttribute('data-target');
+            if (id && root.querySelector('[id="' + id + '"]')) return;
             a.parentNode.replaceChild(el('span', { class: 'cite', text: a.textContent }), a);
         });
         return root;

@@ -253,3 +253,12 @@ def test_settings_dialog_exposes_the_toggle():
     assert "settings-fallback" in ui
     assert "prefs.setModelFallback(fallbackBox.checked)" in ui
     assert "prefs.modelFallback()" in ui
+
+
+def test_citation_targets_do_not_depend_on_location_hash():
+    """On a page opened from file:// a.hash can be empty; '#' alone is an
+    invalid selector, which threw and replaced the whole answer with an error."""
+    dom = strip_js_comments(read("static", "dom.js"))
+    body = dom.split("function unlinkDangling")[1]
+    assert "a.hash" not in body
+    assert "data-target" in body
