@@ -42,6 +42,9 @@
     --danger-border: #800000;
     --danger-fg-hover: #ffabab;
     --danger-bg-hover: rgba(255, 100, 100, 0.2);
+    /* Both themes are dark, so native pop-ups (dropdown lists, scrollbars)
+       should be too, not the browser's default white. */
+    color-scheme: dark;
 }
 
 /* Black mode: true black behind everything, softer white text, same accent.
@@ -123,6 +126,17 @@
         padding: 0.75rem;
         width: 100%;
         transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    /* The open dropdown list. A select with a transparent background (the
+       effort picker in the chat box) would otherwise list on white. */
+    select option {
+        background-color: var(--secondary);
+        color: var(--fg-primary);
+    }
+    select option:checked {
+        background-color: var(--tertiary);
+        color: var(--accent);
     }
 
     input[type="text"]:focus,

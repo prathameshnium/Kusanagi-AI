@@ -73,7 +73,9 @@ window.Kusanagi = window.Kusanagi || {};
         var keyInput = el('input', {
             type: 'password',
             id: 'settings-key-input',
-            autocomplete: 'off',
+            // 'new-password' is the value browsers honour: they neither fill a
+            // saved login into the field nor take it for a site password.
+            autocomplete: 'new-password',
             spellcheck: 'false',
             placeholder: 'Enter secret key...',
             'aria-describedby': 'settings-persist-note',
@@ -92,7 +94,7 @@ window.Kusanagi = window.Kusanagi || {};
         function passwordInput(id, placeholder) {
             return el('input', {
                 type: 'password', id: id, placeholder: placeholder,
-                autocomplete: 'off', spellcheck: 'false', class: 'mt-2',
+                autocomplete: 'new-password', spellcheck: 'false', class: 'mt-2',
             });
         }
 
@@ -214,11 +216,17 @@ window.Kusanagi = window.Kusanagi || {};
             class: 'mt-2' });
         var voiceNote = el('p', { class: 'text-[11px] text-fg-secondary mt-1' });
 
-        var dialog = el('div', {
+        // A form of its own, so the browser's password manager groups these
+        // password fields together instead of taking the page's chat or
+        // search box for a username. It never submits anywhere.
+        var dialog = el('form', {
             class: 'settings-modal-content p-6 rounded-lg shadow-2xl max-w-md w-full border',
             role: 'dialog',
             'aria-modal': 'true',
             'aria-label': title,
+            autocomplete: 'off',
+            novalidate: 'novalidate',
+            on: { submit: function (e) { e.preventDefault(); } },
         }, [
             el('div', { class: 'flex justify-between items-start mb-4' }, [
                 el('h2', { class: 'text-xl font-bold text-accent', text: title }),
