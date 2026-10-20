@@ -57,31 +57,44 @@
     color-scheme: dark;
 }
 
-/* The theme toggle: a labelled pill beside the home button, always visible. */
+/* The theme toggle: a small sun/moon flip switch beside the home button. */
 .theme-toggle {
     position: fixed;
-    top: 1rem;
+    top: 1.5rem;
     left: 4rem;
-    height: 40px;
-    padding: 0 0.9rem 0 0.7rem;
+    width: 52px;
+    height: 26px;
+    padding: 0 5px;
     border-radius: 9999px;
     display: flex;
     align-items: center;
-    gap: 0.45rem;
+    justify-content: space-between;
     background-color: var(--secondary);
     color: var(--accent);
     border: 1px solid var(--accent);
-    font-size: 0.8rem;
-    font-weight: 600;
     z-index: 1001;
     box-shadow: 0 2px 8px rgb(0 0 0 / 0.35);
-    transition: background-color 0.2s ease, transform 0.2s ease;
+    transition: background-color 0.2s ease;
 }
+.theme-toggle-icon { width: 14px; height: 14px; position: relative; z-index: 1; }
+.theme-toggle-knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 9999px;
+    background-color: var(--accent);
+    transition: transform 0.2s ease;
+}
+.theme-toggle[aria-checked="true"] .theme-toggle-knob { transform: translateX(26px); }
+/* The icon under the knob takes the knob's contrast colour. */
+.theme-toggle[aria-checked="false"] .is-sun,
+.theme-toggle[aria-checked="true"] .is-moon { color: var(--accent-fg); }
 .theme-toggle:hover,
-.theme-toggle:focus-visible { background-color: var(--tertiary); transform: scale(1.05); }
-.theme-toggle[aria-pressed="true"] { background-color: var(--accent); color: var(--accent-fg); }
+.theme-toggle:focus-visible { background-color: var(--tertiary); }
 .theme-toggle.is-first { left: 1rem; }
-.theme-toggle.is-inline { position: static; height: 32px; box-shadow: none; }
+.theme-toggle.is-inline { position: relative; top: auto; left: auto; box-shadow: none; }
 
 @layer base {
     /* Selected text: the accent orange, with dark text so it stays readable. */
