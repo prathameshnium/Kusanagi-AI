@@ -340,17 +340,60 @@
         display: block;
         width: 100%;
         text-align: left;
-        padding: 0.45rem 0.75rem;
-        border-radius: 0.375rem;
+        padding: 0.2rem 0.6rem;
+        border-radius: 0.25rem;
         border: 1px solid transparent;
         color: var(--fg-primary);
-        font-size: 0.875rem;
-        transition: background-color 0.15s, border-color 0.15s;
+        font-size: 0.8rem;
     }
-    .skill:hover { background-color: var(--tertiary); border-color: var(--accent); }
-    .skill small { display: block; font-size: 10px; color: var(--fg-secondary); }
-    .skill[aria-pressed="true"] { border-color: var(--accent); background-color: var(--tertiary); }
-    .skill[aria-pressed="true"]::before { content: "\2713  "; color: var(--accent); }
+    .skill:hover { background-color: var(--tertiary); }
+    .skill[aria-pressed="true"] { color: var(--accent); background-color: var(--tertiary); }
+    .skill[aria-pressed="true"]::before { content: "\2713  "; }
+    .skill-picker > summary { list-style: none; }
+    .skill-picker > summary::-webkit-details-marker { display: none; }
+    .skill-picker > summary::after { content: "\25BE"; margin-left: 0.4rem; }
+    .skill-picker[open] > summary::after { content: "\25B4"; }
+    .skill-list { max-height: 16rem; overflow-y: auto; margin-top: 0.25rem; }
+    .skill-heading {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--fg-secondary);
+        padding: 0.4rem 0.6rem 0.1rem;
+    }
+    .slash-menu {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 100%;
+        margin-bottom: 0.4rem;
+        max-height: 18rem;
+        overflow-y: auto;
+        border: 1px solid var(--tertiary);
+        border-radius: 0.5rem;
+        background-color: var(--secondary);
+        box-shadow: 0 8px 24px rgb(0 0 0 / 0.35);
+        z-index: 20;
+        padding: 0.25rem;
+    }
+    .slash-item {
+        display: grid;
+        grid-template-columns: 14rem 10rem minmax(0, 1fr);
+        gap: 0.75rem;
+        align-items: baseline;
+        padding: 0.35rem 0.6rem;
+        border-radius: 0.35rem;
+        cursor: pointer;
+        font-size: 0.8rem;
+    }
+    .slash-item[aria-selected="true"], .slash-item:hover { background-color: var(--tertiary); }
+    .slash-cmd { font-family: ui-monospace, monospace; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .slash-label { color: var(--fg-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .slash-desc { color: var(--fg-secondary); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    @media (max-width: 640px) {
+        .slash-item { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+        .slash-desc { display: none; }
+    }
     .skill-chip {
         display: inline-flex;
         align-items: center;

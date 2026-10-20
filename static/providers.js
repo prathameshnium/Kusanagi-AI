@@ -345,15 +345,19 @@ window.Kusanagi = window.Kusanagi || {};
             // Haiku has only the basic tool versions; the rest get the newer
             // ones that filter results before they reach the context.
             var basic = /haiku/.test(modelId);
+            // No max_uses unless the user set a cap: Claude searches and
+            // fetches as often as the question needs.
+            var limit = parseInt(option('webLimit'), 10);
             var tools = [];
             if (option('webSearch')) {
                 tools.push({ type: basic ? 'web_search_20250305' : 'web_search_20260209',
-                    name: 'web_search', max_uses: 5 });
+                    name: 'web_search' });
             }
             if (option('webFetch')) {
                 tools.push({ type: basic ? 'web_fetch_20250910' : 'web_fetch_20260209',
-                    name: 'web_fetch', max_uses: 5 });
+                    name: 'web_fetch' });
             }
+            if (limit > 0) tools.forEach(function (t) { t.max_uses = limit; });
             if (tools.length) body.tools = tools;
         }
 
@@ -424,7 +428,9 @@ window.Kusanagi = window.Kusanagi || {};
         });
     }
 
-    var MAX_PAUSE_ROUNDS = 4;
+    // Each pause is one long stretch of searching, so a deep question can take
+    // many; this only stops a runaway loop.
+    var MAX_PAUSE_ROUNDS = 30;
 
     /** Pages Claude searched or fetched, deduplicated: [{title, url}]. Results
         are untrusted; the caller renders them as text and checked links. */

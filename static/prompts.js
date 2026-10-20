@@ -271,6 +271,11 @@ window.Kusanagi = window.Kusanagi || {};
             + 'phase purity shown, and does the characterisation support the claims?',
         Editor: 'Review as a journal editor: does the data support the headline '
             + 'claim, is the work clear, and what would a referee ask for first?',
+        Statistician: 'Review as a statistician: are the error bars, sample sizes '
+            + 'and fits adequate, and do the conclusions survive the uncertainty?',
+        'Materials scientist': 'Review as a materials scientist: is the structure '
+            + 'and microstructure characterised, and do processing, structure and '
+            + 'properties connect?',
     };
 
     /** Orochimaru: a referee report on the loaded documents. */
@@ -342,7 +347,8 @@ window.Kusanagi = window.Kusanagi || {};
             hint: 'abstract summary conclusion introduction results' },
     ].concat(Object.keys(REVIEW_PERSONAS).map(function (role) {
         return {
-            id: 'review-' + role.toLowerCase(), label: role + ' review', group: 'review',
+            id: 'review-' + role.toLowerCase().replace(/\s+/g, '-'),
+            label: role + ' review', group: 'review',
             role: role,
             description: 'Critiques what you share or ask about, as a ' + role.toLowerCase() + '.',
             instruction: REVIEW_PERSONAS[role] + ' Read what the user shares or asks '
@@ -350,7 +356,135 @@ window.Kusanagi = window.Kusanagi || {};
                 + 'to and say what would fix it.',
             hint: 'conclusion results methodology abstract',
         };
-    }));
+    }), [
+        // Answer style: one voice at a time.
+        { id: 'eli5', label: 'Explain simply', group: 'voice',
+            description: 'Plain words and an everyday analogy, no jargon left undefined.',
+            instruction: 'explain as to a curious newcomer: plain words, one everyday '
+                + 'analogy, and define any technical term the first time it appears.' },
+        { id: 'expert', label: 'Expert depth', group: 'voice',
+            description: 'Assumes expertise: mechanisms, equations, edge cases.',
+            instruction: 'assume the user is an expert: skip the basics, give mechanisms, '
+                + 'equations and limiting cases, and name the competing explanations.' },
+        { id: 'concise', label: 'Concise', group: 'voice',
+            description: 'Short answers: the point first, no preamble.',
+            instruction: 'be brief: lead with the answer, at most a few sentences or '
+                + 'bullets, and no preamble or recap.' },
+        { id: 'socratic', label: 'Socratic tutor', group: 'voice',
+            description: 'Guides you with questions instead of giving the answer.',
+            instruction: 'teach by questions: give a hint and one guiding question at a '
+                + 'time, and reveal the full answer only when the user asks for it.' },
+
+        // Research.
+        { id: 'fact-check', label: 'Fact check',
+            description: 'Marks each claim supported, disputed or unsupported.',
+            instruction: 'list the factual claims involved and mark each as supported, '
+                + 'disputed or unsupported, with the evidence or source for each.',
+            onDocs: 'Fact-check the main claims in the loaded documents.' },
+        { id: 'devils-advocate', label: 'Devil\u2019s advocate',
+            description: 'Adds the strongest case against the answer.',
+            instruction: 'after answering, give the strongest counter-argument or '
+                + 'alternative explanation, and what evidence would decide between them.' },
+        { id: 'step-by-step', label: 'Step by step',
+            description: 'Numbered working: every step, assumption and unit shown.',
+            instruction: 'work through the problem in numbered steps, stating each '
+                + 'assumption and carrying units through every calculation.' },
+        { id: 'literature-review', label: 'Literature review',
+            description: 'Themes, consensus, disputes and open questions.',
+            instruction: 'organise the answer as a literature review: themes, where the '
+                + 'field agrees, where it disagrees, and the open questions.',
+            onDocs: 'Write a literature review of the loaded documents.' },
+        { id: 'compare', label: 'Compare',
+            description: 'Side-by-side table of approaches, results or documents.',
+            instruction: 'when two or more things are involved, compare them in a '
+                + 'table (rows: criteria, columns: the things) and then give a verdict.',
+            onDocs: 'Compare the loaded documents in a table: aims, methods, key '
+                + 'results and conclusions.' },
+        { id: 'extract-data', label: 'Extract data',
+            description: 'Pulls numbers into a table with units and conditions.',
+            instruction: 'put every quantitative result into a Markdown table with '
+                + 'columns for quantity, value, unit, conditions and source.',
+            onDocs: 'Extract every quantitative result in the loaded documents into a table.',
+            hint: 'table results measured value temperature' },
+        { id: 'research-plan', label: 'Research plan',
+            description: 'Aims, experiments, controls, risks and next steps.',
+            instruction: 'end with a research plan: aims, the experiments to run, the '
+                + 'controls, the main risks, and what to do first.',
+            onDocs: 'Propose the next experiments that follow from the loaded documents.',
+            hint: 'conclusion future work outlook limitations' },
+        { id: 'bibtex', label: 'Citations (BibTeX)',
+            description: 'References as BibTeX entries, never invented.',
+            instruction: 'give any references as BibTeX entries; leave out a DOI, page '
+                + 'or volume you are not sure of rather than guessing it.',
+            onDocs: 'List the references cited in the loaded documents as BibTeX.',
+            hint: 'references bibliography doi journal' },
+
+        // Study.
+        { id: 'quiz-me', label: 'Quiz me',
+            description: 'Ends each answer with three questions to test you.',
+            instruction: 'end every answer with three questions that test understanding '
+                + 'of it, with the answers under an "Answers" heading at the very end.',
+            onDocs: 'Quiz me on the loaded documents.' },
+        { id: 'flashcards', label: 'Flashcards',
+            description: 'Question and answer cards in a table.',
+            instruction: 'turn the key points into flashcards: a two-column table of '
+                + 'question and answer.',
+            onDocs: 'Make flashcards from the loaded documents.' },
+        { id: 'glossary', label: 'Glossary',
+            description: 'Defines the technical terms used.',
+            instruction: 'end with a glossary of the technical terms used, one line each.',
+            onDocs: 'Write a glossary of the technical terms in the loaded documents.' },
+        { id: 'outline', label: 'Outline',
+            description: 'Hierarchical outline of headings and points.',
+            instruction: 'structure the answer as a hierarchical outline of headings '
+                + 'and short bullets.',
+            onDocs: 'Outline the loaded documents.' },
+
+        // Writing.
+        { id: 'proofread', label: 'Proofread',
+            description: 'Lists fixes: original, correction, reason.',
+            instruction: 'when the user shares text, proofread it: a table of original, '
+                + 'correction and reason, then the corrected text.',
+            onDocs: 'Proofread the loaded documents.' },
+        { id: 'co-author', label: 'Doc co-authoring',
+            description: 'Drafts with you section by section, asking what is missing.',
+            instruction: 'co-write with the user: agree an outline, draft one section at '
+                + 'a time, and ask for the facts you need instead of inventing them.' },
+        { id: 'status-update', label: 'Status update',
+            description: 'Writes it as an update: TL;DR, progress, blockers, next.',
+            instruction: 'write it as a status update or email: a one-line TL;DR, then '
+                + 'progress, problems and next steps.',
+            onDocs: 'Write a status update on the work in the loaded documents.' },
+        { id: 'slides', label: 'Slide outline',
+            description: 'Slide titles, bullets and speaker notes.',
+            instruction: 'present the answer as slides: a title per slide, three to five '
+                + 'bullets, and a line of speaker notes.',
+            onDocs: 'Turn the loaded documents into a slide outline.' },
+        { id: 'latex', label: 'LaTeX',
+            description: 'Equations and tables as LaTeX, ready to paste.',
+            instruction: 'give equations, tables and any write-up as LaTeX source in '
+                + 'fenced code blocks, ready to paste into a paper.' },
+
+        // Code.
+        { id: 'code', label: 'Code helper',
+            description: 'Complete, runnable code with a short explanation.',
+            instruction: 'when code helps, give complete runnable code in fenced blocks '
+                + 'with the language named (Python unless asked otherwise), then explain '
+                + 'it briefly.' },
+        { id: 'code-review', label: 'Code review',
+            description: 'Bugs first, each with the line and the fix.',
+            instruction: 'when the user shares code, review it: bugs first, each with the '
+                + 'line, what goes wrong and the fix, then clarity and speed.' },
+        { id: 'brainstorm', label: 'Brainstorm',
+            description: 'Many varied ideas, then the best three ranked.',
+            instruction: 'brainstorm: list at least ten varied ideas, then rank the best '
+                + 'three with a reason each.' },
+    ]);
+
+    /** Headings for the skill picker, in order: [group, heading]. */
+    var SKILL_SECTIONS = [
+        ['review', 'Review as'], ['voice', 'Answer style'], ['', 'Tasks'],
+    ];
 
     function skill(id) {
         for (var i = 0; i < SKILLS.length; i++) if (SKILLS[i].id === id) return SKILLS[i];
@@ -405,6 +539,7 @@ window.Kusanagi = window.Kusanagi || {};
         UNTRUSTED_SOURCES: UNTRUSTED_SOURCES,
         REVIEW_PERSONAS: REVIEW_PERSONAS,
         SKILLS: SKILLS,
+        SKILL_SECTIONS: SKILL_SECTIONS,
         skill: skill,
         sourcesBlock: sourcesBlock,
         deepResearch: deepResearch,

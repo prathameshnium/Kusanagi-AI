@@ -165,6 +165,11 @@ window.Kusanagi = window.Kusanagi || {};
         var maxTokensSelect = optionSelect('settings-claude-max', [
             ['4096', '4K tokens'], ['16000', '16K tokens'], ['32000', '32K tokens'],
         ]);
+        var webLimitSelect = optionSelect('settings-claude-web-limit', [
+            ['', 'No limit'], ['5', '5 each'], ['10', '10 each'], ['25', '25 each'],
+        ]);
+        var chimeToggle = optionToggle('settings-chime', 'Chime when an answer is done',
+            'A short tune, made in the browser. Nothing is downloaded.');
         var claudeToggles = {
             reasoning: optionToggle('settings-claude-reasoning', 'Show reasoning',
                 'A summary of how Claude thought it through, above the answer.'),
@@ -176,8 +181,8 @@ window.Kusanagi = window.Kusanagi || {};
             fast: optionToggle('settings-claude-fast', 'Fast mode (Opus 5.5 only)',
                 'Up to 2.5× faster output at twice the price.'),
             webSearch: optionToggle('settings-claude-search', 'Web search',
-                'Claude searches the web itself, up to 5 times an answer. Billed per '
-                + 'search ($10 per 1,000) on top of tokens.'),
+                'Claude searches the web itself, as often as the answer needs (see '
+                + 'the limit below). Billed per search ($10 per 1,000) on top of tokens.'),
             webFetch: optionToggle('settings-claude-fetch', 'Web fetch',
                 'Claude reads the full text of pages linked in the chat or found by '
                 + 'search. Fetched pages count as input tokens.'),
@@ -205,6 +210,10 @@ window.Kusanagi = window.Kusanagi || {};
             claudeToggles.fast.row,
             claudeToggles.webSearch.row,
             claudeToggles.webFetch.row,
+            el('div', { class: 'mt-2' }, [
+                claudeLabel('Searches and fetches per answer', 'settings-claude-web-limit'),
+                webLimitSelect,
+            ]),
         ]);
 
         var voiceSourceSelect = optionSelect('settings-voice-source', [
@@ -291,6 +300,7 @@ window.Kusanagi = window.Kusanagi || {};
                     text: 'If a model is retired, rate-limited or overloaded, try the '
                         + 'next one in the list. Never switches provider.',
                 }),
+                chimeToggle.row,
             ]),
 
             claudeBox,
@@ -369,9 +379,11 @@ window.Kusanagi = window.Kusanagi || {};
                 : '';
 
             fallbackBox.checked = window.Kusanagi.prefs.modelFallback();
+            chimeToggle.box.checked = prefs.chime();
             claudeBox.classList.toggle('hidden', provider !== 'anthropic');
             effortSelect.value = prefs.claude('effort');
             maxTokensSelect.value = prefs.claude('maxTokens');
+            webLimitSelect.value = prefs.claude('webLimit');
             Object.keys(claudeToggles).forEach(function (name) {
                 claudeToggles[name].box.checked = prefs.claude(name);
             });
@@ -542,9 +554,17 @@ window.Kusanagi = window.Kusanagi || {};
             prefs.setClaude('effort', effortSelect.value);
             announce();
         });
+        webLimitSelect.addEventListener('change', function () {
+            prefs.setClaude('webLimit', webLimitSelect.value);
+            announce();
+        });
         maxTokensSelect.addEventListener('change', function () {
             prefs.setClaude('maxTokens', maxTokensSelect.value);
             announce();
+        });
+        chimeToggle.box.addEventListener('change', function () {
+            prefs.setChime(chimeToggle.box.checked);
+            if (chimeToggle.box.checked) chime();
         });
         Object.keys(claudeToggles).forEach(function (name) {
             var box = claudeToggles[name].box;
@@ -677,6 +697,18 @@ window.Kusanagi = window.Kusanagi || {};
             ['high', 'Effort: high'], ['xhigh', 'Effort: extra high'], ['max', 'Effort: max'],
         ].map(function (c) { return el('option', { value: c[0], text: c[1] }); }));
 
+        // Web tools and how many searches and fetches one answer may use.
+        // 'off' turns both tools off; any other choice turns them on.
+        var web = el('select', {
+            class: '!w-auto !bg-transparent !border-0 !text-xs !py-1 !pl-2 !pr-6 '
+                + 'text-fg-secondary',
+            'aria-label': 'Web searches and fetches per answer',
+            title: 'How many web searches and page fetches Claude may make per answer. '
+                + 'Searches cost $10 per 1,000 on top of tokens.',
+        }, [['off', 'Web: off'], ['', 'Web: no limit'], ['5', 'Web: 5 each'],
+            ['10', 'Web: 10 each'], ['25', 'Web: 25 each'],
+        ].map(function (c) { return el('option', { value: c[0], text: c[1] }); }));
+
         var reasoning = el('button', {
             type: 'button',
             class: 'text-[11px] font-bold px-2 py-0.5 rounded border transition whitespace-nowrap',
@@ -685,13 +717,15 @@ window.Kusanagi = window.Kusanagi || {};
         });
 
         var node = el('span', { class: 'flex items-center gap-1 shrink-0 pr-1' },
-            [select, reasoning]);
+            [select, web, reasoning]);
 
         function announce() { window.dispatchEvent(new CustomEvent('kusanagi:prefs')); }
 
         function sync() {
             node.classList.toggle('hidden', provider() !== 'anthropic');
             select.value = prefs.claude('effort');
+            web.value = prefs.claude('webSearch') || prefs.claude('webFetch')
+                ? prefs.claude('webLimit') : 'off';
             var on = prefs.claude('reasoning');
             reasoning.setAttribute('aria-pressed', String(on));
             reasoning.classList.toggle('border-accent', on);
@@ -701,6 +735,13 @@ window.Kusanagi = window.Kusanagi || {};
         }
         select.addEventListener('change', function () {
             prefs.setClaude('effort', select.value);
+            announce();
+        });
+        web.addEventListener('change', function () {
+            var on = web.value !== 'off';
+            prefs.setClaude('webSearch', on);
+            prefs.setClaude('webFetch', on);
+            if (on) prefs.setClaude('webLimit', web.value);
             announce();
         });
         reasoning.addEventListener('click', function () {
@@ -909,6 +950,47 @@ window.Kusanagi = window.Kusanagi || {};
         return ok;
     }
 
+    /* ----------------------------------------------------------------- chime */
+
+    var audio = null;
+
+    /**
+     * A soft rising arpeggio (C6 E6 G6 C7) when an answer is done, synthesised
+     * with Web Audio so there is no sound file to fetch. Silent if the
+     * preference is off or the browser blocks audio before any click.
+     */
+    function chime() {
+        if (!window.Kusanagi.prefs.chime()) return;
+        var Ctx = window.AudioContext || window.webkitAudioContext;
+        if (!Ctx) return;
+        try {
+            audio = audio || new Ctx();
+            if (audio.state === 'suspended') audio.resume();
+            var t0 = audio.currentTime + 0.02;
+            var out = audio.createGain();
+            out.gain.value = 0.18;
+            out.connect(audio.destination);
+            [1046.5, 1318.5, 1568.0, 2093.0].forEach(function (freq, i) {
+                var start = t0 + i * 0.11;
+                var tail = i === 3 ? 1.2 : 0.6;
+                // A sine with a quiet octave above it reads as a bell, not a beep.
+                [[1, 1], [2, 0.25]].forEach(function (partial) {
+                    var osc = audio.createOscillator();
+                    var env = audio.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.value = freq * partial[0];
+                    env.gain.setValueAtTime(0.0001, start);
+                    env.gain.exponentialRampToValueAtTime(partial[1], start + 0.015);
+                    env.gain.exponentialRampToValueAtTime(0.0001, start + tail);
+                    osc.connect(env);
+                    env.connect(out);
+                    osc.start(start);
+                    osc.stop(start + tail + 0.05);
+                });
+            });
+        } catch (e) { /* audio is a nicety; never break the answer over it */ }
+    }
+
     /* ------------------------------------------------------------ read aloud */
 
     // One voice at a time across the page; this is the button now speaking.
@@ -1034,6 +1116,7 @@ window.Kusanagi = window.Kusanagi || {};
         copyButton: copyButton,
         bindCopy: bindCopy,
         toast: toast,
+        chime: chime,
         mountSettings: mountSettings,
         purgeAll: purgeAll,
         fillModelSelect: fillModelSelect,

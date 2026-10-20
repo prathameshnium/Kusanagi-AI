@@ -108,9 +108,16 @@
             </div>
 
             <div class="mb-4">
-                <h2 class="text-xs font-bold text-fg-secondary uppercase mb-2">Skills</h2>
-                <div id="skill-list" class="space-y-1" role="group" aria-label="Skills"></div>
-                <p class="text-[10px] text-fg-secondary mt-2 opacity-70">A skill that is on shapes every answer. Switching one on with documents loaded also runs it on them once.</p>
+                <details class="skill-picker">
+                    <summary class="text-xs font-bold text-fg-secondary uppercase flex justify-between items-center cursor-pointer">
+                        Skills
+                        <span id="skill-count" class="text-accent normal-case font-normal"></span>
+                    </summary>
+                    <label for="skill-filter" class="sr-only">Filter skills</label>
+                    <input id="skill-filter" type="search" autocomplete="off" placeholder="Filter skills..." class="mt-2 !text-xs !py-1">
+                    <div id="skill-list" class="skill-list" role="group" aria-label="Skills"></div>
+                </details>
+                <p class="text-[10px] text-fg-secondary mt-2 opacity-70">Type / in the chat to pick one. A skill that is on shapes every answer; with documents loaded, switching one on also runs it on them once.</p>
             </div>
 
             <div class="mt-auto pt-4 border-t border-tertiary flex gap-2">
@@ -143,11 +150,12 @@
             <div id="chat-history" class="flex-grow overflow-y-auto p-4 space-y-6" role="log" aria-live="polite" aria-label="Conversation"></div>
 
             <div class="flex-shrink-0 p-4 bg-primary border-t border-tertiary">
-                <div class="max-w-4xl mx-auto">
+                <div class="max-w-4xl mx-auto relative">
+                    <div id="slash-menu" class="slash-menu hidden" role="listbox" aria-label="Skills"></div>
                     <div id="active-skills" class="flex flex-wrap gap-1 mb-2 hidden" aria-label="Skills on"></div>
                     <div class="flex bg-tertiary rounded-lg border border-tertiary focus-within:border-accent shadow-lg transition-colors">
                         <label for="chat-input" class="sr-only">Question</label>
-                        <input id="chat-input" type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" placeholder="Ask anything, or about your documents..." class="!border-0 !bg-transparent !p-3">
+                        <input id="chat-input" type="text" role="combobox" aria-controls="slash-menu" aria-expanded="false" aria-autocomplete="list" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" placeholder="Ask anything, or type / for skills..." class="!border-0 !bg-transparent !p-3">
                         <button id="send-btn" type="button" class="px-4 text-accent hover:text-fg-primary transition" aria-label="Send">
                             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                         </button>

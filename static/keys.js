@@ -421,6 +421,15 @@ window.Kusanagi = window.Kusanagi || {};
             local.set(NS + 'model_fallback', enabled ? '1' : '0');
         },
 
+        /** A short tune when an answer finishes. Default on. */
+        chime: function () {
+            return local.get(NS + 'chime') !== '0';
+        },
+
+        setChime: function (enabled) {
+            local.set(NS + 'chime', enabled ? '1' : '0');
+        },
+
         /** Read-aloud voices: 'local' (on this device) or 'web' (the browser's
             online voices, which send the text to its vendor). Default local. */
         voiceSource: function () {
@@ -475,6 +484,7 @@ window.Kusanagi = window.Kusanagi || {};
         fast: { default: false },       // Opus 5.5 fast mode, at twice the price
         webSearch: { default: false },  // Claude searches the web itself
         webFetch: { default: false },   // Claude reads pages linked in the chat
+        webLimit: { default: '', values: ['', '5', '10', '25'] },  // '' = no cap
     };
     prefs.CLAUDE_OPTIONS = CLAUDE_OPTIONS;
 

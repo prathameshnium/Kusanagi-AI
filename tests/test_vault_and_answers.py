@@ -51,7 +51,7 @@ def test_only_ciphertext_is_written_to_local_storage():
     """No key is written to localStorage in plain text, not even by the legacy
     migration, which used to copy old keys under new names."""
     writes = re.findall(r"local\.set\(([^,]+),", KEYS)
-    allowed = {"VAULT", "NS + 'provider'", "NS + 'migrated'", "NS + 'model_fallback'"}
+    allowed = {"VAULT", "NS + 'provider'", "NS + 'migrated'", "NS + 'model_fallback'", "NS + 'chime'"}
     for target in writes:
         assert target.strip() in allowed, "unexpected localStorage write: %s" % target
 
@@ -308,6 +308,6 @@ def test_skills_are_toggles_that_reach_the_prompt():
     assert 'id="skill-list"' in html and 'id="active-skills"' in html
     source = strip_js_comments(read("static", "pages", "orochimaru.js"))
     assert "'aria-pressed': String(on)" in source
-    assert "function toggleSkill(id)" in source
+    assert "function toggleSkill(id, quiet)" in source
     assert "skillsBlock(skillIds)" in PROMPTS.split("function chatSystemPrompt")[1]
     assert "skillsBlock(skillIds)" in PROMPTS.split("function documentChatPrompt")[1]

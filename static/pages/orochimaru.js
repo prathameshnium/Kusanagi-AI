@@ -673,6 +673,7 @@
                     + ui.model.value + ' was unavailable.');
             }
             addAI(res.text, sources, res.reasoning, res.webSources);
+            K.ui.chime();
             lastAnswer = res.text;
             history.push({ role: 'user', content: userFacing },
                 { role: 'assistant', content: res.text });
@@ -698,6 +699,9 @@
         var query = ui.input.value.trim();
         if (!query) return;
         ui.input.value = '';
+        closeSlash();
+        query = runSlash(query);
+        if (!query) return;
 
         // With documents loaded, retrieve for the newest question and rebuild
         // the system prompt around those excerpts; without, it is plain chat.
@@ -721,14 +725,27 @@
     /** Run a skill once over the loaded documents. */
     function runSkill(skill) {
         if (!docNames().length) return;
-        var limit = skill.group === 'review' ? 8 : 6;
-        var chunks = retrieve(skill.hint, limit);
+        var isReview = skill.group === 'review';
+        // Style skills (and others with nothing to do on their own) only
+        // shape later answers.
+        if (!isReview && skill.id !== 'summarise' && !skill.onDocs) return;
+        var limit = isReview ? 8 : 6;
+        var chunks = retrieve(skill.hint || skill.onDocs, limit);
         if (!chunks.length) chunks = openingChunks(limit);
-        var prompt = skill.group === 'review'
-            ? K.prompts.review(skill.role, REVIEW_PERSONAS[skill.role], chunks)
-            : K.prompts.summarise(chunks);
-        ask([{ role: 'user', content: prompt }],
-            skill.label + ' of the loaded documents', asSources(chunks));
+        var messages;
+        if (isReview) {
+            messages = [{ role: 'user',
+                content: K.prompts.review(skill.role, REVIEW_PERSONAS[skill.role], chunks) }];
+        } else if (skill.onDocs) {
+            messages = [
+                { role: 'system', content: K.prompts.documentChatPrompt(
+                    chunks, docNames(), strictMode(), activeSkills) },
+                { role: 'user', content: skill.onDocs },
+            ];
+        } else {
+            messages = [{ role: 'user', content: K.prompts.summarise(chunks) }];
+        }
+        ask(messages, skill.label + ' of the loaded documents', asSources(chunks));
     }
 
     /** The start of each document, in turn: where a summary or review should
@@ -748,7 +765,9 @@
         return out;
     }
 
-    function toggleSkill(id) {
+    /** Switch a skill on or off. `quiet` skips the one-off run over the
+     *  documents, for "/skill question", where the question is sent next. */
+    function toggleSkill(id, quiet) {
         var skill = K.prompts.skill(id);
         if (!skill) return;
         if (activeSkills.indexOf(id) !== -1) {
@@ -766,20 +785,50 @@
         activeSkills.push(id);
         renderSkills();
         addSystem('Skill on: ' + skill.label + '. ' + skill.description);
-        if (docNames().length && !busy) runSkill(skill);
+        if (!quiet && docNames().length && !busy) runSkill(skill);
+    }
+
+    /** Skills whose command or name contains `text`; those that start with
+     *  it come first. */
+    function matchSkills(text) {
+        var q = text.toLowerCase();
+        var starts = [];
+        var contains = [];
+        K.prompts.SKILLS.forEach(function (s) {
+            if (!q || s.id.indexOf(q) === 0 || s.label.toLowerCase().indexOf(q) === 0) {
+                starts.push(s);
+            } else if ((s.id + ' ' + s.label).toLowerCase().indexOf(q) !== -1) {
+                contains.push(s);
+            }
+        });
+        return starts.concat(contains);
     }
 
     function renderSkills() {
-        dom.replace(ui.skillList, K.prompts.SKILLS.map(function (skill) {
-            var on = activeSkills.indexOf(skill.id) !== -1;
-            return el('button', {
-                type: 'button',
-                class: 'skill',
-                'aria-pressed': String(on),
-                title: skill.description,
-                on: { click: function () { toggleSkill(skill.id); } },
-            }, [skill.label, el('small', { text: skill.description })]);
-        }));
+        var shown = matchSkills(ui.skillFilter.value.trim());
+        var rows = [];
+        K.prompts.SKILL_SECTIONS.forEach(function (section) {
+            var inSection = shown.filter(function (s) {
+                return (s.group || '') === section[0];
+            });
+            if (!inSection.length) return;
+            rows.push(el('p', { class: 'skill-heading', text: section[1] }));
+            inSection.forEach(function (skill) {
+                var on = activeSkills.indexOf(skill.id) !== -1;
+                rows.push(el('button', {
+                    type: 'button',
+                    class: 'skill',
+                    'aria-pressed': String(on),
+                    title: skill.description + ' (/' + skill.id + ')',
+                    on: { click: function () { toggleSkill(skill.id); } },
+                }, [skill.label]));
+            });
+        });
+        if (!rows.length) {
+            rows.push(el('p', { class: 'skill-heading', text: 'No skill matches.' }));
+        }
+        dom.replace(ui.skillList, rows);
+        ui.skillCount.textContent = activeSkills.length ? activeSkills.length + ' on' : '';
 
         ui.activeSkills.classList.toggle('hidden', !activeSkills.length);
         dom.replace(ui.activeSkills, activeSkills.map(function (id) {
@@ -791,6 +840,90 @@
                 on: { click: function () { toggleSkill(id); } },
             }, [skill.label, el('span', { text: '✕', 'aria-hidden': 'true' })]);
         }));
+    }
+
+    /* ---------------------------------------------------- slash commands */
+
+    // Typing "/" at the start of the box lists skills; Enter or Tab picks one.
+    var slash = { items: [], index: 0 };
+
+    function slashQuery() {
+        var m = /^\/([\w-]*)$/.exec(ui.input.value);
+        return m ? m[1] : null;
+    }
+
+    function closeSlash() {
+        slash.items = [];
+        ui.slashMenu.classList.add('hidden');
+        ui.input.removeAttribute('aria-activedescendant');
+        ui.input.setAttribute('aria-expanded', 'false');
+    }
+
+    function renderSlash() {
+        var q = slashQuery();
+        slash.items = q === null ? [] : matchSkills(q).slice(0, 8);
+        if (!slash.items.length) { closeSlash(); return; }
+        slash.index = Math.min(slash.index, slash.items.length - 1);
+        dom.replace(ui.slashMenu, slash.items.map(function (skill, i) {
+            var on = activeSkills.indexOf(skill.id) !== -1;
+            return el('div', {
+                id: 'slash-' + skill.id,
+                class: 'slash-item',
+                role: 'option',
+                'aria-selected': String(i === slash.index),
+                // mousedown, so the input keeps focus.
+                on: { mousedown: function (e) { e.preventDefault(); pickSlash(i); } },
+            }, [
+                el('span', { class: 'slash-cmd', text: '/' + skill.id }),
+                el('span', { class: 'slash-label', text: (on ? '\u2713 ' : '') + skill.label }),
+                el('span', { class: 'slash-desc', text: skill.description }),
+            ]);
+        }));
+        ui.slashMenu.classList.remove('hidden');
+        ui.input.setAttribute('aria-expanded', 'true');
+        ui.input.setAttribute('aria-activedescendant', 'slash-' + slash.items[slash.index].id);
+    }
+
+    function pickSlash(i) {
+        var skill = slash.items[i];
+        if (!skill) return;
+        ui.input.value = '';
+        closeSlash();
+        toggleSkill(skill.id);
+        ui.input.focus();
+    }
+
+    /** True if the key was the menu's to handle. */
+    function slashKey(e) {
+        if (!slash.items.length) return false;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            var step = e.key === 'ArrowDown' ? 1 : -1;
+            slash.index = (slash.index + step + slash.items.length) % slash.items.length;
+            renderSlash();
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            pickSlash(slash.index);
+        } else if (e.key === 'Escape') {
+            closeSlash();
+        } else {
+            return false;
+        }
+        e.preventDefault();
+        return true;
+    }
+
+    /**
+     * "/skill" on its own toggles the skill; "/skill question" switches it on
+     * and asks the question. Returns the text left to send, or null if the
+     * command was all there was.
+     */
+    function runSlash(query) {
+        var m = /^\/([\w-]+)(?:\s+([\s\S]*))?$/.exec(query);
+        var skill = m && K.prompts.skill(m[1].toLowerCase());
+        if (!skill) return query;
+        var rest = (m[2] || '').trim();
+        if (!rest) { toggleSkill(skill.id); return null; }
+        if (activeSkills.indexOf(skill.id) === -1) toggleSkill(skill.id, true);
+        return rest;
     }
 
     /* ---------------------------------------------------------------- status */
@@ -836,6 +969,9 @@
             statusChunks: document.getElementById('status-chunks'),
             dot: document.getElementById('status-dot'),
             skillList: document.getElementById('skill-list'),
+            skillFilter: document.getElementById('skill-filter'),
+            skillCount: document.getElementById('skill-count'),
+            slashMenu: document.getElementById('slash-menu'),
             activeSkills: document.getElementById('active-skills'),
             indicator: document.getElementById('context-indicator'),
             tokens: document.getElementById('perf-tokens'),
@@ -868,6 +1004,9 @@
         renderDocList();
 
         renderSkills();
+        ui.skillFilter.addEventListener('input', renderSkills);
+        ui.input.addEventListener('input', function () { slash.index = 0; renderSlash(); });
+        ui.input.addEventListener('blur', closeSlash);
 
         ui.temp.addEventListener('input', function () {
             ui.tempOut.textContent = ui.temp.value;
@@ -883,6 +1022,7 @@
 
         ui.send.addEventListener('click', send);
         ui.input.addEventListener('keydown', function (e) {
+            if (slashKey(e)) return;
             if (e.key === 'Enter') { e.preventDefault(); send(); }
         });
 

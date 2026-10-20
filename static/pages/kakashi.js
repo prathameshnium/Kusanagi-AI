@@ -532,6 +532,7 @@
                 K.ui.speakButton(function () { return K.ui.speakableText(body); }),
             ]));
             ui.response.classList.remove('hidden');
+            K.ui.chime();
         });
     }
 
