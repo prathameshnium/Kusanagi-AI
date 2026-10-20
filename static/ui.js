@@ -1163,10 +1163,20 @@ window.Kusanagi = window.Kusanagi || {};
         }).catch(function () { return null; });
     }
 
+    /* GitHub Pages lets browsers keep files for 10 minutes, and a plain reload
+       re-checks only the page, not its scripts. Re-fetch our own files past
+       the cache first, so the reload runs the new code, not old scripts. */
+    function reloadFresh() {
+        var refresh = ownAssets().map(function (url) {
+            return fetch(url, { cache: 'reload' }).catch(function () { return null; });
+        });
+        Promise.all(refresh).then(function () { window.location.reload(); });
+    }
+
     function offerReload() {
         var reload = el('button', {
             type: 'button', class: 'btn btn-accent text-xs', text: 'Reload',
-            on: { click: function () { window.location.reload(); } },
+            on: { click: reloadFresh },
         });
         var later = el('button', {
             type: 'button', class: 'btn btn-secondary text-xs', text: 'Later',
