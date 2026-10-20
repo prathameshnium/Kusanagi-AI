@@ -61,6 +61,8 @@
     var chatStarted = null;                // when it began, for that name
     var chatCategory = '';                 // the user's name for its group, or ''
     var folder = null;                     // {name, ready} once a chat folder is chosen
+    var noHistory = true;                  // on each visit: nothing is written to the folder
+    var lastQuestion = '';                 // the one before, to make sense of follow-ups
     var busy = false;
     var settings = null;
     var pdfjsPromise = null;
@@ -100,14 +102,36 @@
         return pdfjsPromise;
     }
 
+    /** Pieces of about CHUNK_SIZE characters, overlapping by CHUNK_OVERLAP,
+     *  that end at a sentence (or failing that, a word) rather than mid-word. */
     function chunkText(text) {
-        var step = CHUNK_SIZE - CHUNK_OVERLAP;
-        if (step <= 0) step = CHUNK_SIZE;   // guard against a config that never advances
         var chunks = [];
-        for (var i = 0; i < text.length; i += step) {
-            chunks.push(text.slice(i, i + CHUNK_SIZE));
+        var start = 0;
+        while (start < text.length) {
+            var end = Math.min(start + CHUNK_SIZE, text.length);
+            if (end < text.length) end = cutPoint(text, start, end);
+            chunks.push(text.slice(start, end).trim());
+            if (end >= text.length) break;
+            // Step back for the overlap, then forward to a word start; always advance.
+            var next = Math.max(end - CHUNK_OVERLAP, start + 1);
+            var space = text.indexOf(' ', next);
+            start = space !== -1 && space < end ? space + 1 : end;
         }
-        return chunks;
+        return chunks.filter(function (c) { return c; });
+    }
+
+    /** The best place to end a piece in text[start, end): the last sentence
+     *  end in its second half, else the last space, else `end`. */
+    function cutPoint(text, start, end) {
+        var half = start + Math.floor((end - start) / 2);
+        var window = text.slice(half, end);
+        var sentence = -1;
+        var re = /[.!?]["')\]]?\s/g;
+        var m;
+        while ((m = re.exec(window)) !== null) sentence = m.index + m[0].length;
+        if (sentence !== -1) return half + sentence;
+        var space = text.lastIndexOf(' ', end);
+        return space > half ? space + 1 : end;
     }
 
     function extensionOf(name) {
@@ -416,11 +440,135 @@
 
     /* -------------------------------------------------------------- retrieval */
 
-    /** Count non-overlapping occurrences without building a RegExp.
-     *  The old code did `new RegExp(term, "g")` on raw user input, which threw on
-     *  any query containing a bracket and invited catastrophic backtracking. */
+    // Words too common to say anything about which passage answers a question.
+    var STOPWORDS = {};
+    ('a an and are as at be been but by can could did do does for from had has have '
+        + 'how i if in into is it its me my no not of on or our so than that the their '
+        + 'them then there these they this those to was we were what when where which '
+        + 'who whom why will with would you your about also any each more most other '
+        + 'some such only own same very just tell give show explain describe please').split(' ')
+        .forEach(function (w) { STOPWORDS[w] = true; });
+
+    /** Lower-case words and numbers, punctuation dropped: "XRD?" -> "xrd",
+     *  "3.5" and "x-ray" stay whole. A RegExp over the text, never built from it. */
+    function tokens(text) {
+        return (text.toLowerCase().match(/[\p{L}\p{N}]+(?:[.\-][\p{L}\p{N}]+)*/gu) || [])
+            .map(stem);
+    }
+
+    /** A light English stemmer, so "measured", "measures" and "measuring"
+     *  all meet "measure"'s stem. Short words and numbers are left alone. */
+    function stem(w) {
+        if (w.length < 5 || /\d/.test(w)) return w;
+        if (/ies$/.test(w)) return w.slice(0, -3) + 'y';
+        if (/(sses|xes|ches|shes)$/.test(w)) return w.slice(0, -2);
+        if (/ing$/.test(w) && w.length > 5) return trimDouble(w.slice(0, -3));
+        if (/ed$/.test(w) && w.length > 4) return trimDouble(w.slice(0, -2));
+        if (/[^s]s$/.test(w)) w = w.slice(0, -1);
+        return /e$/.test(w) ? w.slice(0, -1) : w;
+    }
+    function trimDouble(w) {
+        if (/([^aeiouls])\1$/.test(w)) w = w.slice(0, -1);
+        return /e$/.test(w) ? w.slice(0, -1) : w;
+    }
+
+    /** Query terms, stopwords out. Single letters only when they are digits. */
+    function queryTerms(text) {
+        return tokens(text).filter(function (t) {
+            return !STOPWORDS[t] && (t.length > 1 || /\d/.test(t));
+        });
+    }
+
+    // Term counts per piece, built once per document and dropped with it.
+    var indexCache = new WeakMap();
+    function indexOf(chunks) {
+        var idx = indexCache.get(chunks);
+        if (!idx) {
+            idx = chunks.map(function (text) {
+                var tf = Object.create(null);
+                var words = tokens(text);
+                words.forEach(function (t) { tf[t] = (tf[t] || 0) + 1; });
+                return { tf: tf, len: words.length };
+            });
+            indexCache.set(chunks, idx);
+        }
+        return idx;
+    }
+
+    var BM25_K1 = 1.2;
+    var BM25_B = 0.75;
+
+    /** The `limit` pieces that best answer `query`, ranked by BM25 over every
+     *  loaded document: rare words count for more than common ones, and a word
+     *  repeated in one piece counts less each time. `context` (the previous
+     *  question) adds its words at half weight, so a follow-up such as "and the
+     *  second sample?" still finds the passage the conversation is about. */
+    function retrieve(query, limit, context) {
+        limit = limit || 5;
+        var pieces = [];
+        docNames().forEach(function (name) {
+            var idx = indexOf(documents[name]);
+            documents[name].forEach(function (text, i) {
+                pieces.push({ text: text, doc: name, tf: idx[i].tf, len: idx[i].len });
+            });
+        });
+        if (!pieces.length) return [];
+        if (ui.search && ui.search.value === 'exact') return exactSearch(pieces, query, limit);
+
+        var weights = Object.create(null);
+        queryTerms(context || '').forEach(function (t) { weights[t] = 0.5; });
+        queryTerms(query).forEach(function (t) { weights[t] = 1; });
+        var terms = Object.keys(weights);
+        if (!terms.length) return pieces.slice(0, limit).map(asChunk);
+
+        var n = pieces.length;
+        var avgLen = pieces.reduce(function (sum, p) { return sum + p.len; }, 0) / n || 1;
+        var idf = Object.create(null);
+        terms.forEach(function (t) {
+            var df = pieces.reduce(function (sum, p) { return sum + (p.tf[t] ? 1 : 0); }, 0);
+            idf[t] = Math.log(1 + (n - df + 0.5) / (df + 0.5));
+        });
+
+        return pieces
+            .map(function (p) {
+                var norm = BM25_K1 * (1 - BM25_B + BM25_B * p.len / avgLen);
+                var score = terms.reduce(function (sum, t) {
+                    var f = p.tf[t];
+                    return f ? sum + weights[t] * idf[t] * f * (BM25_K1 + 1) / (f + norm) : sum;
+                }, 0);
+                return { piece: p, score: score };
+            })
+            .filter(function (c) { return c.score > 0; })
+            .sort(function (a, b) { return b.score - a.score; })
+            .slice(0, limit)
+            .map(function (c) { return asChunk(c.piece); });
+    }
+
+    function asChunk(p) { return { text: p.text, doc: p.doc }; }
+
+    /** "Exact words": how often each query word appears in a piece, as written,
+     *  part-words included ("magnet" finds "magnetisation"). No stemming or
+     *  weighting, for when the precise term is what matters. */
+    function exactSearch(pieces, query, limit) {
+        var terms = (query.toLowerCase().match(/[\p{L}\p{N}]+(?:[.\-][\p{L}\p{N}]+)*/gu) || [])
+            .filter(function (t) { return !STOPWORDS[t] && (t.length > 1 || /\d/.test(t)); });
+        if (!terms.length) return pieces.slice(0, limit).map(asChunk);
+        return pieces
+            .map(function (p) {
+                var lower = p.text.toLowerCase();
+                var score = terms.reduce(function (sum, t) {
+                    return sum + countOccurrences(lower, t);
+                }, 0);
+                return { piece: p, score: score };
+            })
+            .filter(function (c) { return c.score > 0; })
+            .sort(function (a, b) { return b.score - a.score; })
+            .slice(0, limit)
+            .map(function (c) { return asChunk(c.piece); });
+    }
+
+    /** Count non-overlapping occurrences without building a RegExp from input. */
     function countOccurrences(haystack, needle) {
-        if (!needle) return 0;
         var count = 0;
         var from = 0;
         for (;;) {
@@ -429,34 +577,6 @@
             count++;
             from = at + needle.length;
         }
-    }
-
-    function retrieve(query, limit) {
-        var chunks = [];
-        docNames().forEach(function (name) {
-            chunks = chunks.concat(documents[name].map(function (text) {
-                return { text: text, doc: name };
-            }));
-        });
-        if (!chunks.length) return [];
-
-        var terms = query.toLowerCase().split(/\s+/).filter(function (w) {
-            return w.length > 3;
-        });
-        if (!terms.length) return chunks.slice(0, limit || 5);
-
-        return chunks
-            .map(function (chunk) {
-                var lower = chunk.text.toLowerCase();
-                var score = terms.reduce(function (sum, term) {
-                    return sum + countOccurrences(lower, term);
-                }, 0);
-                return { chunk: chunk, score: score };
-            })
-            .filter(function (c) { return c.score > 0; })
-            .sort(function (a, b) { return b.score - a.score; })
-            .slice(0, limit || 5)
-            .map(function (c) { return c.chunk; });
     }
 
     /* ------------------------------------------------------------- chat pane */
@@ -682,7 +802,7 @@
     }
 
     function saveNow() {
-        if (!folder || !folder.ready || !turns.length) return null;
+        if (noHistory || !folder || !folder.ready || !turns.length) return null;
         var token = chatToken;
         if (!chatStarted) chatStarted = new Date();
         var named = chatFile ? Promise.resolve(chatFile) : freeName(chatFileName(chatStarted));
@@ -821,6 +941,8 @@
             });
             ui.log.removeAttribute('aria-busy');
             history = cleanHistory(data.history, shown);
+            var asked = shown.filter(function (t) { return t.who === 'You'; });
+            lastQuestion = asked.length ? asked[asked.length - 1].text : '';
             chatFile = name;
             chatStarted = validDate(new Date(data.created));
             chatCategory = categoryOf(text);
@@ -851,6 +973,8 @@
     function chooseFolder() {
         K.chats.pick().then(function (name) {
             folder = { name: name, ready: true };
+            // Choosing a folder is asking to save, so it turns No history off.
+            setNoHistory(false, true);
             addSystem('Saving chats to the folder "' + name + '".');
             renderHistory();
             persist();
@@ -878,6 +1002,23 @@
         });
     }
 
+    /** No history: stop (or resume) writing chats to the folder. It does not
+        make the chat private, so every message says so plainly. */
+    function setNoHistory(on, quiet) {
+        noHistory = on;
+        ui.noHistory.setAttribute('aria-pressed', on ? 'true' : 'false');
+        ui.noHistory.classList.toggle('is-active', on);
+        if (!quiet) {
+            addSystem(on
+                ? 'No history: this chat is not saved on this device. It is not private: '
+                    + 'the AI provider still receives every message and document excerpt.'
+                : (folder ? 'History on: chats are saved to "' + folder.name + '".'
+                    : 'History on: choose a folder in Settings to save chats.'));
+        }
+        renderHistory();
+        if (!on) persist();
+    }
+
     /** The Settings row and the Chat history panel. `files` skips a re-read. */
     function renderHistory(files) {
         var setup;
@@ -894,7 +1035,8 @@
             ];
         } else {
             setup = [el('div', { class: 'flex items-center justify-between gap-2' }, [
-                el('span', { class: 'truncate', text: 'Saving to ' + folder.name }),
+                el('span', { class: 'truncate', text: (noHistory ? 'Paused (No history): '
+                    : 'Saving to ') + folder.name }),
                 el('button', { type: 'button', class: 'text-danger hover:underline shrink-0',
                     text: 'Stop', on: { click: stopSaving } }),
             ])];
@@ -997,6 +1139,7 @@
         transcript = [];
         turns = [];
         history = [];
+        lastQuestion = '';
         chatFile = '';
         chatStarted = null;
         chatCategory = '';
@@ -1060,12 +1203,15 @@
             el('div', { class: 'bg-tertiary p-4 rounded-lg max-w-3xl shadow-md' }, [
                 el('p', { class: 'font-bold text-accent mb-1', text: 'Orochimaru' }),
                 el('ul', { class: 'list-disc ml-5 mt-1 text-sm opacity-90 space-y-1' }, [
-                    el('li', { text: 'Ask anything, or load documents (PDF, Word, text, '
-                        + 'CSV, Markdown, HTML and more) to ask about them.' }),
-                    el('li', { text: '"Answer from" chooses documents plus labelled general '
-                        + 'knowledge (the default), or documents only.' }),
-                    el('li', { text: 'Documents and messages are held in memory only. '
-                        + 'Reloading the page discards them.' }),
+                    el('li', { text: 'Ask anything, or load documents (PDF, Word, CSV, '
+                        + 'Markdown, HTML...) to ask about them.' }),
+                    el('li', { text: '"Answer from": documents plus labelled general '
+                        + 'knowledge, or documents only.' }),
+                    el('li', { text: noHistory
+                        ? 'No history is on: nothing is saved here, and a reload clears it. '
+                            + 'Not private: the AI provider still sees everything you send.'
+                        : 'History is on: chats save to your folder. The AI provider sees '
+                            + 'everything you send.' }),
                 ]),
             ]),
         ]));
@@ -1227,8 +1373,9 @@
         var chunks = [];
         if (docNames().length) {
             ui.indicator.classList.remove('is-invisible');
-            chunks = retrieve(query, 5);
+            chunks = retrieve(query, 5, lastQuestion);
         }
+        lastQuestion = query;
         var turn = K.prompts.chatTurn(query, chunks, docNames(), strictMode(), activeSkills);
 
         ask([{ role: 'system', content: K.prompts.chatSystemPrompt() }]
@@ -1484,6 +1631,7 @@
             model: document.getElementById('model-select'),
             temp: document.getElementById('temp-slider'),
             mode: document.getElementById('answer-mode'),
+            search: document.getElementById('search-mode'),
             tempOut: document.getElementById('temp-val'),
             docList: document.getElementById('doc-list'),
             docCount: document.getElementById('doc-count'),
@@ -1510,6 +1658,7 @@
             historyBody: document.getElementById('history-body'),
             historyCount: document.getElementById('history-count'),
             historySetup: document.getElementById('history-setup'),
+            noHistory: document.getElementById('no-history'),
         };
 
         settings = K.ui.mountSettings({
@@ -1585,6 +1734,7 @@
         document.getElementById('purge-btn').addEventListener('click', K.ui.purgeAll);
         K.ui.bindCopy(document.getElementById('copy-chat'), chatAsMarkdown);
         document.getElementById('save-chat').addEventListener('click', saveChat);
+        ui.noHistory.addEventListener('click', function () { setNoHistory(!noHistory); });
         // Per-answer buttons read one answer; this one reads the whole chat.
         K.ui.bindSpeak(ui.tts, chatAsSpeech);
 

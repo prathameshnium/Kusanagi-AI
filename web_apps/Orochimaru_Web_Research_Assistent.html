@@ -96,6 +96,13 @@
                         </select>
                     </div>
                     <div>
+                        <label for="search-mode" class="block text-[10px] text-fg-secondary mb-1">Search documents by</label>
+                        <select id="search-mode" class="!bg-primary !text-xs !p-1.5" title="Both are RAG. Smart (BM25) ranks rare words higher and matches word forms. Original counts exact words, part-words included.">
+                            <option value="bm25" selected>Smart (BM25)</option>
+                            <option value="exact">Original (exact words)</option>
+                        </select>
+                    </div>
+                    <div>
                         <div class="flex justify-between text-[10px] text-fg-secondary mb-1">
                             <label for="temp-slider">Temperature</label>
                             <span id="temp-val" class="text-accent font-mono">0.3</span>
@@ -145,6 +152,7 @@
                 </div>
 
                 <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    <button id="no-history" type="button" class="header-btn is-active" aria-pressed="true" title="On: chats are not saved on this device. Not private: the AI provider still receives every message.">No history</button>
                     <button id="save-chat" type="button" class="header-btn" title="Download the chat as a Markdown file">Save</button>
                     <button id="copy-chat" type="button" class="header-btn hidden sm:inline-block">Copy</button>
                     <button id="tts-btn" type="button" class="header-btn hidden sm:inline-block" aria-pressed="false">Read aloud</button>

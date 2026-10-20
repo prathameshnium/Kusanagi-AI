@@ -126,10 +126,20 @@ def test_every_answer_is_saved_to_the_folder():
     assert "saving = saving.then(saveNow, saveNow);" in queue, \
         "saves must run one after another, or an older copy can land last"
     body = function_body(OROCHIMARU, "function saveNow()")
-    assert "if (!folder || !folder.ready || !turns.length) return null;" in body
+    assert "if (noHistory || !folder || !folder.ready || !turns.length) return null;" in body
     assert "freeName(chatFileName(chatStarted))" in body, "a new chat must not overwrite an old file"
     assert "if (token !== chatToken) return null;" in body
     assert "K.chats.write(name, chatDocument())" in body
+
+
+def test_no_history_is_on_by_default_and_says_it_is_not_private():
+    """Nothing is written until the user turns No history off, and the page
+    never lets them mistake that for privacy."""
+    assert "var noHistory = true;" in OROCHIMARU
+    assert 'id="no-history"' in OROCHIMARU_HTML and 'aria-pressed="true"' in OROCHIMARU_HTML
+    body = function_body(OROCHIMARU, "function setNoHistory(on, quiet)")
+    assert "It is not private" in body
+    assert "if (!on) persist();" in body
 
 
 def test_a_reply_for_a_chat_no_longer_open_is_dropped():

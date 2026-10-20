@@ -120,7 +120,7 @@ def test_kakashi_grounds_its_answer_in_retrieved_results():
 
 def test_orochimaru_passes_retrieved_chunks_to_the_prompt():
     source = strip_js_comments(read("static", "pages", "orochimaru.js"))
-    assert "chunks = retrieve(query, 5);" in source
+    assert "chunks = retrieve(query, 5, lastQuestion);" in source
     assert "K.prompts.chatTurn(query, chunks, docNames(), strictMode(), activeSkills)" in source
     assert "K.prompts.review(" in source
     assert "K.prompts.summarise(" in source
