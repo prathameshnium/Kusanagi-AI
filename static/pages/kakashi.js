@@ -523,6 +523,8 @@
             var reasoning = K.ui.reasoningBlock(res.reasoning);
             if (reasoning) ui.response.appendChild(reasoning);
             ui.response.appendChild(body);
+            var web = K.ui.webSourcesBlock(res.webSources);
+            if (web) ui.response.appendChild(web);
             ui.response.appendChild(el('div', { class: 'mt-3 flex gap-2' }, [
                 K.ui.copyButton(function () {
                     return dom.relabelCitations(res.text, answerNo);
@@ -621,12 +623,16 @@
             onSave: function () {
                 K.ui.fillModelSelect(ui.model, provider());
                 syncModel();
+                effort.sync();
             },
         });
         K.ui.fillModelSelect(ui.model, provider());
         var syncModel = K.ui.bindModelControls({
             model: ui.model, temp: ui.temp, tempOut: ui.tempOut, provider: provider,
         });
+        // Thinking effort and the reasoning switch sit in the search box, before GO.
+        var effort = K.ui.claudeControls(provider);
+        ui.homeInput.insertAdjacentElement('afterend', effort.node);
 
         ui.temp.addEventListener('input', function () {
             ui.tempOut.textContent = ui.temp.value;

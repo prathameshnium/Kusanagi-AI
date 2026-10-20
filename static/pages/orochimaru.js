@@ -487,7 +487,7 @@
         });
     }
 
-    function addAI(rawText, sources, reasoning) {
+    function addAI(rawText, sources, reasoning, webSources) {
         answerCount += 1;
         var answerNo = answerCount;
         // Copies and the chat transcript carry the same [answer:source] labels
@@ -506,6 +506,7 @@
             el('div', { class: 'flex flex-col items-start gap-1 max-w-3xl min-w-0' }, [
                 K.ui.reasoningBlock(reasoning),
                 body,
+                K.ui.webSourcesBlock(webSources),
                 el('div', { class: 'flex gap-2' }, [
                     K.ui.copyButton(function () { return text; }),
                     K.ui.speakButton(function () { return K.ui.speakableText(body); }),
@@ -671,7 +672,7 @@
                 addSystem('Answered by ' + res.model + ': '
                     + ui.model.value + ' was unavailable.');
             }
-            addAI(res.text, sources, res.reasoning);
+            addAI(res.text, sources, res.reasoning, res.webSources);
             lastAnswer = res.text;
             history.push({ role: 'user', content: userFacing },
                 { role: 'assistant', content: res.text });
@@ -851,6 +852,7 @@
                 checkStatus();
                 K.ui.fillModelSelect(ui.model, provider());
                 syncModel();
+                effort.sync();
             },
         });
 
@@ -858,6 +860,9 @@
         var syncModel = K.ui.bindModelControls({
             model: ui.model, temp: ui.temp, tempOut: ui.tempOut, provider: provider,
         });
+        // Thinking effort and the reasoning switch sit in the chat box, before send.
+        var effort = K.ui.claudeControls(provider);
+        ui.input.insertAdjacentElement('afterend', effort.node);
         checkStatus();
         greeting();
         renderDocList();

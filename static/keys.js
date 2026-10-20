@@ -471,6 +471,8 @@ window.Kusanagi = window.Kusanagi || {};
         cache: { default: false },      // prompt caching: cheaper repeated context
         usOnly: { default: false },     // inference_geo: "us"
         fast: { default: false },       // Opus 5.5 fast mode, at twice the price
+        webSearch: { default: false },  // Claude searches the web itself
+        webFetch: { default: false },   // Claude reads pages linked in the chat
     };
     prefs.CLAUDE_OPTIONS = CLAUDE_OPTIONS;
 

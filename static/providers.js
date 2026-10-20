@@ -338,51 +338,117 @@ window.Kusanagi = window.Kusanagi || {};
         }
         if (betas.length) headers['anthropic-beta'] = betas.join(',');
 
-        return request(ENDPOINTS.anthropic, {
-            method: 'POST',
-            headers: headers,
-            body: JSON.stringify(body),
-        }, (opts && opts.timeoutMs) || ANTHROPIC_TIMEOUT_MS).then(function (resp) {
-            return readJson(resp).then(function (data) {
-                if (!resp.ok) throw providerError(data, resp, 'Anthropic');
+        // Anthropic runs the searches and fetches itself, so the browser only
+        // ever talks to api.anthropic.com. Skipped for JSON calls, where a
+        // search would only get in the way of the bare JSON they expect.
+        if (!(opts && opts.json)) {
+            // Haiku has only the basic tool versions; the rest get the newer
+            // ones that filter results before they reach the context.
+            var basic = /haiku/.test(modelId);
+            var tools = [];
+            if (option('webSearch')) {
+                tools.push({ type: basic ? 'web_search_20250305' : 'web_search_20260209',
+                    name: 'web_search', max_uses: 5 });
+            }
+            if (option('webFetch')) {
+                tools.push({ type: basic ? 'web_fetch_20250910' : 'web_fetch_20260209',
+                    name: 'web_fetch', max_uses: 5 });
+            }
+            if (tools.length) body.tools = tools;
+        }
 
-                if (data.stop_reason === 'refusal') {
-                    var category = data.stop_details && data.stop_details.category;
-                    var refused = new Error('Claude declined to answer'
-                        + (category ? ' (' + category + ').' : '.'));
-                    refused.retryable = true;
-                    throw refused;
-                }
+        var timeoutMs = (opts && opts.timeoutMs) || ANTHROPIC_TIMEOUT_MS;
+        var content = [];   // every block across continuations, in order
+        var usage = { input_tokens: 0, output_tokens: 0 };
 
-                // Content can include thinking blocks; only text is the answer.
-                var text = (data.content || [])
-                    .filter(function (b) { return b && b.type === 'text'; })
-                    .map(function (b) { return b.text; })
-                    .join('');
-                if (!text) {
-                    var blank = new Error('Anthropic returned no text.');
-                    blank.retryable = true;
-                    throw blank;
-                }
-
-                // Summarised reasoning, when asked for; empty text otherwise.
-                var reasoning = (data.content || [])
-                    .filter(function (b) { return b && b.type === 'thinking' && b.thinking; })
-                    .map(function (b) { return b.thinking; })
-                    .join('\n\n');
-
-                var u = data.usage;
-                return {
-                    text: text,
-                    reasoning: reasoning,
-                    usage: u ? {
-                        prompt_tokens: u.input_tokens,
-                        completion_tokens: u.output_tokens,
-                        total_tokens: (u.input_tokens || 0) + (u.output_tokens || 0),
-                    } : null,
-                };
+        // With web tools on, a long search can stop with pause_turn: send the
+        // partial answer back and Claude carries on from where it paused.
+        function send(round) {
+            return request(ENDPOINTS.anthropic, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(body),
+            }, timeoutMs).then(function (resp) {
+                return readJson(resp).then(function (data) {
+                    if (!resp.ok) throw providerError(data, resp, 'Anthropic');
+                    content = content.concat(data.content || []);
+                    if (data.usage) {
+                        usage.input_tokens += data.usage.input_tokens || 0;
+                        usage.output_tokens += data.usage.output_tokens || 0;
+                    }
+                    if (data.stop_reason === 'pause_turn' && round < MAX_PAUSE_ROUNDS) {
+                        body.messages = turns.concat([{ role: 'assistant', content: content }]);
+                        return send(round + 1);
+                    }
+                    return data;
+                });
             });
+        }
+
+        return send(0).then(function (data) {
+            if (data.stop_reason === 'refusal') {
+                var category = data.stop_details && data.stop_details.category;
+                var refused = new Error('Claude declined to answer'
+                    + (category ? ' (' + category + ').' : '.'));
+                refused.retryable = true;
+                throw refused;
+            }
+
+            // Content can include thinking and tool blocks; only text is the answer.
+            var text = content
+                .filter(function (b) { return b && b.type === 'text'; })
+                .map(function (b) { return b.text; })
+                .join('');
+            if (!text) {
+                var blank = new Error('Anthropic returned no text.');
+                blank.retryable = true;
+                throw blank;
+            }
+
+            // Summarised reasoning, when asked for; empty text otherwise.
+            var reasoning = content
+                .filter(function (b) { return b && b.type === 'thinking' && b.thinking; })
+                .map(function (b) { return b.thinking; })
+                .join('\n\n');
+
+            return {
+                text: text,
+                reasoning: reasoning,
+                webSources: webSources(content),
+                usage: {
+                    prompt_tokens: usage.input_tokens,
+                    completion_tokens: usage.output_tokens,
+                    total_tokens: usage.input_tokens + usage.output_tokens,
+                },
+            };
         });
+    }
+
+    var MAX_PAUSE_ROUNDS = 4;
+
+    /** Pages Claude searched or fetched, deduplicated: [{title, url}]. Results
+        are untrusted; the caller renders them as text and checked links. */
+    function webSources(content) {
+        var seen = {};
+        var out = [];
+        function add(url, title) {
+            if (typeof url !== 'string' || !/^https?:\/\//i.test(url) || seen[url]) return;
+            seen[url] = true;
+            out.push({ url: url, title: String(title || url) });
+        }
+        content.forEach(function (b) {
+            if (!b) return;
+            if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) {
+                b.content.forEach(function (r) {
+                    if (r && r.type === 'web_search_result') add(r.url, r.title);
+                });
+            } else if (b.type === 'web_fetch_tool_result' && b.content
+                && b.content.type === 'web_fetch_result') {
+                var doc = b.content.content;
+                add(b.content.url, doc && doc.title);
+            }
+        });
+        return out;
     }
 
     /* For Ollama the "key" field holds the base URL instead. */

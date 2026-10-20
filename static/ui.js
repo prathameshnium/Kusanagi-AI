@@ -173,6 +173,12 @@ window.Kusanagi = window.Kusanagi || {};
                 'Sends inference_geo: "us".'),
             fast: optionToggle('settings-claude-fast', 'Fast mode (Opus 5.5 only)',
                 'Up to 2.5× faster output at twice the price.'),
+            webSearch: optionToggle('settings-claude-search', 'Web search',
+                'Claude searches the web itself, up to 5 times an answer. Billed per '
+                + 'search ($10 per 1,000) on top of tokens.'),
+            webFetch: optionToggle('settings-claude-fetch', 'Web fetch',
+                'Claude reads the full text of pages linked in the chat or found by '
+                + 'search. Fetched pages count as input tokens.'),
         };
 
         function claudeLabel(text, id) {
@@ -195,6 +201,8 @@ window.Kusanagi = window.Kusanagi || {};
             claudeToggles.cache.row,
             claudeToggles.usOnly.row,
             claudeToggles.fast.row,
+            claudeToggles.webSearch.row,
+            claudeToggles.webFetch.row,
         ]);
 
         var voiceSourceSelect = optionSelect('settings-voice-source', [
@@ -629,6 +637,8 @@ window.Kusanagi = window.Kusanagi || {};
             if (prefs.claude('reasoning')) parts.push('reasoning shown');
             if (prefs.claude('cache')) parts.push('cached');
             if (prefs.claude('usOnly')) parts.push('US only');
+            if (prefs.claude('webSearch')) parts.push('web search');
+            if (prefs.claude('webFetch')) parts.push('web fetch');
             if (prefs.claude('fast')) {
                 parts.push(c.model.value === 'claude-opus-5-5' ? 'fast' : 'fast (Opus 5.5 only, off here)');
             }
@@ -639,6 +649,76 @@ window.Kusanagi = window.Kusanagi || {};
         window.addEventListener('kusanagi:prefs', sync);
         sync();
         return sync;
+    }
+
+    /**
+     * Claude controls for beside a chat or search box: the thinking effort and
+     * a "Reasoning" switch. They share their settings with the Settings dialog,
+     * and hide themselves unless Claude is the provider.
+     *
+     * claudeControls(provider) -> {node, sync}
+     */
+    function claudeControls(provider) {
+        var prefs = window.Kusanagi.prefs;
+        var select = el('select', {
+            class: '!w-auto !bg-transparent !border-0 !text-xs !py-1 !pl-2 !pr-6 '
+                + 'text-fg-secondary',
+            'aria-label': 'Thinking effort',
+            title: 'How hard Claude thinks: higher is slower and costs more.',
+        }, [['', 'Effort: default'], ['low', 'Effort: low'], ['medium', 'Effort: medium'],
+            ['high', 'Effort: high'], ['xhigh', 'Effort: extra high'], ['max', 'Effort: max'],
+        ].map(function (c) { return el('option', { value: c[0], text: c[1] }); }));
+
+        var reasoning = el('button', {
+            type: 'button',
+            class: 'text-[11px] font-bold px-2 py-0.5 rounded border transition whitespace-nowrap',
+            text: 'Reasoning',
+            title: 'Show a summary of how Claude thought it through, above the answer.',
+        });
+
+        var node = el('span', { class: 'flex items-center gap-1 shrink-0 pr-1' },
+            [select, reasoning]);
+
+        function announce() { window.dispatchEvent(new CustomEvent('kusanagi:prefs')); }
+
+        function sync() {
+            node.classList.toggle('hidden', provider() !== 'anthropic');
+            select.value = prefs.claude('effort');
+            var on = prefs.claude('reasoning');
+            reasoning.setAttribute('aria-pressed', String(on));
+            reasoning.classList.toggle('border-accent', on);
+            reasoning.classList.toggle('text-accent', on);
+            reasoning.classList.toggle('border-tertiary', !on);
+            reasoning.classList.toggle('text-fg-secondary', !on);
+        }
+        select.addEventListener('change', function () {
+            prefs.setClaude('effort', select.value);
+            announce();
+        });
+        reasoning.addEventListener('click', function () {
+            prefs.setClaude('reasoning', !prefs.claude('reasoning'));
+            announce();
+        });
+        window.addEventListener('kusanagi:prefs', sync);
+        sync();
+        return { node: node, sync: sync };
+    }
+
+    /** "Searched the web" list of the pages Claude used, or null. */
+    function webSourcesBlock(sources) {
+        if (!sources || !sources.length) return null;
+        return el('details', {
+            class: 'mt-2 text-xs text-fg-secondary border border-tertiary rounded px-3 py-2',
+        }, [
+            el('summary', { class: 'cursor-pointer font-bold',
+                text: 'Web sources (' + sources.length + ')' }),
+            el('ol', { class: 'mt-2 list-decimal ml-5 space-y-1' }, sources.map(function (s) {
+                return el('li', {}, [el('a', {
+                    href: s.url, target: '_blank', rel: 'noopener noreferrer',
+                    class: 'text-accent hover:underline break-all', text: s.title,
+                })]);
+            })),
+        ]);
     }
 
     /** A collapsed "Reasoning" box for Claude's summarised thinking, or null. */
@@ -951,6 +1031,8 @@ window.Kusanagi = window.Kusanagi || {};
         fillModelSelect: fillModelSelect,
         bindModelControls: bindModelControls,
         reasoningBlock: reasoningBlock,
+        claudeControls: claudeControls,
+        webSourcesBlock: webSourcesBlock,
         resultCard: resultCard,
         expandableText: expandableText,
         copyToClipboard: copyToClipboard,
