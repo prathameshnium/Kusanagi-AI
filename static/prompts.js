@@ -207,18 +207,25 @@ window.Kusanagi = window.Kusanagi || {};
     }
 
     /**
-     * Orochimaru chat: system prompt for one turn of a conversation, rebuilt
-     * every turn with the excerpts retrieved for the newest question. The
-     * conversation itself goes in the message list, not in here.
+     * Orochimaru chat: one turn of a conversation, as the user message.
+     *
+     * The system prompt (chatSystemPrompt) never changes, so a provider that
+     * caches a prompt prefix (Anthropic) can reuse it and every earlier turn.
+     * Everything that does change -- the excerpts retrieved for this message,
+     * the answer mode, the skills that are on -- travels here, in a CONTEXT
+     * section ahead of the question.
      *
      *   strict  true  -> answer from the documents and nothing else
      *           false -> documents first, general knowledge allowed but labelled
      *                    (the default)
      *
-     * With no documents loaded, Orochimaru uses chatSystemPrompt() instead.
+     * With no documents loaded and no skills on, the turn is just the question.
      */
-    function documentChatPrompt(chunks, documentNames, strict, skillIds) {
+    function chatTurn(question, chunks, documentNames, strict, skillIds) {
+        var hasDocs = documentNames && documentNames.length;
         var hasContext = chunks && chunks.length;
+        var skills = skillsBlock(skillIds);
+        if (!hasDocs && !skills) return question;
 
         var mode = strict
             ? [
@@ -236,30 +243,23 @@ window.Kusanagi = window.Kusanagi || {};
                 'memory after the excerpts, so each [n] points at one thing.',
             ].join('\n');
 
+        var noMatch = strict
+            ? 'No text from the documents matched this message. Say the loaded '
+                + 'documents do not cover it, and suggest rephrasing with the terms '
+                + 'the documents use.'
+            : 'No text from the documents matched this message. Say so in one '
+                + 'line, then answer from general knowledge, marked "(background, '
+                + 'not from the documents)".';
+
         return lines([
-            RIGOUR,
-            '',
-            'This is a conversation about the user\'s documents' + namesNote(documentNames)
-                + '. Answer the newest message; earlier turns are context.',
-            hasContext
-                ? mode
-                : (strict
-                    ? 'No text from the documents matched the newest message. Say the '
-                        + 'loaded documents do not cover it, and suggest rephrasing with '
-                        + 'the terms the documents use.'
-                    : 'No text from the documents matched the newest message. Say so '
-                        + 'in one line, then answer from general knowledge, marked '
-                        + '"(background, not from the documents)".'),
-            '',
-            strict ? null : REFERENCES_FROM_MEMORY,
-            strict ? null : '',
-            skillsBlock(skillIds),
-            skillIds && skillIds.length ? '' : null,
-            FORMAT,
-            hasContext ? '' : null,
-            hasContext ? UNTRUSTED_SOURCES : null,
-            hasContext ? '' : null,
+            'CONTEXT',
+            hasDocs ? 'The user has loaded documents' + namesNote(documentNames) + '.' : null,
+            hasDocs ? (hasContext ? mode : noMatch) : null,
+            skills,
             hasContext ? sourcesBlock(excerpts(chunks), 1200) : null,
+            'END OF CONTEXT',
+            '',
+            'QUESTION: ' + question,
         ]);
     }
 
@@ -317,19 +317,30 @@ window.Kusanagi = window.Kusanagi || {};
         ]);
     }
 
-    /** Orochimaru with no documents loaded: open conversation, same standard. */
-    function chatSystemPrompt(skillIds) {
+    /**
+     * Orochimaru chat: the system prompt, byte-identical on every turn of every
+     * conversation, so it and the turns after it can be read from a provider's
+     * prompt cache. Anything that varies goes in the turn (chatTurn).
+     */
+    function chatSystemPrompt() {
         return lines([
             RIGOUR,
             '',
-            'This is an open conversation on any topic. Match the length of the',
-            'answer to the question.',
+            'This is a conversation, about the user\'s documents when they have',
+            'loaded some and on any topic otherwise. Answer the newest message;',
+            'earlier turns are context. Match the length of the answer to the',
+            'question.',
+            '',
+            'A message may open with a CONTEXT section written by the page, not',
+            'typed by the user: the documents loaded, how to use them, the skills',
+            'the user switched on, and excerpts retrieved for that message. Follow',
+            'it for that message.',
             '',
             REFERENCES_FROM_MEMORY,
             '',
-            skillsBlock(skillIds),
-            skillIds && skillIds.length ? '' : null,
             FORMAT,
+            '',
+            UNTRUSTED_SOURCES,
         ]);
     }
 
@@ -544,10 +555,10 @@ window.Kusanagi = window.Kusanagi || {};
         sourcesBlock: sourcesBlock,
         deepResearch: deepResearch,
         documentQa: documentQa,
-        documentChatPrompt: documentChatPrompt,
         review: review,
         summarise: summarise,
         chatSystemPrompt: chatSystemPrompt,
+        chatTurn: chatTurn,
         tokenProbabilities: tokenProbabilities,
         searchStrategies: searchStrategies,
     };

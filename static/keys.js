@@ -479,7 +479,7 @@ window.Kusanagi = window.Kusanagi || {};
         effort: { default: '', values: ['', 'low', 'medium', 'high', 'xhigh', 'max'] },
         maxTokens: { default: '16000', values: ['4096', '16000', '32000'] },
         reasoning: { default: false },  // summarised thinking, shown above the answer
-        cache: { default: false },      // prompt caching: cheaper repeated context
+        cache: { default: true },       // prompt caching: cheaper repeated context
         usOnly: { default: false },     // inference_geo: "us"
         fast: { default: false },       // Opus 5.5 fast mode, at twice the price
         webSearch: { default: false },  // Claude searches the web itself

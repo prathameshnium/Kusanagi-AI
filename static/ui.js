@@ -174,8 +174,10 @@ window.Kusanagi = window.Kusanagi || {};
             reasoning: optionToggle('settings-claude-reasoning', 'Show reasoning',
                 'A summary of how Claude thought it through, above the answer.'),
             cache: optionToggle('settings-claude-cache', 'Prompt caching',
-                'Follow-up turns re-read documents and history at about a tenth of '
-                + 'the price. The first turn costs a quarter more.'),
+                'Each chat turn re-reads the instructions and earlier turns from '
+                + 'Anthropic\u2019s cache at a twentieth of the price or less (a '
+                + 'fortieth on Fable). New text costs a quarter more the first time. '
+                + 'The cache lasts 5 minutes after each answer.'),
             usOnly: optionToggle('settings-claude-us', 'Process in the US only',
                 'Sends inference_geo: "us".'),
             fast: optionToggle('settings-claude-fast', 'Fast mode (Opus 5.5 only)',
@@ -1108,7 +1110,120 @@ window.Kusanagi = window.Kusanagi || {};
         }), getText);
     }
 
+    /* ------------------------------------------------------------ save file */
+
+    /** Hand the user `text` as a file download. Nothing leaves the browser. */
+    function saveFile(name, text, type) {
+        var blob = new Blob([text], { type: type || 'text/plain;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        // A plain anchor: dom.el only accepts web URLs, and this is a blob: one.
+        var link = document.createElement('a');
+        link.href = url;
+        link.download = name;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    /** "2026-10-21 14-05": a date and time that sorts and is safe in a filename. */
+    function fileStamp(date) {
+        function two(n) { return (n < 10 ? '0' : '') + n; }
+        var d = date || new Date();
+        return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate())
+            + ' ' + two(d.getHours()) + '-' + two(d.getMinutes());
+    }
+
+    /* ----------------------------------------------------------- new version */
+
+    // When a new build is deployed, offer a reload rather than leave the page
+    // running old code. The page, its own scripts and its stylesheet are
+    // checked with HEAD requests (no body is downloaded): GitHub Pages and the
+    // local server both send an ETag or Last-Modified that changes with the
+    // file. Vendor libraries are skipped; they change rarely and are large.
+    var UPDATE_CHECK_MS = 5 * 60 * 1000;
+
+    function ownAssets() {
+        var urls = [window.location.href.split('#')[0]];
+        var nodes = document.querySelectorAll('script[src], link[rel="stylesheet"][href]');
+        Array.prototype.forEach.call(nodes, function (node) {
+            var url = new URL(node.src || node.href, window.location.href);
+            if (url.origin === window.location.origin
+                && url.pathname.indexOf('/vendor/') === -1) {
+                urls.push(url.href);
+            }
+        });
+        return urls;
+    }
+
+    function versionOf(url) {
+        return fetch(url, { method: 'HEAD', cache: 'no-store' }).then(function (resp) {
+            if (!resp.ok) return null;
+            return resp.headers.get('ETag') || resp.headers.get('Last-Modified') || null;
+        }).catch(function () { return null; });
+    }
+
+    function offerReload() {
+        var reload = el('button', {
+            type: 'button', class: 'btn btn-accent text-xs', text: 'Reload',
+            on: { click: function () { window.location.reload(); } },
+        });
+        var later = el('button', {
+            type: 'button', class: 'btn btn-secondary text-xs', text: 'Later',
+            on: { click: function () { node.parentNode.removeChild(node); } },
+        });
+        var node = el('div', {
+            class: 'settings-modal-content px-4 py-3 rounded-lg shadow-lg border '
+                + 'border-accent text-sm max-w-sm fade-enter',
+            role: 'status',
+        }, [
+            el('p', { class: 'font-bold text-fg-primary', text: 'A new version is available.' }),
+            el('p', {
+                class: 'text-xs text-fg-secondary mt-1',
+                text: 'Reload to use it. Anything not saved on this page, such as '
+                    + 'a chat or loaded documents, will be cleared.',
+            }),
+            el('div', { class: 'flex gap-2 mt-2' }, [reload, later]),
+        ]);
+        ensureToastHost().appendChild(node);
+    }
+
+    function watchForUpdates() {
+        if (!/^https?:$/.test(window.location.protocol) || !window.fetch) return;
+        var urls = ownAssets();
+        var known = {};
+        var offered = false;
+
+        function check() {
+            if (offered || document.hidden) return;
+            Promise.all(urls.map(versionOf)).then(function (versions) {
+                var changed = false;
+                versions.forEach(function (version, i) {
+                    if (version === null) return;
+                    if (!(urls[i] in known)) known[urls[i]] = version;
+                    else if (known[urls[i]] !== version) changed = true;
+                });
+                if (changed && !offered) {
+                    offered = true;
+                    offerReload();
+                }
+            });
+        }
+
+        check();
+        setInterval(check, UPDATE_CHECK_MS);
+        document.addEventListener('visibilitychange', check);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', watchForUpdates);
+    } else {
+        watchForUpdates();
+    }
+
     window.Kusanagi.ui = {
+        saveFile: saveFile,
+        fileStamp: fileStamp,
         bindSpeak: bindSpeak,
         speakButton: speakButton,
         speakableText: speakableText,

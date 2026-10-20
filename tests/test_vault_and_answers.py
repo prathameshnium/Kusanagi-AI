@@ -237,7 +237,7 @@ def test_document_mode_toggle_is_wired():
 
 
 def test_strict_mode_forbids_background_knowledge():
-    body = PROMPTS.split("function documentChatPrompt")[1].split("var REVIEW_PERSONAS")[0]
+    body = PROMPTS.split("function chatTurn")[1].split("var REVIEW_PERSONAS")[0]
     strict = body.split("var mode = strict")[1].split(": [")[0]
     assert "nothing else" in strict
     assert "not even with a labelled guess" in strict
@@ -309,5 +309,16 @@ def test_skills_are_toggles_that_reach_the_prompt():
     source = strip_js_comments(read("static", "pages", "orochimaru.js"))
     assert "'aria-pressed': String(on)" in source
     assert "function toggleSkill(id, quiet)" in source
-    assert "skillsBlock(skillIds)" in PROMPTS.split("function chatSystemPrompt")[1]
-    assert "skillsBlock(skillIds)" in PROMPTS.split("function documentChatPrompt")[1]
+    assert "skillsBlock(skillIds)" in PROMPTS.split("function chatTurn")[1].split("\n    }\n")[0]
+
+
+def test_chat_system_prompt_is_frozen_for_the_prompt_cache():
+    """Anthropic's cache is a prefix match: anything that varies per turn in
+    the system prompt would make every turn a cache miss."""
+    body = PROMPTS.split("function chatSystemPrompt(")[1].split("\n    }\n")[0]
+    assert body.startswith(")"), "chatSystemPrompt must take no arguments"
+    source = strip_js_comments(read("static", "pages", "orochimaru.js"))
+    assert "history.slice(-MAX_TURNS / 2)" in source
+    providers = read("static", "providers.js")
+    assert "cache_control: { type: 'ephemeral' } }]" in providers
+    assert "if (cache && opts && opts.conversation)" in providers

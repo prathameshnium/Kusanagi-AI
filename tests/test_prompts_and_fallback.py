@@ -41,7 +41,7 @@ def providers_code():
 
 def test_prompts_module_exports_every_builder(prompts_js):
     for name in ("deepResearch", "documentQa", "review", "summarise",
-                 "chatSystemPrompt", "searchStrategies", "sourcesBlock"):
+                 "chatSystemPrompt", "chatTurn", "searchStrategies", "sourcesBlock"):
         assert re.search(r"\b%s: %s," % (name, name), prompts_js), name
 
 
@@ -121,7 +121,7 @@ def test_kakashi_grounds_its_answer_in_retrieved_results():
 def test_orochimaru_passes_retrieved_chunks_to_the_prompt():
     source = strip_js_comments(read("static", "pages", "orochimaru.js"))
     assert "chunks = retrieve(query, 5);" in source
-    assert "K.prompts.documentChatPrompt(chunks, docNames(), strictMode(), activeSkills)" in source
+    assert "K.prompts.chatTurn(query, chunks, docNames(), strictMode(), activeSkills)" in source
     assert "K.prompts.review(" in source
     assert "K.prompts.summarise(" in source
 
@@ -129,14 +129,14 @@ def test_orochimaru_passes_retrieved_chunks_to_the_prompt():
 def test_chat_sends_the_rigour_preamble_as_a_system_message():
     """OneTail was merged into Orochimaru: with no documents it is plain chat."""
     source = strip_js_comments(read("static", "pages", "orochimaru.js"))
-    assert "K.prompts.chatSystemPrompt(activeSkills)" in source
+    assert "K.prompts.chatSystemPrompt()" in source
     assert "role: 'system'" in source
 
 
 def test_system_prompt_is_not_trimmed_away_by_history_limits():
     """Prepending it to the (already trimmed) history keeps it present on long chats."""
     source = strip_js_comments(read("static", "pages", "orochimaru.js"))
-    assert re.search(r"\[\{ role: 'system', content: system \}\]\s*\n?\s*\.concat\(history,",
+    assert re.search(r"\[\{ role: 'system', content: K\.prompts\.chatSystemPrompt\(\) \}\]\s*\n?\s*\.concat\(history,",
                      source, re.S)
 
 
@@ -145,9 +145,10 @@ def test_chat_history_sent_to_the_model_opens_on_a_user_turn():
     turn, and Anthropic rejects a conversation that starts with the assistant."""
     source = strip_js_comments(read("static", "pages", "orochimaru.js"))
     assert ".concat(history.slice(" not in source
-    assert "history = history.slice(-MAX_TURNS)" in source
+    # Trimmed to half the cap, which must itself be even.
+    assert "history = history.slice(-MAX_TURNS / 2)" in source
     assert re.search(r"MAX_TURNS = (\d+)", source) and \
-        int(re.search(r"MAX_TURNS = (\d+)", source).group(1)) % 2 == 0
+        int(re.search(r"MAX_TURNS = (\d+)", source).group(1)) % 4 == 0
 
 
 def test_prompts_js_is_loaded_by_every_page_that_uses_it(page_sources):

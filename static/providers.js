@@ -57,6 +57,7 @@ window.Kusanagi = window.Kusanagi || {};
         ],
         anthropic: [
             { id: 'claude-opus-5-5', name: 'Claude Opus 5.5' },
+            { id: 'claude-fable-5-1', name: 'Claude Fable 5.1 (most capable, priciest)' },
             { id: 'claude-sonnet-5-5', name: 'Claude Sonnet 5.5' },
             { id: 'claude-haiku-5-5', name: 'Claude Haiku 5.5 (cheapest)' },
         ],
@@ -270,7 +271,7 @@ window.Kusanagi = window.Kusanagi || {};
     }
 
     /* Models that accept the server-side refusal fallback. Haiku has none. */
-    var ANTHROPIC_REFUSAL_FALLBACK = ['claude-opus-5-5', 'claude-sonnet-5-5'];
+    var ANTHROPIC_REFUSAL_FALLBACK = ['claude-fable-5-1', 'claude-opus-5-5', 'claude-sonnet-5-5'];
 
     /**
      * Anthropic Messages API.
@@ -303,8 +304,24 @@ window.Kusanagi = window.Kusanagi || {};
             max_tokens: parseInt(option('maxTokens'), 10) || 16000,
             messages: turns,
         };
-        if (system.length) body.system = system.join('\n\n');
         var betas = [];
+
+        // Prompt caching, laid out as Anthropic advises: the cache is a prefix
+        // match over tools, then system, then messages. An explicit breakpoint
+        // on the system prompt makes it (and the tools ahead of it) a read
+        // point whatever happens later; automatic caching then moves a second
+        // breakpoint to the end of each conversation turn, so the next turn
+        // re-reads the whole history. One-shot prompts end in text that is
+        // never sent again, so they get no tail breakpoint: it would only add
+        // the write premium.
+        var cache = option('cache');
+        if (system.length) {
+            var systemText = system.join('\n\n');
+            body.system = cache
+                ? [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }]
+                : systemText;
+        }
+        if (cache && opts && opts.conversation) body.cache_control = { type: 'ephemeral' };
 
         // Effort is the only depth control on current Claude models: thinking
         // is always on, and a token budget is rejected. Unset keeps the
@@ -312,9 +329,6 @@ window.Kusanagi = window.Kusanagi || {};
         var effort = (opts && opts.effort) || option('effort');
         if (effort) body.output_config = { effort: effort };
         if (option('reasoning')) body.thinking = { type: 'adaptive', display: 'summarized' };
-        // Caches the request up to its last block, so the next turn of the same
-        // chat re-reads the documents and history at about a tenth of the price.
-        if (option('cache')) body.cache_control = { type: 'ephemeral' };
         if (option('usOnly')) body.inference_geo = 'us';
         if (option('fast') && modelId === 'claude-opus-5-5') {
             betas.push('fast-mode-2026-02-01');
@@ -342,9 +356,10 @@ window.Kusanagi = window.Kusanagi || {};
         // ever talks to api.anthropic.com. Skipped for JSON calls, where a
         // search would only get in the way of the bare JSON they expect.
         if (!(opts && opts.json)) {
-            // Haiku has only the basic tool versions; the rest get the newer
-            // ones that filter results before they reach the context.
-            var basic = /haiku/.test(modelId);
+            // The newer tool versions, which filter results before they reach
+            // the context, are documented for Opus and Sonnet; Haiku and
+            // Fable get the basic ones.
+            var basic = !/opus|sonnet/.test(modelId);
             // No max_uses unless the user set a cap: Claude searches and
             // fetches as often as the question needs.
             var limit = parseInt(option('webLimit'), 10);
@@ -361,9 +376,11 @@ window.Kusanagi = window.Kusanagi || {};
             if (tools.length) body.tools = tools;
         }
 
-        var timeoutMs = (opts && opts.timeoutMs) || ANTHROPIC_TIMEOUT_MS;
+        // Fable can think for many minutes on a hard question.
+        var timeoutMs = (opts && opts.timeoutMs)
+            || (/fable/.test(modelId) ? ANTHROPIC_TIMEOUT_MS * 2 : ANTHROPIC_TIMEOUT_MS);
         var content = [];   // every block across continuations, in order
-        var usage = { input_tokens: 0, output_tokens: 0 };
+        var usage = { input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0 };
 
         // With web tools on, a long search can stop with pause_turn: send the
         // partial answer back and Claude carries on from where it paused.
@@ -379,6 +396,8 @@ window.Kusanagi = window.Kusanagi || {};
                     if (data.usage) {
                         usage.input_tokens += data.usage.input_tokens || 0;
                         usage.output_tokens += data.usage.output_tokens || 0;
+                        usage.cache_read += data.usage.cache_read_input_tokens || 0;
+                        usage.cache_write += data.usage.cache_creation_input_tokens || 0;
                     }
                     if (data.stop_reason === 'pause_turn' && round < MAX_PAUSE_ROUNDS) {
                         body.messages = turns.concat([{ role: 'assistant', content: content }]);
@@ -419,10 +438,14 @@ window.Kusanagi = window.Kusanagi || {};
                 text: text,
                 reasoning: reasoning,
                 webSources: webSources(content),
+                // input_tokens is only the uncached remainder; the prompt is all three.
                 usage: {
-                    prompt_tokens: usage.input_tokens,
+                    prompt_tokens: usage.input_tokens + usage.cache_read + usage.cache_write,
                     completion_tokens: usage.output_tokens,
-                    total_tokens: usage.input_tokens + usage.output_tokens,
+                    total_tokens: usage.input_tokens + usage.cache_read + usage.cache_write
+                        + usage.output_tokens,
+                    cache_read_tokens: usage.cache_read,
+                    cache_write_tokens: usage.cache_write,
                 },
             };
         });

@@ -137,10 +137,13 @@
                         <div><span class="text-accent">Tokens:</span> <span id="perf-tokens" class="text-fg-primary">0</span></div>
                         <div class="w-px h-3 bg-tertiary"></div>
                         <div><span class="text-accent">Speed:</span> <span id="perf-speed" class="text-fg-primary">--</span></div>
+                        <div class="w-px h-3 bg-tertiary"></div>
+                        <div><span class="text-accent">Cache:</span> <span id="perf-cache" class="text-fg-primary" title="Share of the last prompt read from Claude's prompt cache">--</span></div>
                     </div>
                 </div>
 
                 <div class="flex items-center gap-3 shrink-0">
+                    <button id="save-chat" type="button" class="text-fg-secondary hover:text-accent text-sm border border-tertiary rounded px-2 py-1" title="Download the chat as a Markdown file">Save chat</button>
                     <button id="copy-chat" type="button" class="text-fg-secondary hover:text-accent text-sm border border-tertiary rounded px-2 py-1">Copy chat</button>
                     <button id="tts-btn" type="button" class="text-fg-secondary hover:text-accent text-sm border border-tertiary rounded px-2 py-1" aria-pressed="false">Read chat aloud</button>
                     <button id="clear-chat" type="button" class="text-fg-secondary hover:text-danger text-sm">Clear</button>

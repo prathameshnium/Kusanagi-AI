@@ -531,6 +531,35 @@
         }).join('\n\n---\n\n');
     }
 
+    /**
+     * Download the chat as Markdown, named after its first question and the
+     * time it was saved: "Orochimaru - <question> - 2026-10-21 14-05.md".
+     */
+    function saveChat() {
+        if (!transcript.length) {
+            K.ui.toast('Nothing to save yet.');
+            return;
+        }
+        var first = transcript.filter(function (t) { return t.who === 'You'; })[0];
+        var topic = (first ? first.text : 'chat')
+            .replace(/[\\/:*?"<>|#\[\]\r\n\t]+/g, ' ')
+            .replace(/\s+/g, ' ').trim().slice(0, 50).trim() || 'chat';
+        var now = new Date();
+        var header = [
+            '# Orochimaru chat: ' + topic,
+            '',
+            '- Saved: ' + now.toLocaleString(),
+            '- Model: ' + ui.model.value,
+            docNames().length ? '- Documents: ' + docNames().join(', ') : null,
+            '',
+            '---',
+            '',
+            '',
+        ].filter(function (line) { return line !== null; }).join('\n');
+        K.ui.saveFile('Orochimaru - ' + topic + ' - ' + K.ui.fileStamp(now) + '.md',
+            header + chatAsMarkdown() + '\n', 'text/markdown;charset=utf-8');
+    }
+
     /** System notices. Filenames land here, so this is text -- the old version
      *  built "<strong>" + file.name + "</strong>" and assigned innerHTML. */
     function addSystem(text, isError) {
@@ -635,19 +664,23 @@
         ui.input.disabled = state;
     }
 
+    /* Trim in one go, to half the cap: dropping the oldest turn on every
+       message would change the start of the conversation each time and miss
+       the prompt cache on every turn instead of once in a while. */
     function trimHistory() {
-        if (history.length > MAX_TURNS) history = history.slice(-MAX_TURNS);
+        if (history.length > MAX_TURNS) history = history.slice(-MAX_TURNS / 2);
     }
 
     /** "Documents only" is on. */
     function strictMode() { return ui.mode.value === 'strict'; }
 
     /**
-     * Send `messages` and show the reply. `userFacing` is what the chat shows,
-     * and what is kept in history for later turns, in place of whatever
-     * one-shot prompt a skill built. `sources` are what the answer may cite.
+     * Send `messages` and show the reply. `userFacing` is what the chat shows.
+     * `kept` is what history keeps for later turns (default `userFacing`, in
+     * place of whatever one-shot prompt a skill built). `sources` are what the
+     * answer may cite.
      */
-    function ask(messages, userFacing, sources) {
+    function ask(messages, userFacing, sources, kept) {
         if (busy) return;
         if (!apiKey()) {
             K.ui.toast('Configure a provider first.', 'error');
@@ -666,6 +699,7 @@
             temperature: parseFloat(ui.temp.value),
             fallback: K.prefs.modelFallback(),
             messages: messages,
+            conversation: true,
         }).then(function (res) {
             thinking.remove();
             if (res.model !== ui.model.value) {
@@ -675,7 +709,7 @@
             addAI(res.text, sources, res.reasoning, res.webSources);
             K.ui.chime();
             lastAnswer = res.text;
-            history.push({ role: 'user', content: userFacing },
+            history.push({ role: 'user', content: kept || userFacing },
                 { role: 'assistant', content: res.text });
             trimHistory();
 
@@ -685,6 +719,7 @@
             sessionTokens += tokens;
             ui.tokens.textContent = sessionTokens.toLocaleString();
             if (secs > 0) ui.speed.textContent = (tokens / secs).toFixed(1) + ' t/s';
+            showCache(res.usage);
         }).catch(function (err) {
             thinking.remove();
             addSystem(err.message, true);
@@ -695,6 +730,20 @@
         });
     }
 
+    /** Share of this answer's prompt read from Anthropic's prompt cache. */
+    function showCache(usage) {
+        if (!usage || usage.cache_read_tokens === undefined) {
+            ui.cache.textContent = '--';
+            return;
+        }
+        var prompt = usage.prompt_tokens || 0;
+        ui.cache.textContent = prompt
+            ? Math.round((100 * usage.cache_read_tokens) / prompt) + '%'
+            : '--';
+        ui.cache.title = usage.cache_read_tokens.toLocaleString() + ' tokens read from cache, '
+            + usage.cache_write_tokens.toLocaleString() + ' written';
+    }
+
     function send() {
         var query = ui.input.value.trim();
         if (!query) return;
@@ -703,21 +752,25 @@
         query = runSlash(query);
         if (!query) return;
 
-        // With documents loaded, retrieve for the newest question and rebuild
-        // the system prompt around those excerpts; without, it is plain chat.
-        // Either way the skills that are on ride along.
-        var system;
+        // The system prompt never changes; the excerpts retrieved for this
+        // question, the answer mode and the skills that are on go in the turn.
         var chunks = [];
         if (docNames().length) {
             ui.indicator.classList.remove('is-invisible');
             chunks = retrieve(query, 5);
-            system = K.prompts.documentChatPrompt(chunks, docNames(), strictMode(), activeSkills);
-        } else {
-            system = K.prompts.chatSystemPrompt(activeSkills);
         }
+        var turn = K.prompts.chatTurn(query, chunks, docNames(), strictMode(), activeSkills);
 
-        ask([{ role: 'system', content: system }]
-            .concat(history, [{ role: 'user', content: query }]), query, asSources(chunks));
+        ask([{ role: 'system', content: K.prompts.chatSystemPrompt() }]
+            .concat(history, [{ role: 'user', content: turn }]),
+            query, asSources(chunks), keptTurn(turn, query));
+    }
+
+    /* Claude's prompt cache needs every earlier turn sent back byte for byte,
+       excerpts included, so that is what history keeps there. Other providers
+       keep the bare question, as before: small local models have little room. */
+    function keptTurn(turn, query) {
+        return provider() === 'anthropic' ? turn : query;
     }
 
     /* ---------------------------------------------------------------- skills */
@@ -738,9 +791,9 @@
                 content: K.prompts.review(skill.role, REVIEW_PERSONAS[skill.role], chunks) }];
         } else if (skill.onDocs) {
             messages = [
-                { role: 'system', content: K.prompts.documentChatPrompt(
-                    chunks, docNames(), strictMode(), activeSkills) },
-                { role: 'user', content: skill.onDocs },
+                { role: 'system', content: K.prompts.chatSystemPrompt() },
+                { role: 'user', content: K.prompts.chatTurn(
+                    skill.onDocs, chunks, docNames(), strictMode(), activeSkills) },
             ];
         } else {
             messages = [{ role: 'user', content: K.prompts.summarise(chunks) }];
@@ -976,6 +1029,7 @@
             indicator: document.getElementById('context-indicator'),
             tokens: document.getElementById('perf-tokens'),
             speed: document.getElementById('perf-speed'),
+            cache: document.getElementById('perf-cache'),
             ram: document.getElementById('perf-ram'),
             tts: document.getElementById('tts-btn'),
             upload: document.getElementById('doc-upload'),
@@ -1043,6 +1097,7 @@
         });
         document.getElementById('purge-btn').addEventListener('click', K.ui.purgeAll);
         K.ui.bindCopy(document.getElementById('copy-chat'), chatAsMarkdown);
+        document.getElementById('save-chat').addEventListener('click', saveChat);
         // Per-answer buttons read one answer; this one reads the whole chat.
         K.ui.bindSpeak(ui.tts, chatAsSpeech);
 
