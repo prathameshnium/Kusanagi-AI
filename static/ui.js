@@ -11,6 +11,10 @@ window.Kusanagi = window.Kusanagi || {};
     var dom = window.Kusanagi.dom;
     var el = dom.el;
 
+    /* Bump on each release. Written into the "Kusanagi AI.md" file beside
+       saved chats, so a folder of chats says which build made it. */
+    window.Kusanagi.VERSION = '2026.10.21';
+
     /* ------------------------------------------------------------------ toasts */
 
     var toastHost = null;
@@ -607,11 +611,15 @@ window.Kusanagi = window.Kusanagi || {};
     }
 
     function purgeAll() {
-        if (!window.confirm('Wipe every saved API key from this browser? This cannot be undone.')) {
+        if (!window.confirm('Wipe every saved API key from this browser, and forget the chat '
+            + 'folder (the chat files in it stay)? This cannot be undone.')) {
             return;
         }
         window.Kusanagi.keys.purge();
-        window.location.reload();
+        var chats = window.Kusanagi.chats;
+        (chats ? chats.forget() : Promise.resolve()).then(function () {
+            window.location.reload();
+        });
     }
 
     /* ------------------------------------------------------------ model select */
@@ -640,8 +648,10 @@ window.Kusanagi = window.Kusanagi || {};
      */
     function bindModelControls(c) {
         var prefs = window.Kusanagi.prefs;
+        // The one-line summary of Claude options under the model menu. Pages
+        // that show those controls beside the menu pass summary: false.
         var summary = el('p', { class: 'text-[10px] text-fg-secondary mt-1 hidden' });
-        c.model.insertAdjacentElement('afterend', summary);
+        if (c.summary !== false) c.model.insertAdjacentElement('afterend', summary);
         var tempValue = c.tempOut ? c.tempOut.textContent : '';
 
         function sync() {
@@ -1060,7 +1070,7 @@ window.Kusanagi = window.Kusanagi || {};
      */
     function speakableText(node) {
         var copy = node.cloneNode(true);
-        copy.querySelectorAll('.katex-html, annotation, button').forEach(function (n) {
+        copy.querySelectorAll('.katex-html, annotation, button, .code-head').forEach(function (n) {
             n.parentNode.removeChild(n);
         });
         return copy.textContent.replace(/\s+/g, ' ').trim();

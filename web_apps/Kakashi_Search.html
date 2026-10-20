@@ -39,9 +39,12 @@
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
     </a>
 
-    <!-- HEADER -->
-    <header class="flex-shrink-0 h-14 border-b border-tertiary flex items-center justify-between px-4 pl-16 bg-secondary/95 backdrop-blur z-20 gap-3">
-        <div class="flex items-center gap-3 shrink-0">
+    <!-- HEADER. Below lg it may wrap: on phones the controls fold onto a second
+         line beside the theme switch, and the header search always takes a
+         full-width row of its own (one row left it under 80px wide on tablets).
+         ml-12 on phones (pl-16 from sm) keeps clear of the fixed home button. -->
+    <header class="flex-shrink-0 min-h-14 py-2 lg:h-14 lg:py-0 border-b border-tertiary flex flex-wrap lg:flex-nowrap items-center justify-between px-4 sm:pl-16 bg-secondary/95 backdrop-blur z-20 gap-x-3 gap-y-2">
+        <div class="flex items-center gap-3 shrink-0 ml-12 sm:ml-0">
             <span id="theme-slot"></span>
             <h1 class="text-lg font-bold text-fg-primary tracking-tight hidden md:block">
                 <a href="../index.html" class="hover:underline">Kusanagi AI</a>
@@ -50,7 +53,7 @@
             </h1>
         </div>
 
-        <div class="flex-1 max-w-2xl hidden" id="header-search-container">
+        <div class="flex-1 min-w-0 max-w-2xl basis-full order-last lg:basis-0 lg:order-none hidden" id="header-search-container">
             <div class="relative">
                 <label for="header-input" class="sr-only">New search</label>
                 <input id="header-input" type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" class="!py-1.5 !pl-4 !pr-12 !rounded-full !bg-primary text-sm" placeholder="New search...">
@@ -58,8 +61,9 @@
             </div>
         </div>
 
-        <div class="flex items-center gap-3 shrink-0">
-            <div class="hidden lg:flex items-center gap-3 text-[10px] font-mono text-fg-secondary bg-primary/50 px-3 py-1 rounded-full border border-tertiary">
+        <div class="flex flex-wrap items-center justify-end gap-2 flex-1 min-w-0 sm:flex-none sm:gap-3">
+            <!-- Session stats: only where the header search still has room. -->
+            <div class="hidden xl:flex items-center gap-3 text-[10px] font-mono text-fg-secondary bg-primary/50 px-3 py-1 rounded-full border border-tertiary">
                 <div><span class="text-accent">RAM:</span> <span id="header-ram">--</span></div>
                 <div class="w-px h-3 bg-tertiary"></div>
                 <div><span class="text-accent">Tok:</span> <span id="header-tokens">0</span></div>
@@ -76,22 +80,24 @@
                     <input type="checkbox" id="no-ai"> No AI
                 </label>
             </div>
-            <button id="purge-btn" type="button" class="btn btn-danger text-xs">Purge keys</button>
+            <!-- Settings has "Purge all keys" too, so phones lose nothing. -->
+            <button id="purge-btn" type="button" class="btn btn-danger text-xs hidden sm:inline-block">Purge keys</button>
             <button id="open-settings" type="button" class="btn btn-secondary text-xs">Settings</button>
         </div>
     </header>
 
     <!-- MAIN -->
-    <main class="flex-1 flex overflow-hidden relative">
+    <!-- Below md the AI panel stacks above the results, once a search runs. -->
+    <main class="flex-1 min-h-0 flex flex-col md:flex-row overflow-hidden relative">
 
         <!-- LEFT: organic results -->
-        <section id="organic-column" class="w-full md:w-1/2 overflow-y-auto bg-primary border-r border-tertiary">
+        <section id="organic-column" class="w-full flex-1 min-h-0 md:flex-none md:w-1/2 overflow-y-auto bg-primary md:border-r border-tertiary">
             <div id="home-state" class="min-h-full flex flex-col items-center justify-center pb-32 px-4">
                 <h2 class="text-4xl md:text-5xl font-bold text-fg-primary mb-6 tracking-tight text-center">Deep search</h2>
                 <div class="w-full max-w-xl mb-8">
-                    <div class="flex items-center bg-secondary rounded-xl shadow-2xl border border-tertiary overflow-hidden focus-within:border-accent transition-colors">
+                    <div class="flex flex-wrap items-center bg-secondary rounded-xl shadow-2xl border border-tertiary overflow-hidden focus-within:border-accent transition-colors">
                         <label for="home-input" class="sr-only">Search query</label>
-                        <input id="home-input" type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" class="!border-0 !rounded-none !bg-transparent text-lg !p-4" placeholder="Ask a complex question..." autofocus>
+                        <input id="home-input" type="text" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" class="flex-1 min-w-0 !border-0 !rounded-none !bg-transparent text-lg !p-4" placeholder="Ask a complex question..." autofocus>
                         <button id="home-go" type="button" class="p-4 bg-accent hover:bg-accent-hover text-secondary font-bold transition shrink-0">GO</button>
                     </div>
                 </div>
@@ -132,7 +138,7 @@
         </section>
 
         <!-- RIGHT: AI panel -->
-        <aside id="ai-sidebar" class="hidden md:flex w-1/2 bg-secondary flex-col z-10 shadow-2xl">
+        <aside id="ai-sidebar" class="hidden md:flex w-full max-h-[45%] order-first border-b border-tertiary md:w-1/2 md:max-h-none md:order-none md:border-b-0 bg-secondary flex-col z-10 shadow-2xl">
             <div class="p-3 border-b border-tertiary bg-secondary/95 backdrop-blur flex flex-wrap items-center justify-between gap-2">
                 <div class="flex items-center gap-2">
                     <span class="w-2 h-2 bg-accent rounded-full" aria-hidden="true"></span>
@@ -151,7 +157,7 @@
                 </div>
             </div>
 
-            <div id="ai-content" class="flex-1 overflow-y-auto p-6">
+            <div id="ai-content" class="flex-1 min-h-0 overflow-y-auto p-4 md:p-6">
                 <div id="ai-placeholder" class="text-center mt-32 opacity-60">
                     <p class="text-sm text-fg-secondary">Enter a query to start a deep analysis.</p>
                 </div>

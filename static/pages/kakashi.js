@@ -365,6 +365,9 @@
         ui.home.classList.add('hidden');
         ui.feed.classList.remove('hidden');
         ui.headerBox.classList.remove('hidden');
+        // The AI panel is hidden on phones until there is an answer to show.
+        ui.aside.classList.remove('hidden');
+        ui.aside.classList.add('flex');
         ui.headerInput.value = query;
         ui.queryDisplay.textContent = query;
         ui.heading.textContent = academic() ? 'Papers' : 'Results';
@@ -575,6 +578,8 @@
         papers = [];
         ui.feed.classList.add('hidden');
         ui.headerBox.classList.add('hidden');
+        ui.aside.classList.remove('flex');
+        ui.aside.classList.add('hidden');
         ui.home.classList.remove('hidden');
         ui.homeInput.value = '';
         ui.homeInput.focus();
@@ -600,6 +605,7 @@
             filterYear: document.getElementById('filter-year'),
             filterSort: document.getElementById('filter-sort'),
             organic: document.getElementById('organic-container'),
+            aside: document.getElementById('ai-sidebar'),
             placeholder: document.getElementById('ai-placeholder'),
             loading: document.getElementById('ai-loading'),
             response: document.getElementById('ai-response'),
@@ -631,9 +637,12 @@
         var syncModel = K.ui.bindModelControls({
             model: ui.model, temp: ui.temp, tempOut: ui.tempOut, provider: provider,
         });
-        // Thinking effort and the reasoning switch sit in the search box, before GO.
+        // Thinking effort and the reasoning switch sit in the search box, on a
+        // row of their own under the input: beside it they squeezed the input
+        // to nothing on a phone.
         var effort = K.ui.claudeControls(provider);
-        ui.homeInput.insertAdjacentElement('afterend', effort.node);
+        effort.node.classList.add('basis-full', 'flex-wrap', 'border-t', 'border-tertiary', 'px-2', 'py-1');
+        ui.homeGo.insertAdjacentElement('afterend', effort.node);
 
         ui.temp.addEventListener('input', function () {
             ui.tempOut.textContent = ui.temp.value;

@@ -194,7 +194,32 @@ window.Kusanagi = window.Kusanagi || {};
         });
         restoreMath(target, math.pieces);
         typesetMath(target);
+        codeCopy(target);
         return target;
+    }
+
+    /* Give each code block a bar with its language and a Copy button that
+       copies the code exactly as written. */
+    function codeCopy(target) {
+        var ui = window.Kusanagi.ui;
+        if (!ui || !ui.bindCopy) return;
+        Array.prototype.forEach.call(target.querySelectorAll('pre'), function (pre) {
+            var code = pre.querySelector('code') || pre;
+            var lang = /language-([\w+#-]+)/.exec(code.className || '');
+            var button = el('button', {
+                type: 'button', class: 'code-copy', text: 'Copy',
+                'aria-label': 'Copy ' + (lang ? lang[1] + ' ' : '') + 'code',
+            });
+            ui.bindCopy(button, function () { return code.textContent; });
+            var block = el('div', { class: 'code-block' }, [
+                el('div', { class: 'code-head' }, [
+                    el('span', { text: lang ? lang[1] : 'code' }),
+                    button,
+                ]),
+            ]);
+            pre.parentNode.insertBefore(block, pre);
+            block.appendChild(pre);
+        });
     }
 
     /* ------------------------------------------------------------------ math */

@@ -32,6 +32,7 @@
     <script src="../static/vendor/katex/katex.min.js" defer></script>
     <script src="../static/vendor/katex/auto-render.min.js" defer></script>
     <script src="../static/keys.js" defer></script>
+    <script src="../static/chats.js" defer></script>
     <script src="../static/providers.js" defer></script>
     <script src="../static/dom.js" defer></script>
     <script src="../static/ui.js" defer></script>
@@ -45,9 +46,9 @@
 
     <div class="flex h-full max-h-screen">
 
-        <!-- === Sidebar === -->
-        <aside class="w-72 flex-shrink-0 bg-secondary flex flex-col p-4 border-r border-tertiary overflow-y-auto">
-            <div class="px-1 mb-6 mt-12">
+        <!-- === Sidebar: a column on wide screens, a drawer on narrow ones === -->
+        <aside id="sidebar" class="app-sidebar bg-secondary flex flex-col p-4 border-r border-tertiary overflow-y-auto" aria-label="Workspace">
+            <div class="px-1 mb-5 mt-12">
                 <h1 class="text-xl font-bold flex flex-wrap items-center gap-2">
                     <a href="../index.html" class="hover:underline text-fg-primary">Kusanagi AI</a>
                     <span class="text-fg-secondary font-normal">/</span>
@@ -56,82 +57,82 @@
                 <p class="text-xs text-fg-secondary mt-1">Research chat, with RAG over your documents</p>
             </div>
 
-            <div class="mb-6">
+            <div class="mb-4">
                 <input type="file" id="doc-upload" accept=".pdf,.docx,.odt,.pptx,.txt,.text,.md,.markdown,.csv,.tsv,.dat,.json,.xml,.html,.htm,.tex,.log,.rtf,.yaml,.yml,.ini" multiple class="hidden">
-                <button id="load-doc" type="button" class="btn btn-accent w-full py-3 flex items-center justify-center gap-2 shadow-lg">
+                <button id="load-doc" type="button" class="btn btn-accent w-full py-2.5 flex items-center justify-center gap-2 shadow-lg">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                     Load document
                 </button>
-                <p class="text-[10px] text-center text-fg-secondary mt-2 opacity-70">Parsed here. Never uploaded.</p>
+                <p class="text-[10px] text-center text-fg-secondary mt-1.5 opacity-70">Parsed here. Never uploaded.</p>
             </div>
 
-            <div class="bg-tertiary/30 rounded-lg p-3 mb-4 border border-tertiary">
-                <h2 class="text-xs font-bold text-fg-secondary uppercase mb-3">AI settings</h2>
-                <div class="mb-3">
-                    <label for="model-select" class="block text-[10px] text-fg-secondary mb-1">Model</label>
-                    <select id="model-select" class="!bg-primary !text-xs !p-1.5"></select>
-                </div>
-                <div class="mb-3">
-                    <label for="answer-mode" class="block text-[10px] text-fg-secondary mb-1">Answer from (when documents are loaded)</label>
-                    <select id="answer-mode" class="!bg-primary !text-xs !p-1.5">
-                        <option value="normal" selected>Documents + general knowledge</option>
-                        <option value="strict">Documents only (strict)</option>
-                    </select>
-                </div>
-                <div>
-                    <div class="flex justify-between text-[10px] text-fg-secondary mb-1">
-                        <label for="temp-slider">Temperature</label>
-                        <span id="temp-val" class="text-accent font-mono">0.3</span>
+            <details class="panel" open>
+                <summary>Documents <span id="doc-count" class="panel-count">0</span></summary>
+                <div id="doc-list" class="space-y-1 max-h-60 overflow-y-auto pr-1 mt-2"></div>
+            </details>
+
+            <details id="history-panel" class="panel hidden" open>
+                <summary>Chat history <span id="history-count" class="panel-count"></span></summary>
+                <div id="history-body" class="mt-2 text-xs"></div>
+            </details>
+
+            <details class="panel">
+                <summary>Skills <span id="skill-count" class="panel-count"></span></summary>
+                <label for="skill-filter" class="sr-only">Filter skills</label>
+                <input id="skill-filter" type="search" autocomplete="off" placeholder="Filter skills..." class="mt-2 !text-xs !py-1">
+                <div id="skill-list" class="skill-list" role="group" aria-label="Skills"></div>
+                <p class="text-[10px] text-fg-secondary mt-2 opacity-70">Type / in the chat to pick one. A skill that is on shapes every answer; with documents loaded, switching one on also runs it on them once.</p>
+            </details>
+
+            <details class="panel">
+                <summary>Settings</summary>
+                <div class="mt-2 space-y-3">
+                    <div>
+                        <label for="answer-mode" class="block text-[10px] text-fg-secondary mb-1">Answer from (when documents are loaded)</label>
+                        <select id="answer-mode" class="!bg-primary !text-xs !p-1.5">
+                            <option value="normal" selected>Documents + general knowledge</option>
+                            <option value="strict">Documents only (strict)</option>
+                        </select>
                     </div>
-                    <input type="range" id="temp-slider" min="0" max="1" step="0.1" value="0.3" class="w-full">
+                    <div>
+                        <div class="flex justify-between text-[10px] text-fg-secondary mb-1">
+                            <label for="temp-slider">Temperature</label>
+                            <span id="temp-val" class="text-accent font-mono">0.3</span>
+                        </div>
+                        <input type="range" id="temp-slider" min="0" max="1" step="0.1" value="0.3" class="w-full">
+                    </div>
+                    <div>
+                        <p class="block text-[10px] text-fg-secondary mb-1">Save chats to a folder</p>
+                        <div id="history-setup" class="text-xs"></div>
+                    </div>
                 </div>
-            </div>
+            </details>
 
-            <div class="bg-tertiary/30 rounded-lg p-3 mb-4 border border-tertiary">
-                <h2 class="text-xs font-bold text-fg-secondary uppercase mb-2 flex justify-between items-center">
-                    System status
-                    <span class="w-2 h-2 bg-danger rounded-full" id="status-dot" aria-hidden="true"></span>
-                </h2>
-                <dl class="space-y-2 text-xs">
+            <details class="panel">
+                <summary>System status <span class="w-2 h-2 bg-danger rounded-full ml-auto mr-1" id="status-dot" aria-hidden="true"></span></summary>
+                <dl class="space-y-2 text-xs mt-2">
                     <div class="flex justify-between gap-2"><dt>AI link</dt><dd id="status-ai" class="text-fg-secondary">Disconnected</dd></div>
                     <div class="flex justify-between gap-2"><dt>Document</dt><dd id="status-doc" class="text-fg-secondary truncate max-w-[110px]">None</dd></div>
                     <div class="flex justify-between gap-2"><dt>Total chunks</dt><dd id="status-chunks" class="text-fg-primary">0</dd></div>
                 </dl>
-            </div>
-
-            <div class="mb-4 flex-grow flex flex-col min-h-[150px]">
-                <h2 class="text-xs font-bold text-fg-secondary uppercase mb-2 flex justify-between items-center">
-                    Loaded documents
-                    <span id="doc-count" class="text-accent bg-tertiary px-1.5 rounded">0</span>
-                </h2>
-                <div id="doc-list" class="space-y-1 overflow-y-auto pr-1 flex-grow"></div>
-            </div>
-
-            <div class="mb-4">
-                <details class="skill-picker">
-                    <summary class="text-xs font-bold text-fg-secondary uppercase flex justify-between items-center cursor-pointer">
-                        Skills
-                        <span id="skill-count" class="text-accent normal-case font-normal"></span>
-                    </summary>
-                    <label for="skill-filter" class="sr-only">Filter skills</label>
-                    <input id="skill-filter" type="search" autocomplete="off" placeholder="Filter skills..." class="mt-2 !text-xs !py-1">
-                    <div id="skill-list" class="skill-list" role="group" aria-label="Skills"></div>
-                </details>
-                <p class="text-[10px] text-fg-secondary mt-2 opacity-70">Type / in the chat to pick one. A skill that is on shapes every answer; with documents loaded, switching one on also runs it on them once.</p>
-            </div>
+            </details>
 
             <div class="mt-auto pt-4 border-t border-tertiary flex gap-2">
                 <button id="open-settings" type="button" class="btn btn-secondary text-xs flex-1">Configure API</button>
                 <button id="purge-btn" type="button" class="btn btn-danger text-xs">Purge</button>
             </div>
         </aside>
+        <div id="sidebar-scrim" class="sidebar-scrim hidden" aria-hidden="true"></div>
 
         <!-- === Main === -->
         <main class="flex-1 flex flex-col max-h-screen relative bg-primary min-w-0">
-            <header class="flex-shrink-0 h-14 border-b border-tertiary flex items-center justify-between px-4 bg-secondary/50 gap-3">
-                <div class="flex items-center gap-4 min-w-0">
-                    <span class="text-lg font-bold text-fg-primary truncate">Secure workspace</span>
-                    <div class="hidden md:flex items-center gap-3 text-[10px] font-mono text-fg-secondary bg-secondary/80 px-3 py-1 rounded border border-tertiary">
+            <header class="app-header flex-shrink-0 h-14 border-b border-tertiary flex items-center justify-between px-3 sm:px-4 bg-secondary/50 gap-2">
+                <div class="flex items-center gap-3 min-w-0">
+                    <button id="sidebar-toggle" type="button" class="lg:hidden text-fg-secondary hover:text-accent border border-tertiary rounded p-1.5" aria-controls="sidebar" aria-expanded="false" aria-label="Show documents, history and settings">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    </button>
+                    <span class="hidden sm:inline text-lg font-bold text-fg-primary truncate">Secure workspace</span>
+                    <div class="hidden xl:flex items-center gap-3 text-[10px] font-mono text-fg-secondary bg-secondary/80 px-3 py-1 rounded border border-tertiary">
                         <div><span class="text-accent">RAM:</span> <span id="perf-ram" class="text-fg-primary">--</span></div>
                         <div class="w-px h-3 bg-tertiary"></div>
                         <div><span class="text-accent">Tokens:</span> <span id="perf-tokens" class="text-fg-primary">0</span></div>
@@ -142,28 +143,34 @@
                     </div>
                 </div>
 
-                <div class="flex items-center gap-3 shrink-0">
-                    <button id="save-chat" type="button" class="text-fg-secondary hover:text-accent text-sm border border-tertiary rounded px-2 py-1" title="Download the chat as a Markdown file">Save chat</button>
-                    <button id="copy-chat" type="button" class="text-fg-secondary hover:text-accent text-sm border border-tertiary rounded px-2 py-1">Copy chat</button>
-                    <button id="tts-btn" type="button" class="text-fg-secondary hover:text-accent text-sm border border-tertiary rounded px-2 py-1" aria-pressed="false">Read chat aloud</button>
-                    <button id="clear-chat" type="button" class="text-fg-secondary hover:text-danger text-sm">Clear</button>
+                <div class="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                    <button id="save-chat" type="button" class="header-btn" title="Download the chat as a Markdown file">Save</button>
+                    <button id="copy-chat" type="button" class="header-btn hidden sm:inline-block">Copy</button>
+                    <button id="tts-btn" type="button" class="header-btn hidden sm:inline-block" aria-pressed="false">Read aloud</button>
+                    <button id="clear-chat" type="button" class="header-btn" title="Start a new chat">New chat</button>
                 </div>
             </header>
 
-            <div id="chat-history" class="flex-grow overflow-y-auto p-4 space-y-6" role="log" aria-live="polite" aria-label="Conversation"></div>
+            <div id="chat-history" class="flex-grow overflow-y-auto p-3 sm:p-4 space-y-6" role="log" aria-live="polite" aria-label="Conversation"></div>
 
-            <div class="flex-shrink-0 p-4 bg-primary border-t border-tertiary">
+            <div class="flex-shrink-0 p-2 sm:p-4 bg-primary border-t border-tertiary">
                 <div class="max-w-4xl mx-auto relative">
                     <div id="slash-menu" class="slash-menu hidden" role="listbox" aria-label="Skills"></div>
                     <div id="active-skills" class="flex flex-wrap gap-1 mb-2 hidden" aria-label="Skills on"></div>
-                    <div class="flex bg-tertiary rounded-lg border border-tertiary focus-within:border-accent shadow-lg transition-colors">
-                        <label for="chat-input" class="sr-only">Question</label>
-                        <input id="chat-input" type="text" role="combobox" aria-controls="slash-menu" aria-expanded="false" aria-autocomplete="list" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" placeholder="Ask anything, or type / for skills..." class="!border-0 !bg-transparent !p-3">
-                        <button id="send-btn" type="button" class="px-4 text-accent hover:text-fg-primary transition" aria-label="Send">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
-                        </button>
+                    <div class="bg-tertiary rounded-lg border border-tertiary focus-within:border-accent shadow-lg transition-colors">
+                        <div class="flex items-center">
+                            <label for="chat-input" class="sr-only">Question</label>
+                            <input id="chat-input" type="text" role="combobox" aria-controls="slash-menu" aria-expanded="false" aria-autocomplete="list" autocomplete="off" data-lpignore="true" data-1p-ignore data-bwignore data-form-type="other" placeholder="Ask anything, or type / for skills..." class="!border-0 !bg-transparent !p-3 min-w-0">
+                            <button id="send-btn" type="button" class="px-4 text-accent hover:text-fg-primary transition shrink-0" aria-label="Send">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                            </button>
+                        </div>
+                        <div id="chat-controls" class="chat-controls">
+                            <label for="model-select" class="sr-only">Model</label>
+                            <select id="model-select" class="!w-auto !bg-transparent !border-0 !text-xs !py-1 !pl-2 !pr-6 text-fg-secondary max-w-[11rem]"></select>
+                        </div>
                     </div>
-                    <div class="text-center mt-2">
+                    <div class="text-center mt-1">
                         <span id="context-indicator" class="text-[10px] text-fg-secondary is-invisible transition-opacity inline-block">
                             Searching local chunks...
                         </span>

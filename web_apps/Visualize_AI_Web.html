@@ -27,15 +27,17 @@
     <script src="../static/prompts.js" defer></script>
     <script src="../static/pages/visualize.js" defer></script>
 </head>
-<body class="bg-secondary text-fg-primary font-sans antialiased h-full">
+<body class="bg-secondary text-fg-primary font-sans antialiased min-h-full md:h-full">
     <a href="../index.html" class="home-button" aria-label="Back to the Kusanagi AI dashboard">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path></svg>
     </a>
 
-    <div class="flex h-full">
+    <!-- Below md the sidebar stacks above the editor and the page scrolls; a
+         288px sidebar beside it left the editor under 90px wide on a phone. -->
+    <div class="flex flex-col md:flex-row min-h-full md:h-full">
 
         <!-- === Sidebar === -->
-        <aside class="w-72 flex-shrink-0 bg-secondary flex flex-col p-4 border-r border-tertiary">
+        <aside class="w-full md:w-72 md:flex-shrink-0 bg-secondary flex flex-col p-4 border-b md:border-b-0 md:border-r border-tertiary">
             <div class="px-1 mb-6 mt-12">
                 <h1 class="text-2xl font-bold flex flex-wrap items-center gap-2">
                     <a href="../index.html" class="hover:underline text-fg-primary">Kusanagi AI</a>
@@ -79,7 +81,7 @@
         </aside>
 
         <!-- === Main === -->
-        <main class="flex-1 flex flex-col h-full relative bg-primary p-6 min-w-0">
+        <main class="flex-1 flex flex-col md:h-full relative bg-primary p-4 md:p-6 min-w-0">
             <div class="flex justify-between items-center mb-6 gap-4">
                 <div>
                     <h2 class="text-xl font-bold text-fg-primary">Next token prediction</h2>
@@ -91,11 +93,13 @@
                 </button>
             </div>
 
-            <div class="flex-1 flex flex-col md:flex-row gap-6 overflow-hidden">
-                <div class="flex-1 flex flex-col h-full min-w-0">
+            <!-- Side by side from lg only: at md, beside the sidebar, a 320px
+                 token list left the editor under 90px wide. -->
+            <div class="flex-1 flex flex-col lg:flex-row gap-6 md:overflow-hidden">
+                <div class="flex-1 flex flex-col md:h-full min-w-0">
                     <div class="flex-1 bg-tertiary/20 rounded-xl border border-tertiary p-4 relative focus-within:border-accent transition-colors flex flex-col">
                         <label for="text-input" class="sr-only">Text to continue</label>
-                        <textarea id="text-input" class="w-full h-full bg-transparent text-lg text-fg-primary placeholder-fg-secondary/30 focus:outline-none resize-none font-mono leading-relaxed" placeholder="The future of AI is..." spellcheck="false"></textarea>
+                        <textarea id="text-input" class="w-full h-full bg-transparent text-lg text-fg-primary placeholder-fg-secondary/30 focus:outline-none resize-none font-mono leading-relaxed min-h-48" placeholder="The future of AI is..." spellcheck="false"></textarea>
 
                         <button id="predict-now" type="button" class="absolute bottom-4 right-14 btn btn-accent text-xs">
                             Predict
@@ -111,7 +115,7 @@
                     </div>
                 </div>
 
-                <div class="w-full md:w-80 flex flex-col bg-secondary rounded-xl border border-tertiary overflow-hidden shrink-0">
+                <div class="w-full max-h-80 lg:max-h-none lg:w-80 flex flex-col bg-secondary rounded-xl border border-tertiary overflow-hidden shrink-0">
                     <div class="p-3 bg-tertiary/30 border-b border-tertiary">
                         <h3 class="text-xs font-bold text-fg-secondary uppercase">Probable next tokens</h3>
                     </div>

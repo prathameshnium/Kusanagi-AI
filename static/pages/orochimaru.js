@@ -56,6 +56,10 @@
     var sessionTokens = 0;
     var answerCount = 0;                   // numbers citations as [answer:source]
     var activeSkills = [];                 // skill ids, see K.prompts.SKILLS
+    var turns = [];                        // the chat as a saved file holds it
+    var chatFile = '';                     // its file name, once saved to the folder
+    var chatStarted = null;                // when it began, for that name
+    var folder = null;                     // {name, ready} once a chat folder is chosen
     var busy = false;
     var settings = null;
     var pdfjsPromise = null;
@@ -469,6 +473,7 @@
 
     function addUser(text) {
         transcript.push({ who: 'You', text: text });
+        turns.push({ who: 'You', text: text });
         ui.log.appendChild(el('div', { class: 'flex items-start gap-4 justify-end' }, [
             el('div', { class: 'flex flex-col items-end gap-1 max-w-2xl' }, [
                 el('div', { class: 'bg-accent text-accent-fg p-3 rounded-lg shadow-md' }, [
@@ -501,6 +506,8 @@
         dom.citations(body, answerNo, sources);
         // `node` lets "Read chat aloud" speak the rendered answer, not raw Markdown.
         transcript.push({ who: 'Orochimaru', text: text, node: body });
+        turns.push({ who: 'Orochimaru', text: rawText, sources: sources || [],
+            reasoning: reasoning || '', webSources: webSources || [] });
         ui.log.appendChild(el('div', { class: 'flex items-start gap-4' }, [
             orochiAvatar(),
             el('div', { class: 'flex flex-col items-start gap-1 max-w-3xl min-w-0' }, [
@@ -531,33 +538,366 @@
         }).join('\n\n---\n\n');
     }
 
-    /**
-     * Download the chat as Markdown, named after its first question and the
-     * time it was saved: "Orochimaru - <question> - 2026-10-21 14-05.md".
-     */
+    /* ------------------------------------------------------- saved chats */
+
+    // Machine-readable copy of the chat at the end of each file, in an HTML
+    // comment so Markdown viewers hide it. It is what "reopen" reads back.
+    var DATA_START = '<!-- kusanagi-chat ';
+    var DATA_END = ' -->';
+
+    /** The first question, made safe for a file name. */
+    function chatTopic() {
+        var first = turns.filter(function (t) { return t.who === 'You'; })[0];
+        return (first ? first.text : 'chat')
+            .replace(/[\\/:*?"<>|#\[\]\x00-\x1f\x7f]+/g, ' ')
+            .replace(/\s+/g, ' ').trim().slice(0, 50).trim() || 'chat';
+    }
+
+    function chatFileName(when) {
+        return 'Orochimaru - ' + chatTopic() + ' - ' + K.ui.fileStamp(when) + '.md';
+    }
+
+    function validDate(d) {
+        return d instanceof Date && !isNaN(d.getTime()) ? d : new Date();
+    }
+
+    /** The chat as a Markdown file: the conversation, then its data. */
+    function chatDocument() {
+        var data = JSON.stringify({
+            v: 1,
+            created: validDate(chatStarted).toISOString(),
+            model: ui.model.value,
+            turns: turns,
+            history: history,
+        // "--" cannot appear inside an HTML comment; inside JSON strings it is
+        // the only place it can occur, and \u002d reads back as "-".
+        }).replace(/--/g, '-\\u002d');
+        return '# ' + chatTopic() + '\n\n' + chatAsMarkdown() + '\n\n'
+            + DATA_START + data + DATA_END + '\n';
+    }
+
+    function readChatDocument(text) {
+        var start = text.lastIndexOf(DATA_START);
+        if (start === -1) return null;
+        var end = text.indexOf(DATA_END, start + DATA_START.length);
+        if (end === -1) return null;
+        try {
+            var data = JSON.parse(text.slice(start + DATA_START.length, end));
+            return data && data.v === 1 && Array.isArray(data.turns) ? data : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /** Download the chat as Markdown (any browser). */
     function saveChat() {
-        if (!transcript.length) {
+        if (!turns.length) {
             K.ui.toast('Nothing to save yet.');
             return;
         }
-        var first = transcript.filter(function (t) { return t.who === 'You'; })[0];
-        var topic = (first ? first.text : 'chat')
-            .replace(/[\\/:*?"<>|#\[\]\r\n\t]+/g, ' ')
-            .replace(/\s+/g, ' ').trim().slice(0, 50).trim() || 'chat';
-        var now = new Date();
-        var header = [
-            '# Orochimaru chat: ' + topic,
+        K.ui.saveFile(chatFile || chatFileName(validDate(chatStarted)), chatDocument(),
+            'text/markdown;charset=utf-8');
+    }
+
+    /** "Kusanagi AI.md": what made the files in this folder, and which version. */
+    function aboutDocument(count) {
+        var site = /^https?:$/.test(window.location.protocol)
+            ? window.location.origin + window.location.pathname.split('web_apps/')[0] : '';
+        return [
+            '# Kusanagi AI',
             '',
-            '- Saved: ' + now.toLocaleString(),
-            '- Model: ' + ui.model.value,
-            docNames().length ? '- Documents: ' + docNames().join(', ') : null,
+            'The chats in this folder were saved by Orochimaru, the research chat in',
+            'Kusanagi AI.',
             '',
-            '---',
+            '- Version: ' + K.VERSION,
+            site ? '- Site: ' + site : null,
+            '- Chats: ' + count,
+            '- Last saved: ' + new Date().toLocaleString(),
             '',
+            'Each chat is a Markdown file named "Orochimaru - <first question> - <date',
+            'time>.md". Open it in any Markdown editor, or reopen it from Chat history',
+            'in Orochimaru to carry on. The excerpts an answer quoted from your',
+            'documents are saved inside that chat; the documents themselves are not,',
+            'so load them again to ask more about them.',
             '',
         ].filter(function (line) { return line !== null; }).join('\n');
-        K.ui.saveFile('Orochimaru - ' + topic + ' - ' + K.ui.fileStamp(now) + '.md',
-            header + chatAsMarkdown() + '\n', 'text/markdown;charset=utf-8');
+    }
+
+    function isChatFile(name) { return /^Orochimaru - .+\.md$/.test(name); }
+
+    // Bumped whenever another chat takes over the screen (new or reopened), so
+    // a reply or a save that was in flight for the old one is dropped.
+    var chatToken = 0;
+    // Saves run one after another, so an older copy never lands last.
+    var saving = Promise.resolve();
+
+    /** A name not yet used in the folder: "... (2).md" when it is taken. */
+    function freeName(name) {
+        function attempt(n) {
+            var candidate = n === 1 ? name : name.replace(/\.md$/, ' (' + n + ').md');
+            return K.chats.has(candidate).then(function (taken) {
+                return taken && n < 100 ? attempt(n + 1) : candidate;
+            });
+        }
+        return attempt(1);
+    }
+
+    /** Write the open chat to the folder, if one is connected. */
+    function persist() {
+        saving = saving.then(saveNow, saveNow);
+        return saving;
+    }
+
+    function saveNow() {
+        if (!folder || !folder.ready || !turns.length) return null;
+        var token = chatToken;
+        if (!chatStarted) chatStarted = new Date();
+        var named = chatFile ? Promise.resolve(chatFile) : freeName(chatFileName(chatStarted));
+        return named.then(function (name) {
+            if (token !== chatToken) return null;
+            chatFile = name;
+            return K.chats.write(name, chatDocument())
+                .then(function () { return K.chats.list(isChatFile); })
+                .then(function (files) {
+                    return K.chats.write('Kusanagi AI.md', aboutDocument(files.length))
+                        .then(function () { renderHistory(files); });
+                });
+        }).catch(function (err) {
+            addSystem('Could not save the chat to the folder: ' + err.message, true);
+        });
+    }
+
+    /* A chat file can come from anywhere, so take only the shapes this page
+       writes: plain strings, and arrays of objects holding strings. */
+    function pick(obj, keys) {
+        var out = {};
+        keys.forEach(function (k) { if (typeof obj[k] === 'string') out[k] = obj[k]; });
+        return out;
+    }
+
+    function objects(list, keys) {
+        return (Array.isArray(list) ? list : []).filter(function (x) {
+            return x && typeof x === 'object';
+        }).map(function (x) { return pick(x, keys); });
+    }
+
+    function cleanTurns(list) {
+        return list.filter(function (t) {
+            return t && typeof t.text === 'string';
+        }).map(function (t) {
+            if (t.who === 'You') return { who: 'You', text: t.text };
+            return {
+                who: 'Orochimaru',
+                text: t.text,
+                sources: objects(t.sources, ['title', 'meta', 'snippet', 'url']),
+                reasoning: typeof t.reasoning === 'string' ? t.reasoning : '',
+                webSources: objects(t.webSources, ['title', 'url']),
+            };
+        });
+    }
+
+    /**
+     * What goes back to the model is the saved history only if it is plain
+     * alternating text turns starting with the user. Otherwise it is rebuilt
+     * from the turns on screen, so a file cannot carry anything the user does
+     * not see.
+     */
+    function cleanHistory(saved, shown) {
+        var ok = Array.isArray(saved) && saved.length % 2 === 0 && saved.every(function (m, i) {
+            return m && typeof m.content === 'string'
+                && m.role === (i % 2 === 0 ? 'user' : 'assistant');
+        }) && saved.length / 2 <= shown.filter(function (t) { return t.who === 'You'; }).length;
+        if (ok) {
+            return saved.map(function (m) { return { role: m.role, content: m.content }; });
+        }
+        var rebuilt = [];
+        for (var i = 0; i + 1 < shown.length; i++) {
+            if (shown[i].who === 'You' && shown[i + 1].who === 'Orochimaru') {
+                rebuilt.push({ role: 'user', content: shown[i].text },
+                    { role: 'assistant', content: shown[i + 1].text });
+                i += 1;
+            }
+        }
+        return rebuilt.slice(-MAX_TURNS / 2);
+    }
+
+    function openChat(name) {
+        K.chats.read(name).then(function (text) {
+            var data = readChatDocument(text);
+            if (!data) {
+                K.ui.toast('That file has no Orochimaru chat data, so it cannot be reopened.',
+                    'error');
+                return;
+            }
+            var shown = cleanTurns(data.turns);
+            resetChat();
+            // One announcement, not the whole chat read out turn by turn.
+            ui.log.setAttribute('aria-busy', 'true');
+            shown.forEach(function (t) {
+                if (t.who === 'You') addUser(t.text);
+                else addAI(t.text, t.sources, t.reasoning, t.webSources);
+            });
+            ui.log.removeAttribute('aria-busy');
+            history = cleanHistory(data.history, shown);
+            chatFile = name;
+            chatStarted = validDate(new Date(data.created));
+            addSystem('Reopened ' + name.replace(/\.md$/, '') + '. The excerpts its answers '
+                + 'quoted are saved with it, but not the documents; load them again to ask '
+                + 'more about them.');
+            renderHistory();
+            setSidebar(false);
+        }).catch(function (err) {
+            K.ui.toast('Could not open the chat: ' + err.message, 'error');
+        });
+    }
+
+    function deleteChat(name) {
+        if (!window.confirm('Delete "' + name + '" from the folder? This cannot be undone.')) return;
+        K.chats.remove(name).then(function () {
+            // The open chat would otherwise be written straight back on the next answer.
+            if (name === chatFile) {
+                resetChat();
+                addSystem('Deleted that chat. This is a new one.');
+            }
+            renderHistory();
+        }).catch(function (err) {
+            K.ui.toast('Could not delete it: ' + err.message, 'error');
+        });
+    }
+
+    function chooseFolder() {
+        K.chats.pick().then(function (name) {
+            folder = { name: name, ready: true };
+            addSystem('Saving chats to the folder "' + name + '".');
+            renderHistory();
+            persist();
+        }).catch(function (err) {
+            if (err && err.name === 'AbortError') return;   // picker closed
+            K.ui.toast('Could not use that folder: ' + err.message, 'error');
+        });
+    }
+
+    function reconnectFolder() {
+        K.chats.reconnect().then(function (ok) {
+            folder.ready = ok;
+            renderHistory();
+            if (ok) persist();
+        }).catch(function (err) {
+            K.ui.toast('The browser did not allow access: ' + err.message, 'error');
+        });
+    }
+
+    function stopSaving() {
+        K.chats.forget().then(function () {
+            folder = null;
+            addSystem('Stopped saving chats. The files already in the folder stay there.');
+            renderHistory();
+        });
+    }
+
+    /** The Settings row and the Chat history panel. `files` skips a re-read. */
+    function renderHistory(files) {
+        var setup;
+        if (!K.chats.supported) {
+            setup = [el('p', { class: 'text-fg-secondary', text: 'Needs Chrome or Edge. In '
+                + 'this browser, use Save in the top bar to download a chat.' })];
+        } else if (!folder) {
+            setup = [
+                el('button', { type: 'button', class: 'btn btn-secondary text-xs w-full',
+                    text: 'Choose a folder...', on: { click: chooseFolder } }),
+                el('p', { class: 'text-[10px] text-fg-secondary mt-1', text: 'Each chat is '
+                    + 'saved there as a Markdown file as you go, with a "Kusanagi AI.md" '
+                    + 'note on the version. Off until you choose one.' }),
+            ];
+        } else {
+            setup = [el('div', { class: 'flex items-center justify-between gap-2' }, [
+                el('span', { class: 'truncate', text: 'Saving to ' + folder.name }),
+                el('button', { type: 'button', class: 'text-danger hover:underline shrink-0',
+                    text: 'Stop', on: { click: stopSaving } }),
+            ])];
+        }
+        dom.replace(ui.historySetup, setup);
+
+        ui.historyPanel.classList.toggle('hidden', !folder);
+        if (!folder) return;
+
+        if (!folder.ready) {
+            ui.historyCount.textContent = '';
+            dom.replace(ui.historyBody, [
+                el('button', { type: 'button', class: 'btn btn-secondary text-xs w-full',
+                    text: 'Allow access to ' + folder.name, on: { click: reconnectFolder } }),
+                el('p', { class: 'text-[10px] text-fg-secondary mt-1', text: 'The browser '
+                    + 'asks again each visit before the page can read the folder.' }),
+            ]);
+            return;
+        }
+
+        var listed = files ? Promise.resolve(files) : K.chats.list(isChatFile);
+        listed.then(function (list) {
+            ui.historyCount.textContent = String(list.length);
+            if (!list.length) {
+                dom.replace(ui.historyBody, el('p', { class: 'text-fg-secondary italic',
+                    text: 'No saved chats yet. They appear here after the first answer.' }));
+                return;
+            }
+            dom.replace(ui.historyBody, el('div', { class: 'history-list' },
+                list.map(function (f) {
+                    var title = f.name.replace(/^Orochimaru - /, '').replace(/\.md$/, '');
+                    var open = { type: 'button', class: 'history-open', title: f.name,
+                        on: { click: function () { openChat(f.name); } } };
+                    if (f.name === chatFile) open['aria-current'] = 'true';
+                    return el('div', {
+                        class: 'history-item' + (f.name === chatFile ? ' is-current' : ''),
+                    }, [
+                        el('button', open, [title]),
+                        el('button', {
+                            type: 'button', class: 'history-delete',
+                            'aria-label': 'Delete ' + title, text: '\u2715',
+                            on: { click: function () { deleteChat(f.name); } },
+                        }),
+                    ]);
+                })));
+        }).catch(function (err) {
+            dom.replace(ui.historyBody, el('p', { class: 'text-danger',
+                text: 'Could not read the folder: ' + err.message }));
+        });
+    }
+
+    /** Start an empty chat. A chat already saved to the folder stays there. */
+    function resetChat() {
+        chatToken += 1;
+        sessionTokens = 0;
+        answerCount = 0;
+        lastAnswer = '';
+        transcript = [];
+        turns = [];
+        history = [];
+        chatFile = '';
+        chatStarted = null;
+        ui.tokens.textContent = '0';
+        ui.speed.textContent = '--';
+        K.ui.stopSpeech();
+        greeting();
+    }
+
+    /* ----------------------------------------------------------- sidebar */
+
+    var narrow = window.matchMedia('(max-width: 1023px)');
+
+    function setSidebar(open) {
+        var wasOpen = ui.sidebar.classList.contains('is-open');
+        ui.sidebar.classList.toggle('is-open', open);
+        ui.scrim.classList.toggle('hidden', !open);
+        ui.sidebarToggle.setAttribute('aria-expanded', String(open));
+        // Off screen is not hidden: keep a closed drawer out of the Tab order
+        // and away from screen readers.
+        ui.sidebar.inert = narrow.matches && !open;
+        if (open && !wasOpen) {
+            var first = ui.sidebar.querySelector('button, a[href], input, select, summary');
+            if (first) first.focus();
+        } else if (!open && wasOpen && narrow.matches) {
+            ui.sidebarToggle.focus();
+        }
     }
 
     /** System notices. Filenames land here, so this is text -- the old version
@@ -692,6 +1032,7 @@
         var thinking = addThinking();
         setBusy(true);
         var started = performance.now();
+        var token = chatToken;
 
         K.callWithFallback(provider(), {
             apiKey: apiKey(),
@@ -701,6 +1042,7 @@
             messages: messages,
             conversation: true,
         }).then(function (res) {
+            if (token !== chatToken) return;   // another chat is open now
             thinking.remove();
             if (res.model !== ui.model.value) {
                 addSystem('Answered by ' + res.model + ': '
@@ -712,6 +1054,7 @@
             history.push({ role: 'user', content: kept || userFacing },
                 { role: 'assistant', content: res.text });
             trimHistory();
+            persist();
 
             var secs = (performance.now() - started) / 1000;
             var tokens = (res.usage && res.usage.total_tokens)
@@ -721,6 +1064,7 @@
             if (secs > 0) ui.speed.textContent = (tokens / secs).toFixed(1) + ' t/s';
             showCache(res.usage);
         }).catch(function (err) {
+            if (token !== chatToken) return;
             thinking.remove();
             addSystem(err.message, true);
         }).then(function () {
@@ -987,7 +1331,7 @@
             ? (provider() === 'ollama' ? 'Local (Ollama)' : K.providerLabel(provider()))
             : 'Disconnected';
         ui.statusAi.className = has ? 'text-success font-bold' : 'text-danger';
-        ui.dot.className = 'w-2 h-2 rounded-full ' + (has ? 'bg-success' : 'bg-danger');
+        ui.dot.className = 'w-2 h-2 rounded-full ml-auto mr-1 ' + (has ? 'bg-success' : 'bg-danger');
     }
 
     function updateRam() {
@@ -1033,6 +1377,13 @@
             ram: document.getElementById('perf-ram'),
             tts: document.getElementById('tts-btn'),
             upload: document.getElementById('doc-upload'),
+            sidebar: document.getElementById('sidebar'),
+            scrim: document.getElementById('sidebar-scrim'),
+            sidebarToggle: document.getElementById('sidebar-toggle'),
+            historyPanel: document.getElementById('history-panel'),
+            historyBody: document.getElementById('history-body'),
+            historyCount: document.getElementById('history-count'),
+            historySetup: document.getElementById('history-setup'),
         };
 
         settings = K.ui.mountSettings({
@@ -1049,10 +1400,27 @@
         K.ui.fillModelSelect(ui.model, provider());
         var syncModel = K.ui.bindModelControls({
             model: ui.model, temp: ui.temp, tempOut: ui.tempOut, provider: provider,
+            summary: false,
         });
-        // Thinking effort and the reasoning switch sit in the chat box, before send.
+        // Model, effort, web and reasoning share the row under the chat input.
         var effort = K.ui.claudeControls(provider);
-        ui.input.insertAdjacentElement('afterend', effort.node);
+        document.getElementById('chat-controls').appendChild(effort.node);
+
+        ui.sidebarToggle.addEventListener('click', function () {
+            setSidebar(!ui.sidebar.classList.contains('is-open'));
+        });
+        ui.scrim.addEventListener('click', function () { setSidebar(false); });
+        setSidebar(false);
+        narrow.addEventListener('change', function () { setSidebar(false); });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && ui.sidebar.classList.contains('is-open')) setSidebar(false);
+        });
+
+        renderHistory();
+        K.chats.restore().then(function (found) {
+            folder = found;
+            renderHistory();
+        });
         checkStatus();
         greeting();
         renderDocList();
@@ -1081,16 +1449,9 @@
         });
 
         document.getElementById('clear-chat').addEventListener('click', function () {
-            sessionTokens = 0;
-            answerCount = 0;
-            lastAnswer = '';
-            transcript = [];
-            history = [];
-            ui.tokens.textContent = '0';
-            ui.speed.textContent = '--';
-            K.ui.stopSpeech();
-            greeting();
-            addSystem('Chat history cleared.');
+            resetChat();
+            addSystem(folder ? 'New chat. The last one is in Chat history.' : 'New chat.');
+            renderHistory();
         });
         document.getElementById('open-settings').addEventListener('click', function () {
             settings.open();
