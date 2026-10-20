@@ -395,7 +395,19 @@
     .panel-count:empty { display: none; }
 
     /* The sidebar: a column from 1024px up, a slide-in drawer below. */
-    .app-sidebar { width: 18rem; flex-shrink: 0; }
+    .app-sidebar { width: 18rem; flex-shrink: 0; height: 100vh; height: 100dvh; }
+    /* Sections keep their size so the sidebar scrolls instead of squashing them. */
+    .app-sidebar > * { flex-shrink: 0; }
+    /* A solid strip under the fixed home and theme buttons, so the sidebar
+       scrolls beneath them instead of showing through. */
+    .sidebar-top {
+        position: sticky;
+        top: -1rem;
+        z-index: 5;
+        height: 4rem;
+        margin: -1rem -1rem 0;
+        background-color: var(--secondary);
+    }
     @media (max-width: 1023px) {
         .app-sidebar {
             position: fixed;
@@ -411,7 +423,29 @@
         .app-header { padding-left: 8.25rem !important; }
     }
 
-    .history-list { max-height: 16rem; overflow-y: auto; }
+    .history-list { max-height: 22rem; overflow-y: auto; }
+    .history-group > summary {
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.25rem 0.15rem;
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--fg-secondary);
+        cursor: pointer;
+    }
+    .history-group > summary::-webkit-details-marker { display: none; }
+    .history-group > summary::before { content: "\25B8"; }
+    .history-group[open] > summary::before { content: "\25BE"; }
+    .history-group-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .history-rename { margin-left: auto; font-weight: 400; text-transform: none; color: var(--fg-secondary); }
+    .history-rename:hover { color: var(--accent); }
+    .history-move { padding: 0.2rem 0.35rem; color: var(--fg-secondary); }
+    .history-move:hover { color: var(--accent); }
+    .history-select { font-size: 11px !important; padding: 0.15rem 0.3rem !important; margin: 0.15rem 0.5rem 0.35rem; width: auto !important; }
     .history-item { display: flex; align-items: center; border-radius: 0.25rem; }
     .history-item:hover, .history-item.is-current { background-color: var(--tertiary); }
     .history-item.is-current .history-open { color: var(--accent); }

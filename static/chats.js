@@ -135,7 +135,7 @@ window.Kusanagi = window.Kusanagi || {};
         },
     };
 
-    /** Markdown files in `dir`, newest first: [{name, modified}]. */
+    /** Markdown files in `dir`, newest first: [{name, modified, head}]. */
     function listIn(dir, filter) {
         var out = [];
         var iter = dir.values();
@@ -147,8 +147,11 @@ window.Kusanagi = window.Kusanagi || {};
                     return next();
                 }
                 return h.getFile().then(function (f) {
-                    out.push({ name: h.name, modified: f.lastModified });
-                    return next();
+                    // The first line holds the chat's category, if it has one.
+                    return f.slice(0, 300).text().then(function (head) {
+                        out.push({ name: h.name, modified: f.lastModified, head: head });
+                        return next();
+                    });
                 });
             });
         }

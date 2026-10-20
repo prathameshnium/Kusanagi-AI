@@ -59,6 +59,7 @@
     var turns = [];                        // the chat as a saved file holds it
     var chatFile = '';                     // its file name, once saved to the folder
     var chatStarted = null;                // when it began, for that name
+    var chatCategory = '';                 // the user's name for its group, or ''
     var folder = null;                     // {name, ready} once a chat folder is chosen
     var busy = false;
     var settings = null;
@@ -571,6 +572,29 @@
     }
 
     /** The chat as a Markdown file: the conversation, then its data. */
+    /* A chat's category is the file's first line, a comment Markdown viewers
+       hide: <!-- kusanagi-category: Spectroscopy --> */
+    var CATEGORY = /^<!-- kusanagi-category: (.*?) -->\r?\n/;
+
+    /** A category name the user typed, made safe for that comment. */
+    function cleanCategory(name) {
+        return String(name || '')
+            .replace(/[\x00-\x1f\x7f>]/g, ' ')
+            .replace(/-{2,}/g, '-')
+            .replace(/\s+/g, ' ').trim().slice(0, 40);
+    }
+
+    function categoryOf(text) {
+        var m = CATEGORY.exec(text || '');
+        return m ? cleanCategory(m[1]) : '';
+    }
+
+    /** `text` with its category line set to `name` (removed when empty). */
+    function withCategory(text, name) {
+        var body = String(text).replace(CATEGORY, '');
+        return name ? '<!-- kusanagi-category: ' + name + ' -->\n' + body : body;
+    }
+
     function chatDocument() {
         var data = JSON.stringify({
             v: 1,
@@ -581,8 +605,8 @@
         // "--" cannot appear inside an HTML comment; inside JSON strings it is
         // the only place it can occur, and \u002d reads back as "-".
         }).replace(/--/g, '-\\u002d');
-        return '# ' + chatTopic() + '\n\n' + chatAsMarkdown() + '\n\n'
-            + DATA_START + data + DATA_END + '\n';
+        return withCategory('# ' + chatTopic() + '\n\n' + chatAsMarkdown() + '\n\n'
+            + DATA_START + data + DATA_END + '\n', chatCategory);
     }
 
     function readChatDocument(text) {
@@ -730,6 +754,55 @@
         return rebuilt.slice(-MAX_TURNS / 2);
     }
 
+    /** Put chat `name` in category `to` ('' for none). */
+    function moveChat(name, to) {
+        saving = saving.then(function () {
+            if (name === chatFile) {
+                chatCategory = to;
+                return K.chats.write(name, chatDocument());
+            }
+            return K.chats.read(name).then(function (text) {
+                return K.chats.write(name, withCategory(text, to));
+            });
+        }).then(function () { renderHistory(); }, function (err) {
+            K.ui.toast('Could not move it: ' + err.message, 'error');
+        });
+    }
+
+    /** Rename category `from` on every chat in it. */
+    function renameCategory(from, files) {
+        var to = cleanCategory(window.prompt('Rename the category "' + from + '" to:', from));
+        if (!to || to === from) return;
+        var inIt = files.filter(function (f) { return categoryOf(f.head) === from; });
+        inIt.forEach(function (f) { moveChat(f.name, to); });
+    }
+
+    /** Ask where to put a chat, offering the categories already in use. */
+    function chooseCategory(item, f, categories) {
+        var current = categoryOf(f.head);
+        var NEW = '\u0000new';
+        var choices = [['', current ? 'Move to...' : 'Put in...']]
+            .concat(categories.filter(function (c) { return c !== current; })
+                .map(function (c) { return [c, c]; }))
+            .concat(current ? [['\u0000none', 'No category']] : [])
+            .concat([[NEW, 'New category...']]);
+        var select = el('select', { class: 'history-select',
+            'aria-label': 'Category for ' + f.name }, choices.map(function (c) {
+            return el('option', { value: c[0], text: c[1] });
+        }));
+        select.addEventListener('change', function () {
+            var to = select.value;
+            if (to === NEW) to = cleanCategory(window.prompt('Name the new category:', ''));
+            else if (to === '\u0000none') to = '';
+            else if (!to) return;
+            if (to === null || (to === '' && select.value === NEW)) { renderHistory(); return; }
+            moveChat(f.name, to);
+        });
+        select.addEventListener('blur', function () { setTimeout(renderHistory, 200); });
+        item.insertAdjacentElement('afterend', select);
+        select.focus();
+    }
+
     function openChat(name) {
         K.chats.read(name).then(function (text) {
             var data = readChatDocument(text);
@@ -750,6 +823,7 @@
             history = cleanHistory(data.history, shown);
             chatFile = name;
             chatStarted = validDate(new Date(data.created));
+            chatCategory = categoryOf(text);
             addSystem('Reopened ' + name.replace(/\.md$/, '') + '. The excerpts its answers '
                 + 'quoted are saved with it, but not the documents; load them again to ask '
                 + 'more about them.');
@@ -849,23 +923,65 @@
                     text: 'No saved chats yet. They appear here after the first answer.' }));
                 return;
             }
+            // Named categories A-Z, then chats with none.
+            var groups = {};
+            list.forEach(function (f) {
+                var c = categoryOf(f.head);
+                (groups[c] = groups[c] || []).push(f);
+            });
+            var named = Object.keys(groups).filter(function (c) { return c; }).sort(
+                function (a, b) { return a.localeCompare(b); });
+            var order = named.concat(groups[''] ? [''] : []);
+
+            function item(f) {
+                var title = f.name.replace(/^Orochimaru - /, '').replace(/\.md$/, '');
+                var open = { type: 'button', class: 'history-open', title: f.name,
+                    on: { click: function () { openChat(f.name); } } };
+                if (f.name === chatFile) open['aria-current'] = 'true';
+                var row = el('div', {
+                    class: 'history-item' + (f.name === chatFile ? ' is-current' : ''),
+                }, [
+                    el('button', open, [title]),
+                    el('button', {
+                        type: 'button', class: 'history-move', text: '\u21C4',
+                        title: 'Move to a category',
+                        'aria-label': 'Move ' + title + ' to a category',
+                        on: { click: function () { chooseCategory(row, f, named); } },
+                    }),
+                    el('button', {
+                        type: 'button', class: 'history-delete',
+                        'aria-label': 'Delete ' + title, text: '\u2715',
+                        on: { click: function () { deleteChat(f.name); } },
+                    }),
+                ]);
+                return row;
+            }
+
             dom.replace(ui.historyBody, el('div', { class: 'history-list' },
-                list.map(function (f) {
-                    var title = f.name.replace(/^Orochimaru - /, '').replace(/\.md$/, '');
-                    var open = { type: 'button', class: 'history-open', title: f.name,
-                        on: { click: function () { openChat(f.name); } } };
-                    if (f.name === chatFile) open['aria-current'] = 'true';
-                    return el('div', {
-                        class: 'history-item' + (f.name === chatFile ? ' is-current' : ''),
-                    }, [
-                        el('button', open, [title]),
-                        el('button', {
-                            type: 'button', class: 'history-delete',
-                            'aria-label': 'Delete ' + title, text: '\u2715',
-                            on: { click: function () { deleteChat(f.name); } },
-                        }),
-                    ]);
-                })));
+                order.length === 1 && !order[0]
+                    ? list.map(item)
+                    : order.map(function (c) {
+                        var head = [
+                            el('span', { class: 'history-group-name',
+                                text: c || 'No category' }),
+                            el('span', { class: 'panel-count', text: String(groups[c].length) }),
+                        ];
+                        if (c) {
+                            head.push(el('button', {
+                                type: 'button', class: 'history-rename', text: 'Rename',
+                                'aria-label': 'Rename the category ' + c,
+                                on: { click: function (e) {
+                                    // Inside <summary>: rename, do not fold.
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    renameCategory(c, list);
+                                } },
+                            }));
+                        }
+                        return el('details', { class: 'history-group', open: 'open' }, [
+                            el('summary', {}, head),
+                        ].concat(groups[c].map(item)));
+                    })));
         }).catch(function (err) {
             dom.replace(ui.historyBody, el('p', { class: 'text-danger',
                 text: 'Could not read the folder: ' + err.message }));
@@ -883,6 +999,7 @@
         history = [];
         chatFile = '';
         chatStarted = null;
+        chatCategory = '';
         ui.tokens.textContent = '0';
         ui.speed.textContent = '--';
         K.ui.stopSpeech();
