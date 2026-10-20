@@ -520,6 +520,8 @@
             var body = el('div');
             dom.markdown(body, res.text);
             dom.citations(body, answerNo, sources);
+            var reasoning = K.ui.reasoningBlock(res.reasoning);
+            if (reasoning) ui.response.appendChild(reasoning);
             ui.response.appendChild(body);
             ui.response.appendChild(el('div', { class: 'mt-3 flex gap-2' }, [
                 K.ui.copyButton(function () {
@@ -616,9 +618,15 @@
 
         settings = K.ui.mountSettings({
             providers: ['gemini', 'anthropic', 'hf', 'openrouter'],
-            onSave: function () { K.ui.fillModelSelect(ui.model, provider()); },
+            onSave: function () {
+                K.ui.fillModelSelect(ui.model, provider());
+                syncModel();
+            },
         });
         K.ui.fillModelSelect(ui.model, provider());
+        var syncModel = K.ui.bindModelControls({
+            model: ui.model, temp: ui.temp, tempOut: ui.tempOut, provider: provider,
+        });
 
         ui.temp.addEventListener('input', function () {
             ui.tempOut.textContent = ui.temp.value;

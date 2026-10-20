@@ -133,6 +133,79 @@ window.Kusanagi = window.Kusanagi || {};
             class: 'mt-0.5 shrink-0',
         });
 
+        var prefs = window.Kusanagi.prefs;
+
+        /* Claude options and the read-aloud voice are remembered in this
+           browser as soon as they change: Save is about keys, and refuses
+           without one. */
+        function optionSelect(id, choices) {
+            return el('select', { id: id, class: 'mt-1' }, choices.map(function (c) {
+                return el('option', { value: c[0], text: c[1] });
+            }));
+        }
+
+        function optionToggle(id, label, note) {
+            var box = el('input', { type: 'checkbox', id: id, class: 'mt-0.5 shrink-0' });
+            var row = el('div', { class: 'mt-2' }, [
+                el('label', {
+                    class: 'flex items-start gap-2 text-xs text-fg-primary cursor-pointer',
+                    for: id,
+                }, [box, el('span', { text: label })]),
+                el('p', { class: 'text-[11px] text-fg-secondary ml-5', text: note }),
+            ]);
+            return { box: box, row: row };
+        }
+
+        var effortSelect = optionSelect('settings-claude-effort', [
+            ['', 'Model default'], ['low', 'Low (fast, cheap)'], ['medium', 'Medium'],
+            ['high', 'High'], ['xhigh', 'Extra high'], ['max', 'Max (slowest, priciest)'],
+        ]);
+        var maxTokensSelect = optionSelect('settings-claude-max', [
+            ['4096', '4K tokens'], ['16000', '16K tokens'], ['32000', '32K tokens'],
+        ]);
+        var claudeToggles = {
+            reasoning: optionToggle('settings-claude-reasoning', 'Show reasoning',
+                'A summary of how Claude thought it through, above the answer.'),
+            cache: optionToggle('settings-claude-cache', 'Prompt caching',
+                'Follow-up turns re-read documents and history at about a tenth of '
+                + 'the price. The first turn costs a quarter more.'),
+            usOnly: optionToggle('settings-claude-us', 'Process in the US only',
+                'Sends inference_geo: "us".'),
+            fast: optionToggle('settings-claude-fast', 'Fast mode (Opus 5.5 only)',
+                'Up to 2.5× faster output at twice the price.'),
+        };
+
+        function claudeLabel(text, id) {
+            return el('label', {
+                class: 'block text-[11px] text-fg-secondary mt-2', for: id, text: text,
+            });
+        }
+
+        var claudeBox = el('div', { class: 'hidden mb-2 pt-3 border-t border-tertiary/60' }, [
+            el('p', {
+                class: 'block text-xs font-bold text-fg-secondary uppercase tracking-wide',
+                text: 'Claude options',
+            }),
+            el('div', { class: 'grid grid-cols-2 gap-2' }, [
+                el('div', {}, [claudeLabel('Effort', 'settings-claude-effort'), effortSelect]),
+                el('div', {}, [claudeLabel('Max answer length', 'settings-claude-max'),
+                    maxTokensSelect]),
+            ]),
+            claudeToggles.reasoning.row,
+            claudeToggles.cache.row,
+            claudeToggles.usOnly.row,
+            claudeToggles.fast.row,
+        ]);
+
+        var voiceSourceSelect = optionSelect('settings-voice-source', [
+            ['local', 'Local (on this device)'],
+            ['web', 'Web (online, natural)'],
+        ]);
+        voiceSourceSelect.classList.add('flex-1', 'min-w-0');
+        var voiceSelect = el('select', { id: 'settings-voice', 'aria-label': 'Voice',
+            class: 'mt-2' });
+        var voiceNote = el('p', { class: 'text-[11px] text-fg-secondary mt-1' });
+
         var dialog = el('div', {
             class: 'settings-modal-content p-6 rounded-lg shadow-2xl max-w-md w-full border',
             role: 'dialog',
@@ -204,6 +277,25 @@ window.Kusanagi = window.Kusanagi || {};
                 }),
             ]),
 
+            claudeBox,
+
+            el('div', { class: 'mb-2 pt-3 border-t border-tertiary/60' }, [
+                el('label', {
+                    class: 'block text-xs font-bold text-fg-secondary uppercase tracking-wide mb-2',
+                    for: 'settings-voice-source',
+                    text: 'Read-aloud voice',
+                }),
+                el('div', { class: 'flex gap-2 items-center' }, [
+                    voiceSourceSelect,
+                    el('button', {
+                        class: 'btn btn-secondary text-xs', type: 'button', text: 'Test',
+                        on: { click: function () { testVoice(); } },
+                    }),
+                ]),
+                voiceSelect,
+                voiceNote,
+            ]),
+
             el('div', {
                 class: 'flex justify-between items-center mt-6 pt-4 border-t border-tertiary',
             }, [
@@ -261,6 +353,13 @@ window.Kusanagi = window.Kusanagi || {};
                 : '';
 
             fallbackBox.checked = window.Kusanagi.prefs.modelFallback();
+            claudeBox.classList.toggle('hidden', provider !== 'anthropic');
+            effortSelect.value = prefs.claude('effort');
+            maxTokensSelect.value = prefs.claude('maxTokens');
+            Object.keys(claudeToggles).forEach(function (name) {
+                claudeToggles[name].box.checked = prefs.claude(name);
+            });
+            fillVoices();
             persistBox.checked = window.Kusanagi.keys.isPersisted(provider);
             unlockBox.classList.toggle('hidden', !(vault.exists() && !vault.isOpen()));
             describePersist();
@@ -370,6 +469,75 @@ window.Kusanagi = window.Kusanagi || {};
             if (lastFocused && lastFocused.focus) lastFocused.focus();
         }
 
+        function announce() {
+            window.dispatchEvent(new CustomEvent('kusanagi:prefs'));
+        }
+
+        function fillVoices() {
+            var source = prefs.voiceSource();
+            voiceSourceSelect.value = source;
+            var voices = voicesFor(source);
+            var current = chosenVoice();
+            dom.clear(voiceSelect);
+            voices.forEach(function (v) {
+                voiceSelect.appendChild(el('option', { value: v.name,
+                    text: v.name + ' (' + v.lang + ')' }));
+            });
+            if (current) voiceSelect.value = current.name;
+            voiceSelect.disabled = !voices.length;
+            voiceNote.textContent = !voices.length
+                ? (source === 'web'
+                    ? 'This browser offers no online voices. Microsoft Edge has the most, '
+                        + 'including Ava Multilingual.'
+                    : 'This browser offers no local voices.')
+                : source === 'web'
+                    ? 'Online voices send the text being read to the browser’s '
+                        + 'speech service (Microsoft for Edge, Google for Chrome).'
+                    : 'Spoken on this device; nothing leaves the browser.';
+        }
+
+        function testVoice() {
+            if (!('speechSynthesis' in window)) {
+                toast('This browser has no speech synthesis.', 'error');
+                return;
+            }
+            stopSpeech();
+            var voice = chosenVoice();
+            var u = new SpeechSynthesisUtterance('Hello, this is how answers will be read aloud.');
+            if (voice) { u.voice = voice; u.lang = voice.lang; }
+            window.speechSynthesis.speak(u);
+        }
+
+        voiceSourceSelect.addEventListener('change', function () {
+            prefs.setVoiceSource(voiceSourceSelect.value);
+            fillVoices();
+        });
+        voiceSelect.addEventListener('change', function () {
+            prefs.setVoiceName(prefs.voiceSource(), voiceSelect.value);
+        });
+        // Chrome loads its voice list after the page, and says so with this event.
+        if ('speechSynthesis' in window) {
+            window.speechSynthesis.addEventListener('voiceschanged', function () {
+                if (!modal.classList.contains('hidden')) fillVoices();
+            });
+        }
+
+        effortSelect.addEventListener('change', function () {
+            prefs.setClaude('effort', effortSelect.value);
+            announce();
+        });
+        maxTokensSelect.addEventListener('change', function () {
+            prefs.setClaude('maxTokens', maxTokensSelect.value);
+            announce();
+        });
+        Object.keys(claudeToggles).forEach(function (name) {
+            var box = claudeToggles[name].box;
+            box.addEventListener('change', function () {
+                prefs.setClaude(name, box.checked);
+                announce();
+            });
+        });
+
         providerSelect.addEventListener('change', refresh);
         persistBox.addEventListener('change', describePersist);
         [keyInput, vaultPassword, vaultConfirm].forEach(function (input) {
@@ -420,6 +588,68 @@ window.Kusanagi = window.Kusanagi || {};
             select.appendChild(el('option', { value: '', text: 'No models' }));
         }
         return select;
+    }
+
+    var EFFORT_NAMES = { low: 'low', medium: 'medium', high: 'high', xhigh: 'extra high', max: 'max' };
+
+    /**
+     * Keep a page's model controls in step with the Claude options in Settings:
+     * the temperature slider is switched off for Claude (it rejects sampling
+     * settings), and a line under the model picker says which options are on.
+     *
+     * bindModelControls({model, temp, tempOut, provider}) -> sync()
+     * Call sync() again after the provider changes.
+     */
+    function bindModelControls(c) {
+        var prefs = window.Kusanagi.prefs;
+        var summary = el('p', { class: 'text-[10px] text-fg-secondary mt-1 hidden' });
+        c.model.insertAdjacentElement('afterend', summary);
+        var tempValue = c.tempOut ? c.tempOut.textContent : '';
+
+        function sync() {
+            var claude = c.provider() === 'anthropic';
+            if (c.temp) {
+                c.temp.disabled = claude;
+                c.temp.title = claude ? 'Claude does not accept a temperature setting.' : '';
+                c.temp.classList.toggle('opacity-40', claude);
+            }
+            if (c.tempOut) {
+                if (claude) {
+                    if (c.tempOut.textContent !== '—') tempValue = c.tempOut.textContent;
+                    c.tempOut.textContent = '—';
+                } else if (c.tempOut.textContent === '—') {
+                    c.tempOut.textContent = tempValue || c.temp.value;
+                }
+            }
+
+            summary.classList.toggle('hidden', !claude);
+            if (!claude) return;
+            var effort = prefs.claude('effort');
+            var parts = ['Effort: ' + (effort ? EFFORT_NAMES[effort] : 'default')];
+            if (prefs.claude('reasoning')) parts.push('reasoning shown');
+            if (prefs.claude('cache')) parts.push('cached');
+            if (prefs.claude('usOnly')) parts.push('US only');
+            if (prefs.claude('fast')) {
+                parts.push(c.model.value === 'claude-opus-5-5' ? 'fast' : 'fast (Opus 5.5 only, off here)');
+            }
+            summary.textContent = parts.join(' · ');
+        }
+
+        c.model.addEventListener('change', sync);
+        window.addEventListener('kusanagi:prefs', sync);
+        sync();
+        return sync;
+    }
+
+    /** A collapsed "Reasoning" box for Claude's summarised thinking, or null. */
+    function reasoningBlock(text) {
+        if (!text) return null;
+        return el('details', {
+            class: 'mb-2 text-xs text-fg-secondary border border-tertiary rounded px-3 py-2',
+        }, [
+            el('summary', { class: 'cursor-pointer font-bold', text: 'Reasoning' }),
+            el('div', { class: 'mt-2 whitespace-pre-wrap', text: text }),
+        ]);
     }
 
     /* -------------------------------------------------------------- result card */
@@ -719,6 +949,8 @@ window.Kusanagi = window.Kusanagi || {};
         mountSettings: mountSettings,
         purgeAll: purgeAll,
         fillModelSelect: fillModelSelect,
+        bindModelControls: bindModelControls,
+        reasoningBlock: reasoningBlock,
         resultCard: resultCard,
         expandableText: expandableText,
         copyToClipboard: copyToClipboard,

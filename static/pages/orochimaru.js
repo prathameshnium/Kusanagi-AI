@@ -487,7 +487,7 @@
         });
     }
 
-    function addAI(rawText, sources) {
+    function addAI(rawText, sources, reasoning) {
         answerCount += 1;
         var answerNo = answerCount;
         // Copies and the chat transcript carry the same [answer:source] labels
@@ -504,6 +504,7 @@
         ui.log.appendChild(el('div', { class: 'flex items-start gap-4' }, [
             orochiAvatar(),
             el('div', { class: 'flex flex-col items-start gap-1 max-w-3xl min-w-0' }, [
+                K.ui.reasoningBlock(reasoning),
                 body,
                 el('div', { class: 'flex gap-2' }, [
                     K.ui.copyButton(function () { return text; }),
@@ -670,7 +671,7 @@
                 addSystem('Answered by ' + res.model + ': '
                     + ui.model.value + ' was unavailable.');
             }
-            addAI(res.text, sources);
+            addAI(res.text, sources, res.reasoning);
             lastAnswer = res.text;
             history.push({ role: 'user', content: userFacing },
                 { role: 'assistant', content: res.text });
@@ -849,10 +850,14 @@
             onSave: function () {
                 checkStatus();
                 K.ui.fillModelSelect(ui.model, provider());
+                syncModel();
             },
         });
 
         K.ui.fillModelSelect(ui.model, provider());
+        var syncModel = K.ui.bindModelControls({
+            model: ui.model, temp: ui.temp, tempOut: ui.tempOut, provider: provider,
+        });
         checkStatus();
         greeting();
         renderDocList();

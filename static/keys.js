@@ -438,7 +438,41 @@ window.Kusanagi = window.Kusanagi || {};
             if (name) local.set(NS + 'voice_' + source, name);
             else local.del(NS + 'voice_' + source);
         },
+
+        /** One Claude request option (see CLAUDE_OPTIONS), or its default. */
+        claude: function (name) {
+            var spec = CLAUDE_OPTIONS[name];
+            if (!spec) return undefined;
+            var raw = local.get(NS + 'claude_' + name);
+            if (raw === null) return spec.default;
+            if (typeof spec.default === 'boolean') return raw === '1';
+            return spec.values.indexOf(raw) !== -1 ? raw : spec.default;
+        },
+
+        setClaude: function (name, value) {
+            var spec = CLAUDE_OPTIONS[name];
+            if (!spec) return;
+            if (typeof spec.default === 'boolean') {
+                local.set(NS + 'claude_' + name, value ? '1' : '0');
+            } else if (spec.values.indexOf(value) !== -1 && value !== spec.default) {
+                local.set(NS + 'claude_' + name, value);
+            } else {
+                local.del(NS + 'claude_' + name);
+            }
+        },
     };
+
+    /* Optional Claude request settings, remembered in this browser. '' on a
+       choice means "send nothing, keep the API's default". */
+    var CLAUDE_OPTIONS = {
+        effort: { default: '', values: ['', 'low', 'medium', 'high', 'xhigh', 'max'] },
+        maxTokens: { default: '16000', values: ['4096', '16000', '32000'] },
+        reasoning: { default: false },  // summarised thinking, shown above the answer
+        cache: { default: false },      // prompt caching: cheaper repeated context
+        usOnly: { default: false },     // inference_geo: "us"
+        fast: { default: false },       // Opus 5.5 fast mode, at twice the price
+    };
+    prefs.CLAUDE_OPTIONS = CLAUDE_OPTIONS;
 
     migrateLegacy();
     forgetRetired();

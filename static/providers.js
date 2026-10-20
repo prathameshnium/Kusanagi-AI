@@ -294,8 +294,32 @@ window.Kusanagi = window.Kusanagi || {};
         });
         if (!turns.length) return Promise.reject(new Error('Nothing to send.'));
 
-        var body = { model: modelId, max_tokens: 16000, messages: turns };
+        // Options the user switched on in Settings, remembered in this browser.
+        var prefs = window.Kusanagi.prefs;
+        function option(name) { return prefs ? prefs.claude(name) : undefined; }
+
+        var body = {
+            model: modelId,
+            max_tokens: parseInt(option('maxTokens'), 10) || 16000,
+            messages: turns,
+        };
         if (system.length) body.system = system.join('\n\n');
+        var betas = [];
+
+        // Effort is the only depth control on current Claude models: thinking
+        // is always on, and a token budget is rejected. Unset keeps the
+        // model's default (medium on Opus and Haiku 5.5, high on Sonnet 5.5).
+        var effort = (opts && opts.effort) || option('effort');
+        if (effort) body.output_config = { effort: effort };
+        if (option('reasoning')) body.thinking = { type: 'adaptive', display: 'summarized' };
+        // Caches the request up to its last block, so the next turn of the same
+        // chat re-reads the documents and history at about a tenth of the price.
+        if (option('cache')) body.cache_control = { type: 'ephemeral' };
+        if (option('usOnly')) body.inference_geo = 'us';
+        if (option('fast') && modelId === 'claude-opus-5-5') {
+            betas.push('fast-mode-2026-02-01');
+            body.speed = 'fast';
+        }
 
         var headers = {
             'Content-Type': 'application/json',
@@ -309,9 +333,10 @@ window.Kusanagi = window.Kusanagi || {};
             // On a safety refusal Anthropic re-runs the request on another Claude
             // model inside the same call. Same provider, so this stays within
             // the line callWithFallback() draws.
-            headers['anthropic-beta'] = 'server-side-fallback-2026-07-01';
+            betas.push('server-side-fallback-2026-07-01');
             body.fallbacks = 'default';
         }
+        if (betas.length) headers['anthropic-beta'] = betas.join(',');
 
         return request(ENDPOINTS.anthropic, {
             method: 'POST',
@@ -340,9 +365,16 @@ window.Kusanagi = window.Kusanagi || {};
                     throw blank;
                 }
 
+                // Summarised reasoning, when asked for; empty text otherwise.
+                var reasoning = (data.content || [])
+                    .filter(function (b) { return b && b.type === 'thinking' && b.thinking; })
+                    .map(function (b) { return b.thinking; })
+                    .join('\n\n');
+
                 var u = data.usage;
                 return {
                     text: text,
+                    reasoning: reasoning,
                     usage: u ? {
                         prompt_tokens: u.input_tokens,
                         completion_tokens: u.output_tokens,
