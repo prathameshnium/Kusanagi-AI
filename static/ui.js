@@ -596,6 +596,35 @@ window.Kusanagi = window.Kusanagi || {};
     // One voice at a time across the page; this is the button now speaking.
     var speaking = null;
 
+    // The web default. Edge names it "Microsoft AvaMultilingual Online (Natural)".
+    var WEB_DEFAULT = /ava\s*multilingual/i;
+
+    /** The browser's voices for a source: 'local' runs on this device, 'web'
+        sends the text to the browser vendor's speech service. */
+    function voicesFor(source) {
+        if (!('speechSynthesis' in window)) return [];
+        return window.speechSynthesis.getVoices().filter(function (v) {
+            return source === 'web' ? !v.localService : v.localService;
+        });
+    }
+
+    /** The voice to speak with: the saved one if it still exists, else the
+        source's default (Ava Multilingual on the web, the browser's own locally). */
+    function chosenVoice() {
+        var prefs = window.Kusanagi.prefs;
+        var source = prefs.voiceSource();
+        var voices = voicesFor(source);
+        var name = prefs.voiceName(source);
+        var match = voices.filter(function (v) { return v.name === name; })[0];
+        if (match) return match;
+        if (source === 'web') {
+            return voices.filter(function (v) { return WEB_DEFAULT.test(v.name); })[0]
+                || voices.filter(function (v) { return /^en/i.test(v.lang); })[0]
+                || voices[0] || null;
+        }
+        return voices.filter(function (v) { return v.default; })[0] || null;
+    }
+
     function resetSpeakButton(button) {
         button.textContent = button.getAttribute('data-label');
         button.setAttribute('aria-pressed', 'false');
@@ -655,8 +684,10 @@ window.Kusanagi = window.Kusanagi || {};
             button.classList.add('text-accent');
 
             var pieces = speechPieces(text);
+            var voice = chosenVoice();
             pieces.forEach(function (piece, i) {
                 var u = new SpeechSynthesisUtterance(piece);
+                if (voice) { u.voice = voice; u.lang = voice.lang; }
                 if (i === pieces.length - 1) {
                     u.onend = function () { if (speaking === button) stopSpeech(); };
                 }

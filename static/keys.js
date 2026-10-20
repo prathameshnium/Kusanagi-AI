@@ -418,6 +418,26 @@ window.Kusanagi = window.Kusanagi || {};
         setModelFallback: function (enabled) {
             local.set(NS + 'model_fallback', enabled ? '1' : '0');
         },
+
+        /** Read-aloud voices: 'local' (on this device) or 'web' (the browser's
+            online voices, which send the text to its vendor). Default local. */
+        voiceSource: function () {
+            return local.get(NS + 'voice_source') === 'web' ? 'web' : 'local';
+        },
+
+        setVoiceSource: function (source) {
+            local.set(NS + 'voice_source', source === 'web' ? 'web' : 'local');
+        },
+
+        /** The chosen voice's name for a source, or '' for that source's default. */
+        voiceName: function (source) {
+            return local.get(NS + 'voice_' + source) || '';
+        },
+
+        setVoiceName: function (source, name) {
+            if (name) local.set(NS + 'voice_' + source, name);
+            else local.del(NS + 'voice_' + source);
+        },
     };
 
     migrateLegacy();
