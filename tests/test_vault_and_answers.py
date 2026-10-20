@@ -10,6 +10,7 @@ pin the properties that matter rather than the wording:
     without ever turning it back into HTML;
   - retrieved text is fenced off as untrusted.
 """
+import pytest
 import io
 import os
 import re
@@ -276,3 +277,34 @@ def test_no_ai_mode_never_calls_a_model():
 def test_academic_answer_is_a_literature_review():
     body = PROMPTS.split("function deepResearch(")[1].split("\n    }\n")[0]
     assert "academic" in body and "literature review" in body
+
+
+def test_general_knowledge_is_the_default_answer_mode():
+    html = read("web_apps", "Orochimaru_Web_Research_Assistent.html")
+    assert '<option value="normal" selected>' in html
+    assert '<option value="strict" selected>' not in html
+
+
+@pytest.mark.parametrize("ext", ["pdf", "docx", "odt", "pptx", "txt", "md", "csv",
+                                 "tsv", "dat", "json", "html", "rtf"])
+def test_orochimaru_accepts_common_document_types(ext):
+    html = read("web_apps", "Orochimaru_Web_Research_Assistent.html")
+    accept = html.split('id="doc-upload" accept="')[1].split('"')[0]
+    assert "." + ext in accept.split(",")
+    source = strip_js_comments(read("static", "pages", "orochimaru.js"))
+    assert "'%s'" % ext in source
+
+
+def test_office_files_cannot_unzip_without_limit():
+    source = strip_js_comments(read("static", "pages", "orochimaru.js"))
+    assert "MAX_UNZIPPED_BYTES" in source and "budget.left < 0" in source
+
+
+def test_skills_are_toggles_that_reach_the_prompt():
+    html = read("web_apps", "Orochimaru_Web_Research_Assistent.html")
+    assert 'id="skill-list"' in html and 'id="active-skills"' in html
+    source = strip_js_comments(read("static", "pages", "orochimaru.js"))
+    assert "'aria-pressed': String(on)" in source
+    assert "function toggleSkill(id)" in source
+    assert "skillsBlock(skillIds)" in PROMPTS.split("function chatSystemPrompt")[1]
+    assert "skillsBlock(skillIds)" in PROMPTS.split("function documentChatPrompt")[1]

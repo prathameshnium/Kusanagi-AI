@@ -22,9 +22,10 @@
         base-uri 'none';
         form-action 'none';">
     <title>Orochimaru &mdash; Kusanagi AI</title>
-    <meta name="description" content="Orochimaru — a private research chat that can also answer from PDFs parsed in your browser and held only in memory.">
+    <meta name="description" content="Orochimaru — a private research chat that can also answer from documents parsed in your browser and held only in memory.">
     <link rel="icon" href="../static/logo-64.png">
     <link rel="stylesheet" href="../static/kusanagi.css">
+    <script src="../static/theme.js"></script>
     <link rel="stylesheet" href="../static/vendor/katex/katex.min.css">
     <script src="../static/vendor/marked.min.js" defer></script>
     <script src="../static/vendor/purify.min.js" defer></script>
@@ -52,11 +53,11 @@
                     <span class="text-fg-secondary font-normal">/</span>
                     <span class="text-accent">Orochimaru</span>
                 </h1>
-                <p class="text-xs text-fg-secondary mt-1">Research chat, with RAG over your PDFs</p>
+                <p class="text-xs text-fg-secondary mt-1">Research chat, with RAG over your documents</p>
             </div>
 
             <div class="mb-6">
-                <input type="file" id="pdf-upload" accept="application/pdf,.pdf" class="hidden">
+                <input type="file" id="doc-upload" accept=".pdf,.docx,.odt,.pptx,.txt,.text,.md,.markdown,.csv,.tsv,.dat,.json,.xml,.html,.htm,.tex,.log,.rtf,.yaml,.yml,.ini" multiple class="hidden">
                 <button id="load-doc" type="button" class="btn btn-accent w-full py-3 flex items-center justify-center gap-2 shadow-lg">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
                     Load document
@@ -73,8 +74,8 @@
                 <div class="mb-3">
                     <label for="answer-mode" class="block text-[10px] text-fg-secondary mb-1">Answer from (when documents are loaded)</label>
                     <select id="answer-mode" class="!bg-primary !text-xs !p-1.5">
-                        <option value="strict" selected>Documents only (strict)</option>
-                        <option value="normal">Documents + general knowledge</option>
+                        <option value="normal" selected>Documents + general knowledge</option>
+                        <option value="strict">Documents only (strict)</option>
                     </select>
                 </div>
                 <div>
@@ -106,17 +107,10 @@
                 <div id="doc-list" class="space-y-1 overflow-y-auto pr-1 flex-grow"></div>
             </div>
 
-            <div id="quick-actions" class="space-y-2 is-dimmed pointer-events-none transition-opacity">
-                <button id="action-summarize" type="button" class="w-full text-left px-3 py-2 rounded hover:bg-tertiary text-sm text-fg-primary border border-transparent hover:border-accent transition">
-                    Summarise all
-                </button>
-                <div>
-                    <button id="toggle-review" type="button" class="w-full text-left px-3 py-2 rounded hover:bg-tertiary text-sm text-fg-primary border border-transparent hover:border-accent transition flex items-center justify-between" aria-expanded="false" aria-controls="review-menu">
-                        <span>Expert review</span>
-                        <span aria-hidden="true">&#9662;</span>
-                    </button>
-                    <div id="review-menu" class="hidden ml-4 mt-1 border-l-2 border-tertiary pl-2 space-y-1"></div>
-                </div>
+            <div class="mb-4">
+                <h2 class="text-xs font-bold text-fg-secondary uppercase mb-2">Skills</h2>
+                <div id="skill-list" class="space-y-1" role="group" aria-label="Skills"></div>
+                <p class="text-[10px] text-fg-secondary mt-2 opacity-70">A skill that is on shapes every answer. Switching one on with documents loaded also runs it on them once.</p>
             </div>
 
             <div class="mt-auto pt-4 border-t border-tertiary flex gap-2">
@@ -150,6 +144,7 @@
 
             <div class="flex-shrink-0 p-4 bg-primary border-t border-tertiary">
                 <div class="max-w-4xl mx-auto">
+                    <div id="active-skills" class="flex flex-wrap gap-1 mb-2 hidden" aria-label="Skills on"></div>
                     <div class="flex bg-tertiary rounded-lg border border-tertiary focus-within:border-accent shadow-lg transition-colors">
                         <label for="chat-input" class="sr-only">Question</label>
                         <input id="chat-input" type="text" autocomplete="off" placeholder="Ask anything, or about your documents..." class="!border-0 !bg-transparent !p-3">

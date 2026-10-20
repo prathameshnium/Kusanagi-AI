@@ -69,7 +69,7 @@ Kusanagi-AI is built with a focus on local execution, privacy, and ease of use. 
 
 ### Orochimaru — research assistant
 
-<p align="center"><i>RAG over your own PDFs: load a paper, ask questions against it, request a summary or a critical review.</i></p>
+<p align="center"><i>RAG over your own documents (PDF, Word, text, CSV, Markdown, HTML and more): load a paper, ask questions against it, switch on a summary or critical-review skill.</i></p>
 
 ![Orochimaru Screenshot](https://raw.githubusercontent.com/prathameshnium/static-files/main/projects/kusanagi-ai/Orochimaru_Screenshot.jpg)
 
@@ -92,7 +92,7 @@ Start them from the menu:
 python local_apps/launcher.py
 ```
 
--   **`local_apps/Orochimaru_Local_Research_Assistent.py`** — the full RAG assistant: load PDFs, chat, request expert reviews.
+-   **`local_apps/Orochimaru_Local_Research_Assistent.py`** — the full RAG assistant: load PDFs, Word, text, CSV and other documents, chat, request expert reviews.
 -   **`local_apps/OneTail_Local_Chatapp.py`** — lightweight multi-model chat.
 -   **`local_apps/Visualize_AI.py`** — next-token predictions in real time.
 -   **`local_apps/Kusanagi_Local.py`** — console and model manager.
@@ -332,11 +332,25 @@ nothing is sent to an AI provider.
 address forwards there) is a multi-turn research chat. With no documents loaded
 it answers from general knowledge, citing papers it recalls with a DOI only when
 certain and otherwise a Google Scholar search for the exact title, so a link can
-never point at an invented record. Once PDFs are loaded, **Answer from** picks
-the grounding: *Documents only* answers from the retrieved excerpts and refuses
-anything they do not cover; *Documents + general knowledge* uses the excerpts
-first and labels every sentence that comes from outside them. Retrieved text is
-fenced and the model is told never to follow instructions inside it.
+never point at an invented record. Documents can be PDF, Word (`.docx`),
+OpenDocument (`.odt`), PowerPoint (`.pptx`), HTML, RTF, or any text format
+(`.txt`, `.md`, `.csv`, `.tsv`, `.dat`, `.json`, `.xml`, `.tex`, ...). Once
+documents are loaded, **Answer from** picks the grounding: *Documents + general
+knowledge* (the default) uses the excerpts first and labels every sentence that
+comes from outside them; *Documents only* answers from the retrieved excerpts
+and refuses anything they do not cover. Retrieved text is fenced and the model
+is told never to follow instructions inside it.
+
+Citations are academic-style: the model writes `[n]` and the page shows it as
+`[answer:source]` (so `[1:2]` is the second source of the first answer), linked
+to that answer's reference list. The page builds the list from the sources it
+actually sent, so no link in it can be invented.
+
+**Skills** (Summarise, and Physicist / Chemist / Editor review) are toggles:
+while one is on it shapes every answer, and switching one on with documents
+loaded also runs it on them once. The moon button beside the home button
+switches every page to **black mode**, a true-black background that is easier
+on the eyes; the choice is remembered.
 
 **Formatting.** Every prose answer is Markdown with all mathematics, symbols and
 chemical formulas in LaTeX, typeset in the page by the vendored KaTeX (with
@@ -378,7 +392,7 @@ different provider is refused, at save time and again before any request, so a
 mis-pasted key is never sent to the wrong company. *Purge all keys* clears both
 stores.
 
-**Your documents.** PDFs opened in Orochimaru are parsed in the browser and held
+**Your documents.** Documents opened in Orochimaru are parsed in the browser and held
 in memory. They are never uploaded. Excerpts retrieved for a question are sent to
 whichever provider you configured, as part of the prompt — for work that must not
 leave the machine at all, use the desktop app against a local Ollama.
@@ -412,10 +426,10 @@ We are continuously working to enhance Kusanagi-AI. Here are some of the feature
 
 -   **UI and UX Improvements**:
     -   **Integrated Visualizer**: Merge the AI Visualizer into the main applications to provide real-time insights into model behavior.
-    -   **UI Theming**: Add options for users to customize the look and feel of the applications.
+    -   **UI Theming**: Black mode is in; further themes could follow the same CSS variables.
 
 -   **Core Functionality Expansion**:
-    -   **Support for More Filetypes**: Extend document processing capabilities beyond PDFs to include formats like `.docx`, `.txt`, and source code files.
+    -   **Support for More Filetypes**: Done for Word, OpenDocument, PowerPoint, HTML, RTF and text formats; spreadsheets (`.xlsx`) and scanned PDFs (OCR) remain.
     -   **Model Fine-Tuning**: Provide scripts and guides for users to fine-tune models on their specific research datasets.
 
 ## Contributing

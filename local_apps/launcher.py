@@ -13,7 +13,7 @@ import sys
 
 APPS = [
     ("Kusanagi (console + model manager)", "Kusanagi_Local.py"),
-    ("Orochimaru (research assistant, RAG over PDFs)", "Orochimaru_Local_Research_Assistent.py"),
+    ("Orochimaru (research assistant, RAG over documents)", "Orochimaru_Local_Research_Assistent.py"),
     ("OneTail (multi-model chat)", "OneTail_Local_Chatapp.py"),
     ("Visualize AI (token probability inspector)", "Visualize_AI.py"),
     ("Hopfield demo (associative memory)", "holffield_demo.py"),

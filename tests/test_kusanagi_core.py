@@ -211,3 +211,43 @@ def test_server_works_as_a_context_manager():
     with core.OllamaServer("") as server:
         assert server.process is None
     assert server._log_handle is None
+
+
+# --------------------------------------------------------------------------
+# Documents
+# --------------------------------------------------------------------------
+
+def test_extracts_text_from_docx(tmp_path):
+    import zipfile
+    path = tmp_path / "a.docx"
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("word/document.xml",
+                   '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+                   '<w:body><w:p><w:r><w:t>Hello</w:t></w:r><w:r><w:instrText>PAGE</w:instrText></w:r></w:p>'
+                   '<w:p><w:r><w:t>World</w:t></w:r></w:p></w:body></w:document>')
+    assert core.extract_document_text(str(path)) == "Hello\nWorld"
+
+
+def test_extracts_text_from_html_without_scripts(tmp_path):
+    path = tmp_path / "a.html"
+    path.write_text("<title>T</title><script>alert(1)</script><p>Body &amp; text</p>")
+    text = core.extract_document_text(str(path))
+    assert "Body & text" in text and "alert" not in text
+
+
+def test_rtf_drops_font_tables(tmp_path):
+    path = tmp_path / "a.rtf"
+    path.write_text("{\\rtf1{\\fonttbl{\\f0 Arial;}}\\f0 Caf\\'e9\\par}")
+    assert core.extract_document_text(str(path)) == "Café"
+
+
+def test_plain_text_types_and_binary_refusal(tmp_path):
+    good = tmp_path / "a.dat"
+    good.write_text("T R\n10 1.5\n")
+    assert core.extract_document_text(str(good)) == "T R\n10 1.5"
+    bad = tmp_path / "b.txt"
+    bad.write_bytes(b"ab\x00cd")
+    with pytest.raises(ValueError):
+        core.extract_document_text(str(bad))
+    with pytest.raises(ValueError):
+        core.extract_document_text(str(tmp_path / "c.xyz"))

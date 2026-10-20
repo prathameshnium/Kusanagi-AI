@@ -13,19 +13,24 @@ Import from here instead of copying:
 """
 
 import datetime
+import html.parser
 import importlib.util
 import json
 import os
 import queue
+import re
 import subprocess
 import sys
 import threading
+import zipfile
+import xml.etree.ElementTree as ElementTree
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 __all__ = ["PROJECT_ROOT", "Style", "DEFAULT_CONFIG", "load_config", "save_config",
            "log_path", "open_path", "OllamaServer", "ConsoleRedirector", "Speaker",
-           "apply_theme", "SettingsWindow"]
+           "apply_theme", "SettingsWindow", "DOCUMENT_FILETYPES", "TEXT_EXTENSIONS",
+           "extract_document_text"]
 
 
 # --------------------------------------------------------------------------
@@ -48,6 +53,205 @@ def log_path(name):
     directory = os.path.join(PROJECT_ROOT, "logs")
     os.makedirs(directory, exist_ok=True)
     return os.path.join(directory, name)
+
+
+# --------------------------------------------------------------------------
+# Documents
+# --------------------------------------------------------------------------
+
+# Read as plain text. PDF is handled by the apps themselves (PyMuPDF); the
+# rest are parsed below with the standard library only.
+TEXT_EXTENSIONS = (".txt", ".text", ".md", ".markdown", ".csv", ".tsv", ".dat",
+                   ".json", ".xml", ".tex", ".log", ".yaml", ".yml", ".ini")
+_OFFICE_PARTS = {
+    # extension: (entries to read, paragraph tags, text tags or None for all text)
+    ".docx": (re.compile(r"^word/document\.xml$"), {"p"}, {"t"}),
+    ".pptx": (re.compile(r"^ppt/slides/slide\d+\.xml$"), {"p"}, {"t"}),
+    ".odt": (re.compile(r"^content\.xml$"), {"p", "h"}, None),
+}
+_MAX_UNZIPPED_BYTES = 256 * 1024 * 1024
+
+DOCUMENT_FILETYPES = [
+    ("Documents", " ".join("*" + e for e in
+                           (".pdf", ".docx", ".odt", ".pptx", ".html", ".htm", ".rtf")
+                           + TEXT_EXTENSIONS)),
+    ("PDF", "*.pdf"),
+    ("Word / OpenDocument / PowerPoint", "*.docx *.odt *.pptx"),
+    ("Text, Markdown, CSV, data", " ".join("*" + e for e in TEXT_EXTENSIONS)),
+    ("Web pages", "*.html *.htm"),
+    ("All files", "*.*"),
+]
+
+
+def _local(tag):
+    return tag.rsplit("}", 1)[-1]
+
+
+def _xml_text(data, paragraphs, text_tags):
+    out = []
+
+    def walk(node, in_text):
+        tag = _local(node.tag)
+        if tag == "tab":
+            out.append("\t")
+        elif tag in ("br", "cr", "line-break"):
+            out.append("\n")
+        elif tag == "s":
+            out.append(" ")
+        here = in_text if text_tags is None else tag in text_tags
+        if here and node.text:
+            out.append(node.text)
+        for child in node:
+            walk(child, here)
+            # Tail text belongs to the parent element.
+            if (text_tags is None or tag in text_tags) and child.tail:
+                out.append(child.tail)
+        if tag in paragraphs:
+            out.append("\n")
+
+    walk(ElementTree.fromstring(data), text_tags is None)
+    return "".join(out)
+
+
+def _natural_key(name):
+    return [int(p) if p.isdigit() else p for p in re.split(r"(\d+)", name)]
+
+
+def _office_text(path, ext):
+    pattern, paragraphs, text_tags = _OFFICE_PARTS[ext]
+    with zipfile.ZipFile(path) as archive:
+        names = sorted((n for n in archive.namelist() if pattern.match(n)), key=_natural_key)
+        if not names:
+            raise ValueError("No text found in this document.")
+        if sum(archive.getinfo(n).file_size for n in names) > _MAX_UNZIPPED_BYTES:
+            raise ValueError("The document unpacks to more than 256 MB.")
+        return "\n\n".join(_xml_text(archive.read(n), paragraphs, text_tags) for n in names)
+
+
+class _HTMLText(html.parser.HTMLParser):
+    _SKIP = {"script", "style", "noscript", "template", "svg"}
+    _BLOCK = {"p", "div", "br", "li", "tr", "h1", "h2", "h3", "h4", "h5", "h6", "pre",
+              "blockquote", "section", "article", "header", "footer", "table", "title"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts, self._skipping = [], 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self._SKIP:
+            self._skipping += 1
+        elif tag in self._BLOCK:
+            self.parts.append("\n")
+
+    def handle_endtag(self, tag):
+        if tag in self._SKIP:
+            self._skipping = max(0, self._skipping - 1)
+        elif tag in self._BLOCK:
+            self.parts.append("\n")
+        elif tag in ("td", "th"):
+            self.parts.append("\t")
+
+    def handle_data(self, data):
+        if not self._skipping:
+            self.parts.append(data)
+
+
+_RTF_SKIP = {"fonttbl", "colortbl", "stylesheet", "info", "pict", "object",
+             "listtable", "listoverridetable", "rsidtbl", "generator", "themedata",
+             "colorschememapping", "latentstyles", "datastore", "xmlnstbl",
+             "fldinst", "filetbl", "revtbl", "bkmkstart", "bkmkend"}
+_RTF_WORD = re.compile(r"([a-zA-Z]+)(-?\d+)? ?")
+
+
+def _rtf_text(rtf):
+    """RTF to text: keeps the prose, drops font tables, pictures and other
+    destinations. Not a layout engine: tables come out as plain lines."""
+    out, stack, skip, i, n = [], [], False, 0, len(rtf)
+    while i < n:
+        ch = rtf[i]
+        if ch == "{":
+            stack.append(skip)
+            i += 1
+        elif ch == "}":
+            skip = stack.pop() if stack else False
+            i += 1
+        elif ch == "\\" and i + 1 < n:
+            nxt = rtf[i + 1]
+            if nxt in "\\{}":
+                if not skip:
+                    out.append(nxt)
+                i += 2
+            elif nxt == "'":
+                if not skip:
+                    out.append(bytes([int(rtf[i + 2:i + 4] or "3f", 16)]).decode("cp1252", "replace"))
+                i += 4
+            elif nxt == "*":
+                skip = True
+                i += 2
+            else:
+                match = _RTF_WORD.match(rtf, i + 1)
+                if not match:
+                    i += 2   # control symbol such as \~ or \-
+                    continue
+                word, arg = match.group(1), match.group(2)
+                i = match.end()
+                if word in _RTF_SKIP:
+                    skip = True
+                elif skip:
+                    pass
+                elif word == "u" and arg:
+                    out.append(chr(int(arg) % 65536))
+                    # Skip the plain-text fallback that follows a \u character.
+                    i += 4 if rtf.startswith("\\'", i) else 1
+                elif word in ("par", "line", "row"):
+                    out.append("\n")
+                elif word in ("tab", "cell"):
+                    out.append("\t")
+        else:
+            if not skip and ch not in "\r\n":
+                out.append(ch)
+            i += 1
+    return "".join(out)
+
+
+def _read_text_file(path):
+    with open(path, "rb") as handle:
+        raw = handle.read()
+    if b"\x00" in raw:
+        raise ValueError("This looks like a binary file, not text.")
+    for encoding in ("utf-8-sig", "cp1252"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("latin-1")
+
+
+def extract_document_text(path):
+    """Plain text of any supported non-PDF document, tidied for chunking.
+
+    Raises ValueError for an unsupported type or a file with no text.
+    """
+    ext = os.path.splitext(path)[1].lower()
+    if ext in _OFFICE_PARTS:
+        text = _office_text(path, ext)
+    elif ext in (".html", ".htm"):
+        parser = _HTMLText()
+        parser.feed(_read_text_file(path))
+        text = "".join(parser.parts)
+    elif ext == ".rtf":
+        text = _rtf_text(_read_text_file(path))
+    elif ext in TEXT_EXTENSIONS:
+        text = _read_text_file(path)
+    else:
+        raise ValueError("Cannot read %s files." % (ext or "extensionless"))
+
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"[ \t]+\n", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text).strip()
+    if not text:
+        raise ValueError("%s contains no readable text." % os.path.basename(path))
+    return text
 
 
 # --------------------------------------------------------------------------

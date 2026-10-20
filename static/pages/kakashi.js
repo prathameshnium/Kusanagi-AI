@@ -68,6 +68,7 @@
     var RANK = { DuckDuckGo: 10, Wikipedia: 4, OpenAlex: 4, Crossref: 3, HackerNews: 1 };
 
     var sessionTokens = 0;
+    var answerCount = 0;   // numbers citations as [answer:source]
     var settings = null;
     var searching = false;
     var papers = [];          // Academic mode results, kept for re-filtering
@@ -512,12 +513,18 @@
                         + ui.model.value + ' was unavailable.',
                 }));
             }
-            // dom.markdown also typesets the LaTeX.
+            // dom.markdown also typesets the LaTeX; citations then become
+            // [answer:source] links into the sources this search retrieved.
+            answerCount += 1;
+            var answerNo = answerCount;
             var body = el('div');
             dom.markdown(body, res.text);
+            dom.citations(body, answerNo, sources);
             ui.response.appendChild(body);
             ui.response.appendChild(el('div', { class: 'mt-3 flex gap-2' }, [
-                K.ui.copyButton(function () { return res.text; }, 'Copy answer'),
+                K.ui.copyButton(function () {
+                    return dom.relabelCitations(res.text, answerNo);
+                }, 'Copy answer'),
                 K.ui.speakButton(function () { return K.ui.speakableText(body); }),
             ]));
             ui.response.classList.remove('hidden');

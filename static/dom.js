@@ -260,6 +260,145 @@ window.Kusanagi = window.Kusanagi || {};
         }
     }
 
+    /* ------------------------------------------------------------- citations */
+
+    var CITE = /\[(\d{1,3}(?:\s*,\s*\d{1,3})*)\]/g;
+    var REF_HEADING = /^(sources|references|bibliography)$/i;
+
+    function citeId(answerNo, n) { return 'cite-' + answerNo + '-' + n; }
+
+    /** The same relabelling for copied text: [2] in answer 3 becomes [3:2]. */
+    function relabelCitations(text, answerNo) {
+        return String(text || '').replace(CITE, function (_, list) {
+            return list.split(/\s*,\s*/).map(function (n) {
+                return '[' + answerNo + ':' + n + ']';
+            }).join('');
+        });
+    }
+
+    function jumpTo(target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.classList.remove('cite-flash');
+        void target.offsetWidth;   // restart the animation
+        target.classList.add('cite-flash');
+    }
+
+    /**
+     * Turn the model's [n] markers into academic-style [answer:source] links,
+     * e.g. [1:2] for the second source of the first answer, each jumping to
+     * its entry in that answer's reference list.
+     *
+     * `sources` are what the page actually sent ({title, url, snippet, meta});
+     * the page builds their list itself, so no link in it can be invented.
+     * A list the model wrote (citing from memory) is relabelled in place.
+     */
+    function citations(root, answerNo, sources) {
+        sources = sources || [];
+        var anchors = Object.create(null);
+
+        // 1. A "## Sources" / "## References" list the model wrote.
+        var headings = root.querySelectorAll('h1, h2, h3, h4, p > strong:only-child');
+        var refHeading = null;
+        Array.prototype.forEach.call(headings, function (h) {
+            if (REF_HEADING.test(h.textContent.trim().replace(/:$/, ''))) refHeading = h;
+        });
+        var refBlock = refHeading && refHeading.tagName === 'STRONG' ? refHeading.parentNode : refHeading;
+        if (refBlock) {
+            for (var node = refBlock.nextElementSibling; node; node = node.nextElementSibling) {
+                var entries = /^(UL|OL)$/.test(node.tagName) ? node.children : [node];
+                Array.prototype.forEach.call(entries, function (entry) {
+                    var first = document.createTreeWalker(entry, NodeFilter.SHOW_TEXT).nextNode();
+                    var m = first && /^\s*\[(\d{1,3})\]\s*/.exec(first.nodeValue);
+                    if (!m || anchors[m[1]]) return;
+                    first.nodeValue = first.nodeValue.slice(m[0].length);
+                    entry.insertBefore(el('span', {
+                        class: 'cite-label', text: '[' + answerNo + ':' + m[1] + '] ',
+                    }), entry.firstChild);
+                    entry.id = citeId(answerNo, m[1]);
+                    entry.classList.add('cite-entry');
+                    anchors[m[1]] = entry;
+                });
+            }
+        }
+
+        // 2. Inline markers in the prose.
+        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode: function (n) {
+                return n.parentNode.closest('a, code, pre, .katex, .cite-entry')
+                    ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT;
+            },
+        });
+        var texts = [];
+        while (walker.nextNode()) texts.push(walker.currentNode);
+        var cited = [];
+        texts.forEach(function (textNode) {
+            var value = textNode.nodeValue;
+            CITE.lastIndex = 0;
+            if (!CITE.test(value)) return;
+            var frag = document.createDocumentFragment();
+            var last = 0;
+            value.replace(CITE, function (match, list, offset) {
+                frag.appendChild(document.createTextNode(value.slice(last, offset)));
+                list.split(/\s*,\s*/).forEach(function (n) {
+                    n = String(Number(n));
+                    if (cited.indexOf(n) === -1) cited.push(n);
+                    var anchor = el('a', {
+                        class: 'cite', href: '#' + citeId(answerNo, n),
+                        text: '[' + answerNo + ':' + n + ']',
+                        'aria-label': 'Source ' + n + ' of answer ' + answerNo,
+                    });
+                    anchor.addEventListener('click', function (e) {
+                        var target = document.getElementById(citeId(answerNo, n));
+                        if (!target) return;
+                        e.preventDefault();
+                        jumpTo(target);
+                    });
+                    frag.appendChild(anchor);
+                });
+                last = offset + match.length;
+                return match;
+            });
+            frag.appendChild(document.createTextNode(value.slice(last)));
+            textNode.parentNode.replaceChild(frag, textNode);
+        });
+
+        // 3. The page's own list for cited sources the model did not list.
+        var missing = cited
+            .filter(function (n) { return !anchors[n] && sources[n - 1]; })
+            .sort(function (a, b) { return a - b; });
+        if (!missing.length) return unlinkDangling(root);
+
+        var list = el('ol', { class: 'cite-list' }, missing.map(function (n) {
+            var src = sources[n - 1];
+            var parts = [el('span', { class: 'cite-label', text: '[' + answerNo + ':' + n + '] ' })];
+            parts.push(src.url ? link(src.url, src.title || src.url) : el('strong', { text: src.title || 'Source ' + n }));
+            if (src.meta) parts.push(el('span', { class: 'cite-meta', text: ' · ' + src.meta }));
+            if (src.snippet && !src.url) {
+                parts.push(el('details', {}, [
+                    el('summary', { text: 'Show excerpt' }),
+                    el('blockquote', { text: src.snippet }),
+                ]));
+            }
+            return el('li', { id: citeId(answerNo, n), class: 'cite-entry' }, parts);
+        }));
+        if (refBlock) {
+            refBlock.parentNode.appendChild(list);
+        } else {
+            root.appendChild(el('h2', { text: 'Sources' }));
+            root.appendChild(list);
+        }
+        return unlinkDangling(root);
+    }
+
+    /** A marker with nothing to point at stays a label, not a dead link. */
+    function unlinkDangling(root) {
+        Array.prototype.forEach.call(root.querySelectorAll('a.cite'), function (a) {
+            if (root.querySelector('#' + a.hash.slice(1))) return;
+            a.parentNode.replaceChild(el('span', { class: 'cite', text: a.textContent }), a);
+        });
+        return root;
+    }
+
     /** Render Markdown into a fresh element. */
     function markdownEl(tag, className, text) {
         return markdown(el(tag, { class: className }), text);
@@ -276,5 +415,7 @@ window.Kusanagi = window.Kusanagi || {};
         safeUrl: safeUrl,
         markdown: markdown,
         markdownEl: markdownEl,
+        citations: citations,
+        relabelCitations: relabelCitations,
     };
 })();

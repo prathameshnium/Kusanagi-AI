@@ -59,11 +59,22 @@ def test_rigour_preamble_keeps_its_core_rules(prompts_js, rule):
     assert rule in block, "the rigour preamble no longer mentions %r" % rule
 
 
-def test_citation_rules_require_resolvable_links(prompts_js):
+def test_citation_rules_leave_the_source_list_to_the_page(prompts_js):
+    """The page lists the sources it sent, so no link in the list can be invented."""
     block = prompts_js.split("var CITATION_RULES")[1].split("].join")[0]
-    assert "Markdown link" in block
-    assert "<url>" in block
-    assert "Do not list sources you did not cite" in block
+    assert "[n]" in block
+    assert "do not write a sources list" in block
+
+
+def test_answers_link_citations_academically():
+    """[n] becomes [answer:source], linked to that answer's reference list."""
+    dom = strip_js_comments(read("static", "dom.js"))
+    assert "function citations(root, answerNo, sources)" in dom
+    assert "'[' + answerNo + ':' + n + ']'" in dom
+    for page in ("kakashi.js", "orochimaru.js"):
+        source = strip_js_comments(read("static", "pages", page))
+        assert "dom.citations(body, answerNo, sources)" in source, page
+        assert "dom.relabelCitations(" in source, page
 
 
 def test_sources_block_is_numbered_to_match_inline_citations(prompts_js):
@@ -109,7 +120,8 @@ def test_kakashi_grounds_its_answer_in_retrieved_results():
 
 def test_orochimaru_passes_retrieved_chunks_to_the_prompt():
     source = strip_js_comments(read("static", "pages", "orochimaru.js"))
-    assert "K.prompts.documentChatPrompt(retrieve(query, 5), docNames(), strictMode())" in source
+    assert "chunks = retrieve(query, 5);" in source
+    assert "K.prompts.documentChatPrompt(chunks, docNames(), strictMode(), activeSkills)" in source
     assert "K.prompts.review(" in source
     assert "K.prompts.summarise(" in source
 
@@ -117,7 +129,7 @@ def test_orochimaru_passes_retrieved_chunks_to_the_prompt():
 def test_chat_sends_the_rigour_preamble_as_a_system_message():
     """OneTail was merged into Orochimaru: with no documents it is plain chat."""
     source = strip_js_comments(read("static", "pages", "orochimaru.js"))
-    assert "K.prompts.chatSystemPrompt()" in source
+    assert "K.prompts.chatSystemPrompt(activeSkills)" in source
     assert "role: 'system'" in source
 
 

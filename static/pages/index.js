@@ -33,7 +33,7 @@
           worksWithoutKey: 'No-AI mode only' },
         { name: 'Orochimaru Chat', href: 'web_apps/Orochimaru_Web_Research_Assistent.html',
           providers: CLOUD.concat('ollama'),
-          line: 'Chat, or ask questions about your own PDFs.' },
+          line: 'Chat, or ask questions about your own documents.' },
         { name: 'AI Visualizer', href: 'web_apps/Visualize_AI_Web.html', providers: CLOUD,
           line: 'See which word a model would write next, and how sure it is.' },
     ];

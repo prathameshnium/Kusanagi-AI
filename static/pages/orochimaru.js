@@ -1,14 +1,19 @@
-/* Orochimaru -- research chat, with in-memory RAG over PDFs loaded locally.
+/* Orochimaru -- research chat, with in-memory RAG over documents loaded locally.
  *
  * This is also where OneTail went: with no documents loaded it is a plain
- * multi-turn chat; with documents loaded it answers from them, either strictly
- * ("Documents only") or documents-first with labelled background.
+ * multi-turn chat; with documents loaded it answers from them, documents-first
+ * with labelled background (the default) or strictly ("Documents only").
+ *
+ * Documents are read in the tab: PDF through pdf.js, Word / OpenDocument /
+ * PowerPoint by unzipping them with the browser's own DecompressionStream,
+ * HTML through DOMParser (which never runs scripts), and anything text-based
+ * (txt, md, csv, dat, json, ...) as plain text.
  *
  * The conversation lives in `history` and `transcript` and nowhere else: not
  * localStorage, not sessionStorage, not a server. Reloading loses it.
  *
  * Documents live in `documents` and nowhere else. Filenames are attacker-controlled
- * for our purposes (a PDF can be named anything), so they are rendered as text and
+ * for our purposes (a file can be named anything), so they are rendered as text and
  * carried on dataset attributes rather than interpolated into onclick handlers.
  */
 (function () {
@@ -25,9 +30,16 @@
 
     var CHUNK_SIZE = 1000;
     var CHUNK_OVERLAP = 200;
-    var MAX_PDF_BYTES = 64 * 1024 * 1024;
+    var MAX_FILE_BYTES = 64 * 1024 * 1024;
+    // Cap on what one archive may inflate to, so a zip bomb cannot take the tab.
+    var MAX_UNZIPPED_BYTES = 256 * 1024 * 1024;
 
-    // Personas live in prompts.js, beside the rigour rules they are combined with.
+    // Read as plain text. Anything else with an extension below is parsed.
+    var TEXT_TYPES = ['txt', 'text', 'md', 'markdown', 'csv', 'tsv', 'dat', 'json',
+        'xml', 'tex', 'log', 'yaml', 'yml', 'ini'];
+    var PARSED_TYPES = ['pdf', 'docx', 'odt', 'pptx', 'html', 'htm', 'rtf'];
+
+    // Personas and skills live in prompts.js, beside the rules they are combined with.
     var REVIEW_PERSONAS = K.prompts.REVIEW_PERSONAS;
 
     /* A dynamic import() inside a classic script resolves relative to the *script*,
@@ -42,6 +54,8 @@
     var transcript = [];                   // every turn, for "Copy chat"; memory only
     var history = [];                      // turns sent back to the model, trimmed
     var sessionTokens = 0;
+    var answerCount = 0;                   // numbers citations as [answer:source]
+    var activeSkills = [];                 // skill ids, see K.prompts.SKILLS
     var busy = false;
     var settings = null;
     var pdfjsPromise = null;
@@ -91,15 +105,22 @@
         return chunks;
     }
 
+    function extensionOf(name) {
+        var match = /\.([a-z0-9]+)$/i.exec(name);
+        return match ? match[1].toLowerCase() : '';
+    }
+
     function handleFile(file) {
         if (!file) return;
 
-        if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) {
-            K.ui.toast('That is not a PDF.', 'error');
+        var ext = extensionOf(file.name);
+        if (TEXT_TYPES.indexOf(ext) === -1 && PARSED_TYPES.indexOf(ext) === -1) {
+            K.ui.toast('Cannot read .' + (ext || '?') + ' files. Supported: '
+                + PARSED_TYPES.concat(TEXT_TYPES).join(', ') + '.', 'error');
             return;
         }
-        if (file.size > MAX_PDF_BYTES) {
-            K.ui.toast('That PDF is larger than 64 MB and would exhaust the tab.', 'error');
+        if (file.size > MAX_FILE_BYTES) {
+            K.ui.toast('That file is larger than 64 MB and would exhaust the tab.', 'error');
             return;
         }
         if (documents[file.name] || parsing[file.name]) {
@@ -113,7 +134,55 @@
         ui.statusDoc.textContent = 'Parsing...';
         addSystem('Reading ' + file.name + ' into memory...');
 
-        loadPdfJs()
+        extractText(file, ext)
+            .then(function (fullText) {
+                fullText = tidy(fullText);
+                if (!fullText) {
+                    throw new Error(ext === 'pdf'
+                        ? 'This PDF has no extractable text. Scanned pages need OCR, '
+                            + 'which this tool does not do.'
+                        : file.name + ' contains no readable text.');
+                }
+                documents[file.name] = chunkText(fullText);
+                renderDocList();
+                ui.statusDoc.textContent = 'Ready';
+                addSystem('Loaded ' + file.name + ' ('
+                    + documents[file.name].length + ' chunks).');
+            })
+            .catch(function (err) {
+                ui.statusDoc.textContent = 'Error';
+                addSystem(file.name + ': ' + err.message, true);
+            })
+            .then(function () { delete parsing[file.name]; });
+    }
+
+    function tidy(text) {
+        return String(text || '')
+            .replace(/\r\n?/g, '\n')
+            .replace(/[ \t]+\n/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim();
+    }
+
+    function extractText(file, ext) {
+        if (ext === 'pdf') return pdfText(file);
+        if (ext === 'docx') return officeText(file, /^word\/document\.xml$/, ['p'], ['t']);
+        if (ext === 'pptx') return officeText(file, /^ppt\/slides\/slide\d+\.xml$/, ['p'], ['t']);
+        if (ext === 'odt') return officeText(file, /^content\.xml$/, ['p', 'h'], null);
+        return file.text().then(function (text) {
+            if (text.indexOf('\u0000') !== -1) {
+                throw new Error('This looks like a binary file, not text.');
+            }
+            if (ext === 'html' || ext === 'htm') return htmlText(text);
+            if (ext === 'rtf') return rtfText(text);
+            return text;
+        });
+    }
+
+    /* ----------------------------------------------------------- pdf */
+
+    function pdfText(file) {
+        return loadPdfJs()
             .then(function (pdfjs) {
                 return file.arrayBuffer().then(function (buffer) {
                     return pdfjs.getDocument({
@@ -131,23 +200,7 @@
                     chain = chain.then(collectPage(pdf, i, pages));
                 }
                 return chain.then(function () { return pages.join('\n'); });
-            })
-            .then(function (fullText) {
-                if (!fullText.trim()) {
-                    throw new Error('This PDF has no extractable text. Scanned pages '
-                        + 'need OCR, which this tool does not do.');
-                }
-                documents[file.name] = chunkText(fullText);
-                renderDocList();
-                ui.statusDoc.textContent = 'Ready';
-                addSystem('Loaded ' + file.name + ' ('
-                    + documents[file.name].length + ' chunks).');
-            })
-            .catch(function (err) {
-                ui.statusDoc.textContent = 'Error';
-                addSystem(err.message, true);
-            })
-            .then(function () { delete parsing[file.name]; });
+            });
     }
 
     function collectPage(pdf, pageNumber, sink) {
@@ -160,6 +213,200 @@
                         Math.round((pageNumber / pdf.numPages) * 100) + '%';
                 });
         };
+    }
+
+    /* ------------------------------------------- docx / pptx / odt (zip + xml) */
+
+    /**
+     * Read the entries whose names match `pattern` out of a zip archive.
+     * Only stored and deflated entries exist in Office / OpenDocument files.
+     */
+    function unzip(buffer, pattern) {
+        var view = new DataView(buffer);
+        var eocd = -1;
+        for (var i = buffer.byteLength - 22; i >= Math.max(0, buffer.byteLength - 65557); i--) {
+            if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+        }
+        if (eocd === -1) return Promise.reject(new Error('Not a valid document archive.'));
+
+        var count = view.getUint16(eocd + 10, true);
+        var at = view.getUint32(eocd + 16, true);
+        var decoder = new TextDecoder();
+        var entries = [];
+        for (var n = 0; n < count; n++) {
+            if (at + 46 > buffer.byteLength || view.getUint32(at, true) !== 0x02014b50) {
+                return Promise.reject(new Error('The document archive is damaged.'));
+            }
+            var method = view.getUint16(at + 10, true);
+            var size = view.getUint32(at + 20, true);
+            var nameLen = view.getUint16(at + 28, true);
+            var skip = nameLen + view.getUint16(at + 30, true) + view.getUint16(at + 32, true);
+            var local = view.getUint32(at + 42, true);
+            var name = decoder.decode(new Uint8Array(buffer, at + 46, nameLen));
+            at += 46 + skip;
+            if (!pattern.test(name)) continue;
+
+            var start = local + 30 + view.getUint16(local + 26, true)
+                + view.getUint16(local + 28, true);
+            if (start + size > buffer.byteLength) {
+                return Promise.reject(new Error('The document archive is damaged.'));
+            }
+            entries.push({ name: name, method: method, data: new Uint8Array(buffer, start, size) });
+        }
+
+        var budget = { left: MAX_UNZIPPED_BYTES };
+        return Promise.all(entries.map(function (entry) {
+            var bytes = entry.method === 0 ? Promise.resolve(entry.data)
+                : entry.method === 8 ? inflate(entry.data, budget)
+                : Promise.reject(new Error('Unsupported compression in the document.'));
+            return bytes.then(function (data) {
+                return { name: entry.name, text: decoder.decode(data) };
+            });
+        }));
+    }
+
+    function inflate(data, budget) {
+        if (typeof DecompressionStream === 'undefined') {
+            return Promise.reject(new Error('This browser cannot unpack Office files. '
+                + 'Use a current Chrome, Edge, Firefox or Safari.'));
+        }
+        var reader = new Blob([data]).stream()
+            .pipeThrough(new DecompressionStream('deflate-raw')).getReader();
+        var parts = [];
+        var total = 0;
+        function pump() {
+            return reader.read().then(function (step) {
+                if (step.done) {
+                    var out = new Uint8Array(total);
+                    var offset = 0;
+                    parts.forEach(function (p) { out.set(p, offset); offset += p.length; });
+                    return out;
+                }
+                total += step.value.length;
+                budget.left -= step.value.length;
+                if (budget.left < 0) {
+                    reader.cancel();
+                    throw new Error('The document unpacks to more than 256 MB.');
+                }
+                parts.push(step.value);
+                return pump();
+            });
+        }
+        return pump();
+    }
+
+    /**
+     * Pull readable text out of Office XML. `paragraphs` are the element names
+     * that end a line; `textTags`, when given, are the only elements whose text
+     * counts (Word keeps field codes and such in other elements).
+     */
+    function xmlText(xml, paragraphs, textTags) {
+        var doc = new DOMParser().parseFromString(xml, 'application/xml');
+        var out = [];
+        (function walk(node, inText) {
+            for (var child = node.firstChild; child; child = child.nextSibling) {
+                if (child.nodeType === 3) {
+                    if (inText) out.push(child.nodeValue);
+                    continue;
+                }
+                if (child.nodeType !== 1) continue;
+                var tag = child.localName;
+                if (tag === 'tab') out.push('\t');
+                else if (tag === 'br' || tag === 'cr' || tag === 'line-break') out.push('\n');
+                else if (tag === 's') out.push(' ');
+                walk(child, textTags ? textTags.indexOf(tag) !== -1 : true);
+                if (paragraphs.indexOf(tag) !== -1) out.push('\n');
+            }
+        })(doc, !textTags);
+        return out.join('');
+    }
+
+    function officeText(file, pattern, paragraphs, textTags) {
+        return file.arrayBuffer()
+            .then(function (buffer) { return unzip(buffer, pattern); })
+            .then(function (parts) {
+                if (!parts.length) throw new Error('No text found in this document.');
+                // slide2 before slide10
+                parts.sort(function (a, b) {
+                    return a.name.localeCompare(b.name, undefined, { numeric: true });
+                });
+                return parts.map(function (part) {
+                    return xmlText(part.text, paragraphs, textTags);
+                }).join('\n\n');
+            });
+    }
+
+    /* ---------------------------------------------------------- html, rtf */
+
+    /** DOMParser builds an inert document: no scripts run, nothing is fetched. */
+    function htmlText(html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        Array.prototype.forEach.call(
+            doc.querySelectorAll('script, style, noscript, template, svg'),
+            function (node) { node.remove(); });
+        Array.prototype.forEach.call(
+            doc.querySelectorAll('p, div, br, li, tr, h1, h2, h3, h4, h5, h6, pre, '
+                + 'blockquote, section, article, header, footer, table'),
+            function (node) { node.appendChild(doc.createTextNode('\n')); });
+        Array.prototype.forEach.call(doc.querySelectorAll('td, th'),
+            function (node) { node.appendChild(doc.createTextNode('\t')); });
+        var title = doc.title ? doc.title + '\n\n' : '';
+        return title + (doc.body ? doc.body.textContent : '');
+    }
+
+    var RTF_SKIP = ['fonttbl', 'colortbl', 'stylesheet', 'info', 'pict', 'object',
+        'listtable', 'listoverridetable', 'rsidtbl', 'generator', 'themedata',
+        'colorschememapping', 'latentstyles', 'datastore', 'xmlnstbl',
+        'fldinst', 'filetbl', 'revtbl', 'bkmkstart', 'bkmkend'];
+
+    /** RTF to text: keeps the prose, drops font tables, pictures and other
+     *  destinations. Not a layout engine: tables come out as plain lines. */
+    function rtfText(rtf) {
+        var out = [];
+        var stack = [];
+        var skip = false;
+        var word = /([a-zA-Z]+)(-?\d+)? ?/y;
+        var cp1252 = new TextDecoder('windows-1252');
+        var i = 0;
+        while (i < rtf.length) {
+            var ch = rtf[i];
+            if (ch === '{') { stack.push(skip); i++; continue; }
+            if (ch === '}') { skip = stack.length ? stack.pop() : false; i++; continue; }
+            if (ch !== '\\' || i + 1 >= rtf.length) {
+                if (!skip && ch !== '\r' && ch !== '\n') out.push(ch);
+                i++;
+                continue;
+            }
+            var next = rtf[i + 1];
+            if (next === '\\' || next === '{' || next === '}') {
+                if (!skip) out.push(next);
+                i += 2;
+            } else if (next === "'") {
+                if (!skip) {
+                    var code = parseInt(rtf.substr(i + 2, 2), 16);
+                    out.push(cp1252.decode(new Uint8Array([isNaN(code) ? 63 : code])));
+                }
+                i += 4;
+            } else if (next === '*') {
+                skip = true;
+                i += 2;
+            } else {
+                word.lastIndex = i + 1;
+                var m = word.exec(rtf);
+                if (!m) { i += 2; continue; }   // control symbol such as \~ or \-
+                i = word.lastIndex;
+                if (RTF_SKIP.indexOf(m[1]) !== -1) skip = true;
+                else if (skip) continue;
+                else if (m[1] === 'u' && m[2]) {
+                    var n = parseInt(m[2], 10);
+                    out.push(String.fromCharCode(n < 0 ? n + 65536 : n));
+                    // Skip the plain-text fallback that follows a \u character.
+                    i += rtf.substr(i, 2) === "\\'" ? 4 : 1;
+                } else if (m[1] === 'par' || m[1] === 'line' || m[1] === 'row') out.push('\n');
+                else if (m[1] === 'tab' || m[1] === 'cell') out.push('\t');
+            }
+        }
+        return out.join('');
     }
 
     /* -------------------------------------------------------------- retrieval */
@@ -182,7 +429,9 @@
     function retrieve(query, limit) {
         var chunks = [];
         docNames().forEach(function (name) {
-            chunks = chunks.concat(documents[name]);
+            chunks = chunks.concat(documents[name].map(function (text) {
+                return { text: text, doc: name };
+            }));
         });
         if (!chunks.length) return [];
 
@@ -193,16 +442,16 @@
 
         return chunks
             .map(function (chunk) {
-                var lower = chunk.toLowerCase();
+                var lower = chunk.text.toLowerCase();
                 var score = terms.reduce(function (sum, term) {
                     return sum + countOccurrences(lower, term);
                 }, 0);
-                return { text: chunk, score: score };
+                return { chunk: chunk, score: score };
             })
             .filter(function (c) { return c.score > 0; })
             .sort(function (a, b) { return b.score - a.score; })
             .slice(0, limit || 5)
-            .map(function (c) { return c.text; });
+            .map(function (c) { return c.chunk; });
     }
 
     /* ------------------------------------------------------------- chat pane */
@@ -231,12 +480,25 @@
         scrollDown();
     }
 
-    function addAI(text) {
+    /** The excerpts behind an answer, as citable sources: document and excerpt. */
+    function asSources(chunks) {
+        return (chunks || []).map(function (chunk, index) {
+            return { title: chunk.doc, meta: 'excerpt ' + (index + 1), snippet: chunk.text };
+        });
+    }
+
+    function addAI(rawText, sources) {
+        answerCount += 1;
+        var answerNo = answerCount;
+        // Copies and the chat transcript carry the same [answer:source] labels
+        // the reader sees.
+        var text = dom.relabelCitations(rawText, answerNo);
         var body = el('div', {
             class: 'bg-tertiary p-4 rounded-lg shadow-md prose prose-invert '
                 + 'text-sm text-fg-primary break-words',
         });
-        dom.markdown(body, text);
+        dom.markdown(body, rawText);
+        dom.citations(body, answerNo, sources);
         // `node` lets "Read chat aloud" speak the rendered answer, not raw Markdown.
         transcript.push({ who: 'Orochimaru', text: text, node: body });
         ui.log.appendChild(el('div', { class: 'flex items-start gap-4' }, [
@@ -301,9 +563,10 @@
             el('div', { class: 'bg-tertiary p-4 rounded-lg max-w-3xl shadow-md' }, [
                 el('p', { class: 'font-bold text-accent mb-1', text: 'Orochimaru' }),
                 el('ul', { class: 'list-disc ml-5 mt-1 text-sm opacity-90 space-y-1' }, [
-                    el('li', { text: 'Ask anything, or load PDFs to ask about them.' }),
-                    el('li', { text: '"Answer from" chooses documents only, or documents '
-                        + 'plus labelled general knowledge.' }),
+                    el('li', { text: 'Ask anything, or load documents (PDF, Word, text, '
+                        + 'CSV, Markdown, HTML and more) to ask about them.' }),
+                    el('li', { text: '"Answer from" chooses documents plus labelled general '
+                        + 'knowledge (the default), or documents only.' }),
                     el('li', { text: 'Documents and messages are held in memory only. '
                         + 'Reloading the page discards them.' }),
                 ]),
@@ -320,14 +583,11 @@
         var chunks = names.reduce(function (sum, n) { return sum + documents[n].length; }, 0);
         ui.statusChunks.textContent = String(chunks);
 
-        ui.quickActions.classList.toggle('is-dimmed', !names.length);
-        ui.quickActions.classList.toggle('pointer-events-none', !names.length);
-
         if (!names.length) {
             dom.replace(ui.docList, el('p', {
                 class: 'text-[10px] text-fg-secondary italic p-4 text-center border '
                     + 'border-dashed border-tertiary rounded',
-                text: 'No documents loaded. Load a PDF to begin.',
+                text: 'No documents loaded. Load one to begin.',
             }));
             ui.statusDoc.textContent = 'None';
             return;
@@ -383,9 +643,9 @@
     /**
      * Send `messages` and show the reply. `userFacing` is what the chat shows,
      * and what is kept in history for later turns, in place of whatever
-     * one-shot prompt a quick action built.
+     * one-shot prompt a skill built. `sources` are what the answer may cite.
      */
-    function ask(messages, userFacing) {
+    function ask(messages, userFacing, sources) {
         if (busy) return;
         if (!apiKey()) {
             K.ui.toast('Configure a provider first.', 'error');
@@ -410,7 +670,7 @@
                 addSystem('Answered by ' + res.model + ': '
                     + ui.model.value + ' was unavailable.');
             }
-            addAI(res.text);
+            addAI(res.text, sources);
             lastAnswer = res.text;
             history.push({ role: 'user', content: userFacing },
                 { role: 'assistant', content: res.text });
@@ -439,30 +699,96 @@
 
         // With documents loaded, retrieve for the newest question and rebuild
         // the system prompt around those excerpts; without, it is plain chat.
+        // Either way the skills that are on ride along.
         var system;
+        var chunks = [];
         if (docNames().length) {
             ui.indicator.classList.remove('is-invisible');
-            system = K.prompts.documentChatPrompt(retrieve(query, 5), docNames(), strictMode());
+            chunks = retrieve(query, 5);
+            system = K.prompts.documentChatPrompt(chunks, docNames(), strictMode(), activeSkills);
         } else {
-            system = K.prompts.chatSystemPrompt();
+            system = K.prompts.chatSystemPrompt(activeSkills);
         }
 
         ask([{ role: 'system', content: system }]
-            .concat(history, [{ role: 'user', content: query }]), query);
+            .concat(history, [{ role: 'user', content: query }]), query, asSources(chunks));
     }
 
-    function runReview(role) {
+    /* ---------------------------------------------------------------- skills */
+
+    /** Run a skill once over the loaded documents. */
+    function runSkill(skill) {
         if (!docNames().length) return;
-        var chunks = retrieve('conclusion results methodology abstract', 8);
-        ask([{ role: 'user', content: K.prompts.review(role, REVIEW_PERSONAS[role], chunks) }],
-            role + ' review of the loaded documents');
+        var limit = skill.group === 'review' ? 8 : 6;
+        var chunks = retrieve(skill.hint, limit);
+        if (!chunks.length) chunks = openingChunks(limit);
+        var prompt = skill.group === 'review'
+            ? K.prompts.review(skill.role, REVIEW_PERSONAS[skill.role], chunks)
+            : K.prompts.summarise(chunks);
+        ask([{ role: 'user', content: prompt }],
+            skill.label + ' of the loaded documents', asSources(chunks));
     }
 
-    function runSummary() {
-        if (!docNames().length) return;
-        var chunks = retrieve('abstract summary conclusion introduction', 6);
-        ask([{ role: 'user', content: K.prompts.summarise(chunks) }],
-            'Summarise the loaded documents');
+    /** The start of each document, in turn: where a summary or review should
+     *  begin when no passage matches the skill's retrieval hint. */
+    function openingChunks(limit) {
+        var out = [];
+        for (var i = 0; out.length < limit; i++) {
+            var added = false;
+            docNames().forEach(function (name) {
+                if (out.length < limit && documents[name][i] !== undefined) {
+                    out.push({ text: documents[name][i], doc: name });
+                    added = true;
+                }
+            });
+            if (!added) break;
+        }
+        return out;
+    }
+
+    function toggleSkill(id) {
+        var skill = K.prompts.skill(id);
+        if (!skill) return;
+        if (activeSkills.indexOf(id) !== -1) {
+            activeSkills = activeSkills.filter(function (s) { return s !== id; });
+            renderSkills();
+            addSystem('Skill off: ' + skill.label + '.');
+            return;
+        }
+        // One reviewer voice at a time.
+        if (skill.group) {
+            activeSkills = activeSkills.filter(function (s) {
+                return K.prompts.skill(s).group !== skill.group;
+            });
+        }
+        activeSkills.push(id);
+        renderSkills();
+        addSystem('Skill on: ' + skill.label + '. ' + skill.description);
+        if (docNames().length && !busy) runSkill(skill);
+    }
+
+    function renderSkills() {
+        dom.replace(ui.skillList, K.prompts.SKILLS.map(function (skill) {
+            var on = activeSkills.indexOf(skill.id) !== -1;
+            return el('button', {
+                type: 'button',
+                class: 'skill',
+                'aria-pressed': String(on),
+                title: skill.description,
+                on: { click: function () { toggleSkill(skill.id); } },
+            }, [skill.label, el('small', { text: skill.description })]);
+        }));
+
+        ui.activeSkills.classList.toggle('hidden', !activeSkills.length);
+        dom.replace(ui.activeSkills, activeSkills.map(function (id) {
+            var skill = K.prompts.skill(id);
+            return el('button', {
+                type: 'button',
+                class: 'skill-chip',
+                'aria-label': 'Turn off ' + skill.label,
+                on: { click: function () { toggleSkill(id); } },
+            }, [skill.label, el('span', { text: '✕', 'aria-hidden': 'true' })]);
+        }));
     }
 
     /* ---------------------------------------------------------------- status */
@@ -507,14 +833,14 @@
             statusDoc: document.getElementById('status-doc'),
             statusChunks: document.getElementById('status-chunks'),
             dot: document.getElementById('status-dot'),
-            quickActions: document.getElementById('quick-actions'),
-            reviewMenu: document.getElementById('review-menu'),
+            skillList: document.getElementById('skill-list'),
+            activeSkills: document.getElementById('active-skills'),
             indicator: document.getElementById('context-indicator'),
             tokens: document.getElementById('perf-tokens'),
             speed: document.getElementById('perf-speed'),
             ram: document.getElementById('perf-ram'),
             tts: document.getElementById('tts-btn'),
-            upload: document.getElementById('pdf-upload'),
+            upload: document.getElementById('doc-upload'),
         };
 
         settings = K.ui.mountSettings({
@@ -531,15 +857,7 @@
         greeting();
         renderDocList();
 
-        dom.replace(ui.reviewMenu, Object.keys(REVIEW_PERSONAS).map(function (role) {
-            return el('button', {
-                type: 'button',
-                class: 'w-full text-left px-2 py-1.5 text-xs text-fg-secondary '
-                    + 'hover:text-accent transition',
-                text: role,
-                on: { click: function () { runReview(role); } },
-            });
-        }));
+        renderSkills();
 
         ui.temp.addEventListener('input', function () {
             ui.tempOut.textContent = ui.temp.value;
@@ -549,7 +867,7 @@
             ui.upload.click();
         });
         ui.upload.addEventListener('change', function () {
-            handleFile(ui.upload.files[0]);
+            Array.prototype.forEach.call(ui.upload.files, handleFile);
             ui.upload.value = '';
         });
 
@@ -558,13 +876,9 @@
             if (e.key === 'Enter') { e.preventDefault(); send(); }
         });
 
-        document.getElementById('action-summarize').addEventListener('click', runSummary);
-        document.getElementById('toggle-review').addEventListener('click', function (e) {
-            var nowHidden = ui.reviewMenu.classList.toggle('hidden');
-            e.currentTarget.setAttribute('aria-expanded', String(!nowHidden));
-        });
         document.getElementById('clear-chat').addEventListener('click', function () {
             sessionTokens = 0;
+            answerCount = 0;
             lastAnswer = '';
             transcript = [];
             history = [];

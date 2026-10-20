@@ -441,8 +441,19 @@ def test_compiled_css_carries_the_self_hosted_fonts(repo_root):
 
 @pytest.mark.parametrize("cls", ["btn", "btn-accent", "btn-secondary", "btn-danger",
                                  "home-button", "settings-modal", "prob-bar-fill",
-                                 "is-dimmed", "is-invisible"])
+                                 "is-invisible"])
 def test_component_classes_survived_compilation(repo_root, cls):
     css = io.open(os.path.join(repo_root, "static", "kusanagi.css"),
                   encoding="utf-8").read()
     assert ".%s" % cls in css, "%s was purged from the build" % cls
+
+
+def test_black_mode_is_available_on_every_app_page(page_sources):
+    """theme.js runs before first paint (no defer) so a saved theme never flashes."""
+    for name, html in page_sources.items():
+        if 'http-equiv="refresh"' in html:
+            continue
+        assert re.search(r'<script src="[^"]*static/theme\.js"></script>', html), name
+        assert html.index("kusanagi.css") < html.index("theme.js"), name
+    css = io.open(os.path.join(ROOT, "static", "src", "input.css"), encoding="utf-8").read()
+    assert ':root[data-theme="black"]' in css and "--rgb-secondary: 0 0 0;" in css
