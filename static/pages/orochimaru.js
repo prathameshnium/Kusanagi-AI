@@ -505,6 +505,9 @@
         });
         dom.markdown(body, rawText);
         dom.citations(body, answerNo, sources);
+        // Its Read aloud button, and a click on any paragraph reads from there.
+        var readAloud = K.ui.speakButton(function () { return K.ui.speakableParts(body); });
+        K.ui.readOnClick(body, readAloud);
         // `node` lets "Read chat aloud" speak the rendered answer, not raw Markdown.
         transcript.push({ who: 'Orochimaru', text: text, node: body });
         turns.push({ who: 'Orochimaru', text: rawText, sources: sources || [],
@@ -517,7 +520,7 @@
                 K.ui.webSourcesBlock(webSources),
                 el('div', { class: 'flex gap-2' }, [
                     K.ui.copyButton(function () { return text; }),
-                    K.ui.speakButton(function () { return K.ui.speakableParts(body); }),
+                    readAloud,
                 ]),
             ]),
         ]));

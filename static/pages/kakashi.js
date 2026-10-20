@@ -523,6 +523,9 @@
             var body = el('div');
             dom.markdown(body, res.text);
             dom.citations(body, answerNo, sources);
+            // Its Read aloud button, and a click on any paragraph reads from there.
+            var readAloud = K.ui.speakButton(function () { return K.ui.speakableParts(body); });
+            K.ui.readOnClick(body, readAloud);
             var reasoning = K.ui.reasoningBlock(res.reasoning);
             if (reasoning) ui.response.appendChild(reasoning);
             ui.response.appendChild(body);
@@ -532,7 +535,7 @@
                 K.ui.copyButton(function () {
                     return dom.relabelCitations(res.text, answerNo);
                 }, 'Copy answer'),
-                K.ui.speakButton(function () { return K.ui.speakableParts(body); }),
+                readAloud,
             ]));
             ui.response.classList.remove('hidden');
             K.ui.chime();
