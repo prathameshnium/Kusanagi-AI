@@ -532,7 +532,7 @@
                 K.ui.copyButton(function () {
                     return dom.relabelCitations(res.text, answerNo);
                 }, 'Copy answer'),
-                K.ui.speakButton(function () { return K.ui.speakableText(body); }),
+                K.ui.speakButton(function () { return K.ui.speakableParts(body); }),
             ]));
             ui.response.classList.remove('hidden');
             K.ui.chime();

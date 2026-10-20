@@ -472,12 +472,13 @@
     }
 
     function addUser(text) {
-        transcript.push({ who: 'You', text: text });
+        var said = el('p', { class: 'text-sm whitespace-pre-wrap break-words', text: text });
+        transcript.push({ who: 'You', text: text, said: said });
         turns.push({ who: 'You', text: text });
         ui.log.appendChild(el('div', { class: 'flex items-start gap-4 justify-end' }, [
             el('div', { class: 'flex flex-col items-end gap-1 max-w-2xl' }, [
                 el('div', { class: 'bg-accent text-accent-fg p-3 rounded-lg shadow-md' }, [
-                    el('p', { class: 'text-sm whitespace-pre-wrap break-words', text: text }),
+                    said,
                 ]),
                 K.ui.copyButton(function () { return text; }),
             ]),
@@ -516,19 +517,24 @@
                 K.ui.webSourcesBlock(webSources),
                 el('div', { class: 'flex gap-2' }, [
                     K.ui.copyButton(function () { return text; }),
-                    K.ui.speakButton(function () { return K.ui.speakableText(body); }),
+                    K.ui.speakButton(function () { return K.ui.speakableParts(body); }),
                 ]),
             ]),
         ]));
         scrollDown();
     }
 
-    /** The whole conversation as speech: who said it, then what was said. */
+    /** The whole conversation as speech: who said it, then what was said,
+     *  block by block so each is highlighted as it is read. */
     function chatAsSpeech() {
-        return transcript.map(function (turn) {
-            var said = turn.node ? K.ui.speakableText(turn.node) : turn.text;
-            return turn.who + ' said: ' + said;
-        }).join(' ');
+        var parts = [];
+        transcript.forEach(function (turn) {
+            var own = turn.node ? K.ui.speakableParts(turn.node)
+                : [{ node: turn.said || null, text: turn.text }];
+            if (own.length) own[0] = { node: own[0].node, text: turn.who + ' said: ' + own[0].text };
+            parts = parts.concat(own);
+        });
+        return parts;
     }
 
     /** The whole conversation as Markdown, ready to paste. */

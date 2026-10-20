@@ -1047,6 +1047,112 @@ window.Kusanagi = window.Kusanagi || {};
         if (window.speechSynthesis) window.speechSynthesis.cancel();
         if (speaking) resetSpeakButton(speaking);
         speaking = null;
+        highlight(null);
+        hideSpeechBar();
+    }
+
+    /* ------------------------------------------- what is being spoken now */
+
+    // The block being read gets a highlight, and a small Pause / Stop bar
+    // floats beside it, following it as the page scrolls.
+    var spokenNode = null;
+    var speechBar = null;
+    var pauseButton = null;
+
+    function highlight(node) {
+        if (spokenNode) spokenNode.classList.remove('is-speaking');
+        spokenNode = node;
+        if (!node) return;
+        node.classList.add('is-speaking');
+        var calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        var rect = node.getBoundingClientRect();
+        if (rect.top < 60 || rect.bottom > window.innerHeight - 60) {
+            node.scrollIntoView({ block: 'center', behavior: calm ? 'auto' : 'smooth' });
+        }
+        placeSpeechBar();
+    }
+
+    function ensureSpeechBar() {
+        if (speechBar && document.body.contains(speechBar)) return speechBar;
+        pauseButton = el('button', {
+            type: 'button', class: 'speech-btn', text: 'Pause',
+            on: { click: togglePause },
+        });
+        speechBar = el('div', { class: 'speech-bar hidden', role: 'toolbar',
+            'aria-label': 'Reading aloud' }, [
+            pauseButton,
+            el('button', { type: 'button', class: 'speech-btn', text: 'Stop',
+                on: { click: stopSpeech } }),
+        ]);
+        document.body.appendChild(speechBar);
+        // Capture, so scrolling inside the chat log moves the bar too.
+        window.addEventListener('scroll', placeSpeechBar, true);
+        window.addEventListener('resize', placeSpeechBar);
+        return speechBar;
+    }
+
+    /** Beside the spoken block (or the button that started it), on screen. */
+    function placeSpeechBar() {
+        if (!speechBar || speechBar.classList.contains('hidden')) return;
+        var anchor = spokenNode || speaking;
+        if (!anchor) return;
+        var rect = anchor.getBoundingClientRect();
+        var w = speechBar.offsetWidth;
+        var h = speechBar.offsetHeight;
+        var left;
+        var top;
+        if (rect.right + 8 + w <= window.innerWidth - 8) {
+            // Room to the right: sit level with the block, covering nothing.
+            left = rect.right + 8;
+            top = rect.top + (rect.height - h) / 2;
+        } else {
+            // Narrow screens: just above the block, or below it at the top.
+            left = Math.min(rect.right - w, window.innerWidth - w - 8);
+            top = rect.top - h - 6;
+            if (top < 8) top = rect.bottom + 6;
+        }
+        speechBar.style.left = Math.max(8, left) + 'px';
+        speechBar.style.top = Math.min(Math.max(8, top), window.innerHeight - h - 8) + 'px';
+    }
+
+    function showSpeechBar() {
+        ensureSpeechBar();
+        pauseButton.textContent = 'Pause';
+        speechBar.classList.remove('hidden');
+        placeSpeechBar();
+    }
+
+    function hideSpeechBar() {
+        if (speechBar) speechBar.classList.add('hidden');
+    }
+
+    function togglePause() {
+        var synth = window.speechSynthesis;
+        if (!synth || !speaking) return;
+        if (synth.paused) {
+            synth.resume();
+            pauseButton.textContent = 'Pause';
+        } else {
+            synth.pause();
+            pauseButton.textContent = 'Resume';
+        }
+    }
+
+    /**
+     * A rendered answer split into the blocks a reader sees -- paragraphs,
+     * list items, headings, table cells -- each with the text to speak, so
+     * each can be highlighted as it is read. -> [{node, text}]
+     */
+    var BLOCKS = 'p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th, pre';
+
+    function speakableParts(root) {
+        var blocks = Array.prototype.filter.call(root.querySelectorAll(BLOCKS), function (b) {
+            // Innermost only: a list item holding paragraphs is read as those.
+            return !b.querySelector(BLOCKS) && !b.closest('.code-head, button');
+        });
+        var parts = blocks.map(function (b) { return { node: b, text: speakableText(b) }; })
+            .filter(function (p) { return p.text; });
+        return parts.length ? parts : [{ node: root, text: speakableText(root) }];
     }
 
     /* Chrome stops a single long utterance after roughly 15 seconds, so speech
@@ -1076,7 +1182,11 @@ window.Kusanagi = window.Kusanagi || {};
         return copy.textContent.replace(/\s+/g, ' ').trim();
     }
 
-    /** Make a button read `getText()` aloud, and stop on a second click. */
+    /**
+     * Make a button read aloud, and stop on a second click. `getText` returns
+     * a string, or parts from speakableParts() so each block is highlighted
+     * while it is read.
+     */
     function bindSpeak(button, getText) {
         button.setAttribute('data-label', button.textContent);
         button.setAttribute('aria-pressed', 'false');
@@ -1087,24 +1197,37 @@ window.Kusanagi = window.Kusanagi || {};
             }
             if (speaking === button) { stopSpeech(); return; }
             stopSpeech();
-            var text = String(getText() || '').trim();
-            if (!text) { toast('Nothing to read yet.'); return; }
+            var got = getText();
+            var parts = Array.isArray(got)
+                ? got.filter(function (p) { return p && p.text; })
+                : [{ node: null, text: String(got || '').trim() }].filter(function (p) {
+                    return p.text;
+                });
+            if (!parts.length) { toast('Nothing to read yet.'); return; }
 
             speaking = button;
             button.textContent = 'Stop';
             button.setAttribute('aria-pressed', 'true');
             button.classList.add('text-accent');
+            showSpeechBar();
 
-            var pieces = speechPieces(text);
             var voice = chosenVoice();
-            pieces.forEach(function (piece, i) {
-                var u = new SpeechSynthesisUtterance(piece);
-                if (voice) { u.voice = voice; u.lang = voice.lang; }
-                if (i === pieces.length - 1) {
-                    u.onend = function () { if (speaking === button) stopSpeech(); };
-                }
-                u.onerror = function () { if (speaking === button) stopSpeech(); };
-                window.speechSynthesis.speak(u);
+            parts.forEach(function (part, p) {
+                var pieces = speechPieces(part.text);
+                pieces.forEach(function (piece, i) {
+                    var u = new SpeechSynthesisUtterance(piece);
+                    if (voice) { u.voice = voice; u.lang = voice.lang; }
+                    if (i === 0) {
+                        u.onstart = function () {
+                            if (speaking === button) highlight(part.node);
+                        };
+                    }
+                    if (p === parts.length - 1 && i === pieces.length - 1) {
+                        u.onend = function () { if (speaking === button) stopSpeech(); };
+                    }
+                    u.onerror = function () { if (speaking === button) stopSpeech(); };
+                    window.speechSynthesis.speak(u);
+                });
             });
         });
         return button;
@@ -1247,6 +1370,7 @@ window.Kusanagi = window.Kusanagi || {};
         bindSpeak: bindSpeak,
         speakButton: speakButton,
         speakableText: speakableText,
+        speakableParts: speakableParts,
         stopSpeech: stopSpeech,
         copyButton: copyButton,
         bindCopy: bindCopy,

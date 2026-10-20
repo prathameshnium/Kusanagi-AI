@@ -196,7 +196,8 @@ def test_every_answer_can_be_read_aloud():
     for page in ("orochimaru.js", "kakashi.js"):
         source = strip_js_comments(read("static", "pages", page))
         assert "K.ui.speakButton(" in source, page
-        assert "K.ui.speakableText(body)" in source, page
+        # By block, so the part being read is highlighted.
+        assert "K.ui.speakableParts(body)" in source, page
 
 
 def test_speech_reads_rendered_text_not_tex():

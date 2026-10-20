@@ -428,6 +428,34 @@
     .history-delete { padding: 0.2rem 0.5rem; color: var(--fg-secondary); }
     .history-delete:hover { color: var(--danger-fg); }
 
+    /* Reading aloud: the block being spoken, and the Pause / Stop bar. */
+    .is-speaking {
+        background-color: rgb(var(--rgb-accent) / 0.18);
+        box-shadow: 0 0 0 3px rgb(var(--rgb-accent) / 0.18);
+        border-radius: 4px;
+        transition: background-color 0.2s ease;
+    }
+    .speech-bar {
+        position: fixed;
+        z-index: 70;
+        display: flex;
+        gap: 0.25rem;
+        padding: 0.25rem;
+        border: 1px solid var(--accent);
+        border-radius: 9999px;
+        background-color: var(--secondary);
+        box-shadow: 0 6px 20px rgb(0 0 0 / 0.35);
+    }
+    .speech-bar.hidden { display: none; }
+    .speech-btn {
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.2rem 0.75rem;
+        border-radius: 9999px;
+        color: var(--fg-primary);
+    }
+    .speech-btn:hover, .speech-btn:focus-visible { background-color: var(--tertiary); color: var(--accent); }
+
     .header-btn {
         font-size: 0.75rem;
         padding: 0.25rem 0.5rem;
