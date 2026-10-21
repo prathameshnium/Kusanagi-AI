@@ -50,6 +50,9 @@
 
     var documents = Object.create(null);   // filename -> [chunk, ...]
     var parsing = Object.create(null);     // filename -> true while being read
+    // Files sent whole to the AI: filename -> {provider, file}. Memory only,
+    // like `documents`, but these do leave the tab (see sentPrefix).
+    var sentFiles = Object.create(null);
     var lastAnswer = '';
     var transcript = [];                   // every turn, for "Copy chat"; memory only
     var history = [];                      // turns sent back to the model, trimmed
@@ -72,6 +75,7 @@
     function provider() { return settings.provider(); }
     function apiKey() { return K.keys.get(provider()); }
     function docNames() { return Object.keys(documents); }
+    function sentNames() { return Object.keys(sentFiles); }
 
     /* ---------------------------------------------------------------- pdf.js */
 
@@ -183,6 +187,116 @@
                 addSystem(file.name + ': ' + err.message, true);
             })
             .then(function () { delete parsing[file.name]; });
+    }
+
+    /* --------------------------------------- files sent whole to the AI */
+
+    /* "Send whole file to AI": the provider reads the file itself (a PDF's
+       layout, tables and figures too) instead of the excerpts found here.
+       Files are held provider-neutral ({type: 'file', ...}); providers.js turns
+       them into each API's own blocks, and K.acceptsFiles() says which
+       providers can take them (Anthropic for now).
+
+       Privacy: the file is sent inline with each request, never to a file
+       store; it stays in this tab's memory only, is never written into saved
+       chats, and goes only to the provider it was sent to -- switch provider
+       and it is held back, not passed on. */
+
+    // One request may be at most 32 MB, and base64 adds a third.
+    var MAX_SENT_BYTES = 20 * 1024 * 1024;
+    var MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+    var IMAGE_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+        gif: 'image/gif', webp: 'image/webp' };
+
+    function sentBytes() {
+        return sentNames().reduce(function (sum, n) { return sum + sentFiles[n].file.bytes; }, 0);
+    }
+
+    function base64Of(file) {
+        return new Promise(function (resolve, reject) {
+            var reader = new FileReader();
+            reader.onload = function () {
+                var url = String(reader.result);
+                resolve(url.slice(url.indexOf(',') + 1));
+            };
+            reader.onerror = function () { reject(reader.error || new Error('Could not read it.')); };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    /** Hold `file` to send whole, to the provider chosen now: PDFs and images
+     *  as base64, text files as text. */
+    function handleSentFile(file) {
+        if (!file) return;
+        var to = provider();
+        if (!K.acceptsFiles(to)) {
+            K.ui.toast(K.providerLabel(to) + ' cannot take whole files here yet. Switch to '
+                + 'Anthropic in Configure API, or use Load document.', 'error');
+            return;
+        }
+        var ext = extensionOf(file.name);
+        var image = IMAGE_TYPES[ext];
+        if (ext !== 'pdf' && !image && TEXT_TYPES.concat('html', 'htm').indexOf(ext) === -1) {
+            K.ui.toast('.' + (ext || '?') + ' files cannot be sent whole. Send a PDF, '
+                + 'an image or a text file, or use Load document.', 'error');
+            return;
+        }
+        if (sentFiles[file.name]) {
+            K.ui.toast('That file is already sent to the AI.', 'error');
+            return;
+        }
+        if (image && file.size > MAX_IMAGE_BYTES) {
+            K.ui.toast('Images can be up to 5 MB.', 'error');
+            return;
+        }
+        if (sentBytes() + file.size > MAX_SENT_BYTES) {
+            K.ui.toast('Files sent whole are capped at 20 MB in all, to fit one request.',
+                'error');
+            return;
+        }
+
+        var read = ext === 'pdf' || image ? base64Of(file) : file.text().then(function (text) {
+            if (text.indexOf('\u0000') !== -1) {
+                throw new Error('This looks like a binary file, not text.');
+            }
+            return text;
+        });
+
+        read.then(function (data) {
+            sentFiles[file.name] = { provider: to, file: {
+                type: 'file',
+                name: file.name,
+                kind: ext === 'pdf' ? 'pdf' : image ? 'image' : 'text',
+                mediaType: ext === 'pdf' ? 'application/pdf' : image || 'text/plain',
+                data: data,
+                bytes: file.size,
+            } };
+            renderDocList();
+            addSystem('Sent whole to ' + K.providerLabel(to) + ' with each message: '
+                + file.name + '. The provider receives the whole file under its API data '
+                + 'policy. It is held in this tab only, never saved with the chat, and never '
+                + 'sent to another provider.');
+        }).catch(function (err) {
+            addSystem(file.name + ': ' + err.message, true);
+        });
+    }
+
+    /** The opening pair that carries the files sent whole to `to`. It comes
+     *  first and never changes, so a prompt cache re-reads it every turn. */
+    function sentPrefix(to) {
+        var names = sentNames().filter(function (n) { return sentFiles[n].provider === to; });
+        if (!names.length) return [];
+        var parts = names.map(function (n) { return sentFiles[n].file; });
+        // Images carry no name of their own, so name every file in the text.
+        parts.push({ type: 'text', text: 'Attached files: ' + names.join(', ') + '. Answer '
+            + 'from them where they are relevant, naming the file you draw on.' });
+        return [{ role: 'user', content: parts },
+            { role: 'assistant', content: 'I have the attached files and will use them.' }];
+    }
+
+    /** Files held back because the provider changed since they were sent. */
+    function heldBack(to) {
+        return sentNames().filter(function (n) { return sentFiles[n].provider !== to; });
     }
 
     function tidy(text) {
@@ -596,7 +710,7 @@
         var said = el('p', { class: 'text-sm whitespace-pre-wrap break-words', text: text });
         transcript.push({ who: 'You', text: text, said: said });
         turns.push({ who: 'You', text: text });
-        ui.log.appendChild(el('div', { class: 'flex items-start gap-4 justify-end' }, [
+        ui.log.appendChild(el('div', { class: 'flex items-start gap-4 justify-end msg-in' }, [
             el('div', { class: 'flex flex-col items-end gap-1 max-w-2xl' }, [
                 el('div', { class: 'bg-accent text-accent-fg p-3 rounded-lg shadow-md' }, [
                     said,
@@ -1172,7 +1286,7 @@
     /** System notices. Filenames land here, so this is text -- the old version
      *  built "<strong>" + file.name + "</strong>" and assigned innerHTML. */
     function addSystem(text, isError) {
-        ui.log.appendChild(el('div', { class: 'flex justify-center my-2' }, [
+        ui.log.appendChild(el('div', { class: 'flex justify-center my-2 msg-in' }, [
             el('span', {
                 class: 'text-xs px-3 py-1 rounded-full max-w-2xl text-center '
                     + (isError
@@ -1184,17 +1298,111 @@
         scrollDown();
     }
 
+    /* While waiting for the first word: one animation picked at random, and
+       phrases that change every couple of seconds, so a long think feels
+       alive rather than stuck. The art is CSS (see .think-* in input.css). */
+    // Full class names, so the stylesheet build sees and keeps them.
+    var THINK_ART = [['think-dots', 3], ['think-snake', 5], ['think-orbit', 3],
+        ['think-ripple', 2], ['think-flip', 1], ['think-scan', 1]];
+    var THINK_PHRASES = ['Thinking', 'Consulting the scrolls', 'Weaving hand signs',
+        'Shedding old assumptions', 'Reading between the lines', 'Following the thread',
+        'Connecting the dots', 'Checking the sources', 'Sharpening the blade',
+        'Gathering chakra', 'Untangling the question', 'Sketching an answer',
+        'Weighing the evidence', 'Slithering through the details', 'Summoning a reply'];
+
+    function anyOf(list) { return list[Math.floor(Math.random() * list.length)]; }
+
     function addThinking() {
-        var node = el('div', { class: 'flex items-start gap-4' }, [
-            orochiAvatar('animate-pulse'),
-            el('div', {
-                class: 'bg-tertiary p-3 rounded-lg text-fg-secondary italic text-sm',
-                text: 'Thinking...',
-            }),
+        var art = anyOf(THINK_ART);
+        var bits = [];
+        for (var i = 0; i < art[1]; i++) bits.push(el('i'));
+        var phrase = el('span', { class: 'think-phrase', text: anyOf(THINK_PHRASES) + '...' });
+        var clock = el('span', { class: 'think-time', text: '0s' });
+        var node = el('div', { class: 'flex items-start gap-4 msg-in' }, [
+            orochiAvatar(),
+            el('div', { class: 'think', role: 'status' }, [
+                el('span', { class: 'think-art ' + art[0], 'aria-hidden': 'true' }, bits),
+                phrase,
+                clock,
+            ]),
         ]);
+        var started = Date.now();
+        var ticks = 0;
+        var timer = setInterval(function () {
+            clock.textContent = Math.floor((Date.now() - started) / 1000) + 's';
+            ticks += 1;
+            if (ticks % 5) return;   // a new phrase every 2.5 s
+            phrase.classList.add('is-swapping');
+            setTimeout(function () {
+                var next = phrase.textContent;
+                while (next === phrase.textContent) next = anyOf(THINK_PHRASES) + '...';
+                phrase.textContent = next;
+                phrase.classList.remove('is-swapping');
+            }, 250);
+        }, 500);
+        node.stop = function () { clearInterval(timer); node.remove(); };
         ui.log.appendChild(node);
         scrollDown();
         return node;
+    }
+
+    /** True when the reader is at (or near) the bottom, so new words should
+     *  keep the view pinned there; scrolled up to read, it is left alone. */
+    function nearBottom() {
+        return ui.log.scrollHeight - ui.log.scrollTop - ui.log.clientHeight < 80;
+    }
+
+    /**
+     * The answer as it streams in, drawn as Markdown with a caret on the end.
+     * Redrawn at most once a frame, and less often as it grows, so a long
+     * answer stays smooth. Replaced by the finished answer (with its
+     * citations and buttons) once the stream ends.
+     */
+    function addStream() {
+        var body = el('div', {
+            class: 'bg-tertiary p-4 rounded-lg shadow-md prose prose-invert '
+                + 'text-sm text-fg-primary break-words',
+        });
+        var node = el('div', { class: 'flex items-start gap-4 msg-in', 'aria-hidden': 'true' }, [
+            orochiAvatar(),
+            el('div', { class: 'flex flex-col items-start gap-1 max-w-3xl min-w-0' }, [body]),
+        ]);
+        var latest = '';
+        var frame = 0;
+        var lastDraw = 0;
+        var attached = false;
+        function draw() {
+            frame = 0;
+            var pinned = nearBottom();
+            lastDraw = performance.now();
+            dom.markdown(body, latest);
+            var tail = body;
+            while (tail.lastElementChild && !/^(PRE|TABLE|UL|OL|HR)$/.test(tail.lastElementChild.tagName)) {
+                tail = tail.lastElementChild;
+            }
+            tail.appendChild(el('span', { class: 'stream-caret' }));
+            if (pinned) scrollDown();
+        }
+        return {
+            update: function (text) {
+                latest = text;
+                if (!attached) {
+                    attached = true;
+                    ui.log.appendChild(node);
+                }
+                if (frame) return;
+                var wait = Math.min(250, latest.length / 40) - (performance.now() - lastDraw);
+                frame = wait > 0
+                    ? setTimeout(function () { frame = requestAnimationFrame(draw); }, wait)
+                    : requestAnimationFrame(draw);
+            },
+            started: function () { return attached; },
+            remove: function () {
+                cancelAnimationFrame(frame);
+                clearTimeout(frame);
+                node.remove();
+            },
+        };
     }
 
     function greeting() {
@@ -1221,12 +1429,13 @@
 
     function renderDocList() {
         var names = docNames();
-        ui.docCount.textContent = String(names.length);
+        var sent = sentNames();
+        ui.docCount.textContent = String(names.length + sent.length);
 
         var chunks = names.reduce(function (sum, n) { return sum + documents[n].length; }, 0);
         ui.statusChunks.textContent = String(chunks);
 
-        if (!names.length) {
+        if (!names.length && !sent.length) {
             dom.replace(ui.docList, el('p', {
                 class: 'text-[10px] text-fg-secondary italic p-4 text-center border '
                     + 'border-dashed border-tertiary rounded',
@@ -1236,36 +1445,115 @@
             return;
         }
 
-        dom.replace(ui.docList, names.map(function (name) {
-            var remove = el('button', {
-                type: 'button',
-                class: 'text-fg-secondary hover:text-danger transition opacity-60 '
-                    + 'group-hover:opacity-100 shrink-0 px-1',
-                // Filename travels as data, never as code.
-                dataset: { doc: name },
-                'aria-label': 'Remove ' + name,
-                text: '✕',
-            });
-            remove.addEventListener('click', function () { removeDocument(name); });
-
-            return el('div', {
-                class: 'bg-tertiary rounded p-2 flex justify-between items-center gap-2 group',
-            }, [
-                el('span', {
-                    class: 'truncate text-xs text-fg-primary',
-                    title: name,
-                    text: name,
-                }),
-                remove,
-            ]);
-        }));
+        var rows = names.map(function (n) { return docRow(n, false); })
+            .concat(sent.map(function (n) { return docRow(n, true); }));
+        dom.replace(ui.docList, rows);
     }
 
-    function removeDocument(name) {
+    /** One row of the Documents list; `whole` marks a file sent to the AI whole. */
+    function docRow(name, whole) {
+        var remove = el('button', {
+            type: 'button',
+            class: 'text-fg-secondary hover:text-danger transition opacity-60 '
+                + 'group-hover:opacity-100 shrink-0 px-1',
+            // Filename travels as data, never as code.
+            dataset: { doc: name },
+            'aria-label': 'Remove ' + name,
+            text: '✕',
+        });
+        remove.addEventListener('click', function () { removeDocument(name, whole); });
+
+        return el('div', {
+            class: 'bg-tertiary rounded p-2 flex justify-between items-center gap-2 group',
+        }, [
+            el('span', {
+                class: 'truncate text-xs text-fg-primary',
+                title: whole ? name + ' (sent whole to the AI provider)' : name + ' (read here)',
+                text: name,
+            }),
+            whole ? el('span', { class: 'panel-count shrink-0', text: 'AI',
+                title: 'Sent whole to the AI provider with each message' }) : null,
+            remove,
+        ]);
+    }
+
+    function removeDocument(name, whole) {
         if (!window.confirm('Remove "' + name + '" from memory?')) return;
-        delete documents[name];
+        if (whole) delete sentFiles[name];
+        else delete documents[name];
         renderDocList();
-        addSystem('Dropped ' + name + '.');
+        addSystem(whole ? 'Dropped ' + name + '. It is no longer sent with messages.'
+            : 'Dropped ' + name + '.');
+    }
+
+    /* ------------------------------------------------------- drag and drop */
+
+    /** Files dropped on the chat: ask how to load them, private choice first. */
+    function bindDrop(zone) {
+        var depth = 0;   // dragenter/leave fire for every child crossed
+        function hasFiles(e) {
+            return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') !== -1;
+        }
+        // Set through the CSSOM, which the page's style-src 'self' allows.
+        function mark(on) {
+            zone.style.outline = on ? '2px dashed var(--accent)' : '';
+            zone.style.outlineOffset = on ? '-8px' : '';
+        }
+        zone.addEventListener('dragenter', function (e) {
+            if (!hasFiles(e)) return;
+            e.preventDefault();
+            depth += 1;
+            mark(true);
+        });
+        zone.addEventListener('dragover', function (e) {
+            if (!hasFiles(e)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        });
+        zone.addEventListener('dragleave', function () {
+            depth = Math.max(0, depth - 1);
+            if (!depth) mark(false);
+        });
+        zone.addEventListener('drop', function (e) {
+            if (!hasFiles(e)) return;
+            e.preventDefault();
+            depth = 0;
+            mark(false);
+            var files = Array.prototype.slice.call(e.dataTransfer.files);
+            if (files.length) askDropMode(files);
+        });
+    }
+
+    function askDropMode(files) {
+        var names = files.map(function (f) { return f.name; }).join(', ');
+        var card;
+        function choose(handler) {
+            return function () {
+                card.remove();
+                files.forEach(handler);
+            };
+        }
+        card = el('div', { class: 'flex justify-center my-2', role: 'group',
+            'aria-label': 'How to load the dropped files' }, [
+            el('div', { class: 'bg-tertiary border border-accent rounded-lg p-3 max-w-xl '
+                + 'text-xs space-y-2 shadow-md' }, [
+                el('p', { class: 'text-fg-primary break-words', text: 'Load ' + names + ':' }),
+                el('div', { class: 'flex flex-wrap gap-2' }, [
+                    el('button', { type: 'button', class: 'btn btn-accent text-xs',
+                        text: 'Read here (private)', on: { click: choose(handleFile) } }),
+                    el('button', { type: 'button', class: 'btn btn-secondary text-xs',
+                        text: 'Send whole file to AI', on: { click: choose(handleSentFile) } }),
+                    el('button', { type: 'button', class: 'btn text-xs text-fg-secondary',
+                        text: 'Cancel', on: { click: function () { card.remove(); } } }),
+                ]),
+                el('p', { class: 'text-[10px] text-fg-secondary', text: 'Read here: parsed in '
+                    + 'this tab; only matching excerpts go with a question. Whole file: the '
+                    + 'AI provider receives all of it with each message.' }),
+            ]),
+        ]);
+        ui.log.appendChild(card);
+        scrollDown();
+        card.querySelector('button').focus();
     }
 
     /* ------------------------------------------------------------------ chat */
@@ -1302,9 +1590,17 @@
 
         addUser(userFacing);
         var thinking = addThinking();
+        var stream = addStream();
         setBusy(true);
         var started = performance.now();
         var token = chatToken;
+        // One announcement when the answer is done, not one per word.
+        ui.log.setAttribute('aria-busy', 'true');
+        function settle() {
+            thinking.stop();
+            stream.remove();
+            ui.log.removeAttribute('aria-busy');
+        }
 
         K.callWithFallback(provider(), {
             apiKey: apiKey(),
@@ -1313,9 +1609,14 @@
             fallback: K.prefs.modelFallback(),
             messages: messages,
             conversation: true,
+            onDelta: function (text) {
+                if (token !== chatToken) return;
+                if (!stream.started()) thinking.stop();
+                stream.update(text);
+            },
         }).then(function (res) {
+            settle();
             if (token !== chatToken) return;   // another chat is open now
-            thinking.remove();
             if (res.model !== ui.model.value) {
                 addSystem('Answered by ' + res.model + ': '
                     + ui.model.value + ' was unavailable.');
@@ -1336,8 +1637,8 @@
             if (secs > 0) ui.speed.textContent = (tokens / secs).toFixed(1) + ' t/s';
             showCache(res.usage);
         }).catch(function (err) {
+            settle();
             if (token !== chatToken) return;
-            thinking.remove();
             addSystem(err.message, true);
         }).then(function () {
             setBusy(false);
@@ -1377,9 +1678,19 @@
         }
         lastQuestion = query;
         var turn = K.prompts.chatTurn(query, chunks, docNames(), strictMode(), activeSkills);
+        var attached = sentPrefix(provider());
+        if (attached.length && strictMode()) {
+            turn += '\n\nAnswer only from the attached files and any excerpts above. If they '
+                + 'do not cover it, say so and stop.';
+        }
+        var held = heldBack(provider());
+        if (held.length) {
+            addSystem('Not sent to ' + K.providerLabel(provider()) + ': ' + held.join(', ')
+                + '. Those files go only to the provider they were sent to.');
+        }
 
         ask([{ role: 'system', content: K.prompts.chatSystemPrompt() }]
-            .concat(history, [{ role: 'user', content: turn }]),
+            .concat(attached, history, [{ role: 'user', content: turn }]),
             query, asSources(chunks), keptTurn(turn, query));
     }
 
@@ -1716,6 +2027,15 @@
             Array.prototype.forEach.call(ui.upload.files, handleFile);
             ui.upload.value = '';
         });
+        var sendUpload = document.getElementById('send-upload');
+        document.getElementById('send-doc').addEventListener('click', function () {
+            sendUpload.click();
+        });
+        sendUpload.addEventListener('change', function () {
+            Array.prototype.forEach.call(sendUpload.files, handleSentFile);
+            sendUpload.value = '';
+        });
+        bindDrop(document.querySelector('main'));
 
         ui.send.addEventListener('click', send);
         ui.input.addEventListener('keydown', function (e) {
@@ -1740,7 +2060,7 @@
 
         // Only nag about leaving when there is actually something to lose.
         window.addEventListener('beforeunload', function (e) {
-            if (!docNames().length) return;
+            if (!docNames().length && !sentNames().length) return;
             e.preventDefault();
             e.returnValue = '';
         });

@@ -147,7 +147,8 @@ def test_a_reply_for_a_chat_no_longer_open_is_dropped():
     assert "chatToken += 1;" in function_body(OROCHIMARU, "function resetChat()")
     ask = function_body(OROCHIMARU, "function ask(messages, userFacing, sources, kept)")
     assert "var token = chatToken;" in ask
-    assert ask.count("if (token !== chatToken) return") == 2
+    # The reply, the error, and each streamed piece of the reply.
+    assert ask.count("if (token !== chatToken) return") == 3
 
 
 def test_reopened_chats_restore_their_turns():

@@ -134,9 +134,10 @@ def test_chat_sends_the_rigour_preamble_as_a_system_message():
 
 
 def test_system_prompt_is_not_trimmed_away_by_history_limits():
-    """Prepending it to the (already trimmed) history keeps it present on long chats."""
+    """Prepending it to the (already trimmed) history keeps it present on long chats.
+    Files sent whole may sit between the two; they are never trimmed either."""
     source = strip_js_comments(read("static", "pages", "orochimaru.js"))
-    assert re.search(r"\[\{ role: 'system', content: K\.prompts\.chatSystemPrompt\(\) \}\]\s*\n?\s*\.concat\(history,",
+    assert re.search(r"\[\{ role: 'system', content: K\.prompts\.chatSystemPrompt\(\) \}\]\s*\n?\s*\.concat\((?:attached, )?history,",
                      source, re.S)
 
 

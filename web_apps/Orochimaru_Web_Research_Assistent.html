@@ -65,6 +65,12 @@
                     Load document
                 </button>
                 <p class="text-[10px] text-center text-fg-secondary mt-1.5 opacity-70">Parsed here. Never uploaded.</p>
+                <input type="file" id="send-upload" accept=".pdf,.txt,.text,.md,.markdown,.csv,.tsv,.dat,.json,.xml,.html,.htm,.tex,.log,.yaml,.yml,.ini,.png,.jpg,.jpeg,.gif,.webp" multiple class="hidden">
+                <button id="send-doc" type="button" class="btn btn-secondary w-full py-2 mt-3 flex items-center justify-center gap-2" title="The AI reads the whole file itself, layout, tables and figures included. Anthropic only, for now.">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                    Send whole file to AI
+                </button>
+                <p class="text-[10px] text-center text-fg-secondary mt-1.5 opacity-70">Goes to your AI provider with each message. Or drop files on the chat.</p>
             </div>
 
             <details class="panel" open>

@@ -118,6 +118,149 @@ window.Kusanagi = window.Kusanagi || {};
         return resp.json().catch(function () { return {}; });
     }
 
+    /* ------------------------------------------------------------ streaming */
+
+    /* A caller that passes onDelta(textSoFar) gets the answer as it is
+       written: each handler then asks its API for a stream and reports the
+       growing text. The promise still resolves to the same {text, usage, ...}
+       as a plain call, so nothing else has to change. */
+
+    // A stream that goes quiet this long is treated as dead. Claude sends
+    // pings while it thinks, so a real answer never sits silent this long.
+    var STREAM_IDLE_MS = 120000;
+
+    /** Read a response body line by line, without waiting for the end. */
+    function streamLines(resp, onLine) {
+        if (!resp.body || !resp.body.getReader) {
+            return resp.text().then(function (all) { all.split(/\r?\n/).forEach(onLine); });
+        }
+        var reader = resp.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = '';
+        var timer = null;
+        var stalled = false;
+        function watch() {
+            clearTimeout(timer);
+            timer = setTimeout(function () { stalled = true; reader.cancel(); }, STREAM_IDLE_MS);
+        }
+        function pump() {
+            watch();
+            return reader.read().then(function (step) {
+                if (stalled) {
+                    var quiet = new Error('The provider stopped sending the answer.');
+                    quiet.retryable = true;
+                    throw quiet;
+                }
+                if (step.done) {
+                    clearTimeout(timer);
+                    buffer += decoder.decode();
+                    if (buffer) onLine(buffer);
+                    return;
+                }
+                buffer += decoder.decode(step.value, { stream: true });
+                var lines = buffer.split(/\r?\n/);
+                buffer = lines.pop();
+                lines.forEach(onLine);
+                return pump();
+            }, function (err) {
+                clearTimeout(timer);
+                throw err;
+            });
+        }
+        return pump().catch(function (err) {
+            clearTimeout(timer);
+            try { reader.cancel(); } catch (e) { /* already closed */ }
+            throw err;
+        });
+    }
+
+    /** Server-sent events: call onData(parsedJson) for each `data:` event. */
+    function streamEvents(resp, onData) {
+        var data = [];
+        function flush() {
+            if (!data.length) return;
+            var payload = data.join('\n');
+            data = [];
+            if (payload === '[DONE]') return;
+            var parsed;
+            try { parsed = JSON.parse(payload); } catch (e) { return; }
+            onData(parsed);
+        }
+        return streamLines(resp, function (line) {
+            if (line === '') flush();
+            else if (line.indexOf('data:') === 0) data.push(line.slice(5).replace(/^ /, ''));
+            // `event:`, `id:` and `:` comment lines carry nothing we need.
+        }).then(flush);
+    }
+
+    /** The answer text in a list of Anthropic content blocks. */
+    function textOf(content) {
+        return content
+            .filter(function (b) { return b && b.type === 'text'; })
+            .map(function (b) { return b.text; })
+            .join('');
+    }
+
+    /**
+     * Rebuild an Anthropic message from its stream, block by block, so the
+     * result looks just like a non-streamed response (pause_turn sends these
+     * blocks back as they are). `onBlocks` sees the blocks after each change.
+     */
+    function readAnthropicStream(resp, onBlocks) {
+        var msg = { content: [], stop_reason: null, stop_details: null, usage: {} };
+        var partialJson = {};
+        var failure = null;
+        return streamEvents(resp, function (ev) {
+            if (failure) return;
+            var block = msg.content[ev.index];
+            switch (ev.type) {
+            case 'message_start':
+                Object.assign(msg.usage, ev.message && ev.message.usage);
+                break;
+            case 'content_block_start':
+                msg.content[ev.index] = Object.assign({}, ev.content_block);
+                break;
+            case 'content_block_delta':
+                if (!block || !ev.delta) break;
+                if (ev.delta.type === 'text_delta') {
+                    block.text = (block.text || '') + ev.delta.text;
+                    onBlocks(msg.content);
+                } else if (ev.delta.type === 'thinking_delta') {
+                    block.thinking = (block.thinking || '') + ev.delta.thinking;
+                } else if (ev.delta.type === 'signature_delta') {
+                    block.signature = ev.delta.signature;
+                } else if (ev.delta.type === 'input_json_delta') {
+                    partialJson[ev.index] = (partialJson[ev.index] || '') + ev.delta.partial_json;
+                } else if (ev.delta.type === 'citations_delta') {
+                    (block.citations = block.citations || []).push(ev.delta.citation);
+                }
+                break;
+            case 'content_block_stop':
+                if (block && partialJson[ev.index] !== undefined) {
+                    try { block.input = JSON.parse(partialJson[ev.index] || '{}'); }
+                    catch (e) { block.input = {}; }
+                }
+                break;
+            case 'message_delta':
+                if (ev.delta) {
+                    msg.stop_reason = ev.delta.stop_reason || msg.stop_reason;
+                    msg.stop_details = ev.delta.stop_details || msg.stop_details;
+                }
+                Object.assign(msg.usage, ev.usage);
+                break;
+            case 'error':
+                var e = ev.error || {};
+                failure = new Error('Anthropic: ' + (e.message || e.type || 'stream error'));
+                failure.retryable = /overloaded|api_error|rate_limit/.test(e.type || '');
+                break;
+            }
+        }).then(function () {
+            if (failure) throw failure;
+            msg.content = msg.content.filter(Boolean);
+            return msg;
+        });
+    }
+
     /**
      * Build an Error from a failed response, without leaking the key.
      *
@@ -170,8 +313,11 @@ window.Kusanagi = window.Kusanagi || {};
      */
     function toMessages(params) {
         if (Array.isArray(params.messages) && params.messages.length) {
+            // Content is text, or a list of parts -- {type: 'text', text} and
+            // {type: 'file', ...} -- for providers that take whole files.
             return params.messages.filter(function (m) {
-                return m && typeof m.content === 'string' && m.content.length;
+                return m && (typeof m.content === 'string' || Array.isArray(m.content))
+                    && m.content.length;
             });
         }
         return [{ role: 'user', content: String(params.prompt || '') }];
@@ -195,6 +341,9 @@ window.Kusanagi = window.Kusanagi || {};
         });
         if (typeof temperature === 'number') body.generationConfig.temperature = temperature;
         if (opts && opts.json) body.generationConfig.responseMimeType = 'application/json';
+        var onDelta = opts && opts.onDelta;
+        // alt=sse is a format switch, not data; the key stays in the header.
+        if (onDelta) url = url.replace(/:generateContent$/, ':streamGenerateContent?alt=sse');
 
         return request(url, {
             method: 'POST',
@@ -202,7 +351,8 @@ window.Kusanagi = window.Kusanagi || {};
             headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
             body: JSON.stringify(body),
         }, opts && opts.timeoutMs).then(function (resp) {
-            return readJson(resp).then(function (data) {
+            var read = !resp.ok || !onDelta ? readJson(resp) : readGeminiStream(resp, onDelta);
+            return read.then(function (data) {
                 if (!resp.ok) throw providerError(data, resp, 'Gemini');
 
                 var candidate = data.candidates && data.candidates[0];
@@ -232,6 +382,48 @@ window.Kusanagi = window.Kusanagi || {};
         });
     }
 
+    /** Gemini's stream, folded back into the shape of one generateContent reply. */
+    function readGeminiStream(resp, onDelta) {
+        var text = '';
+        var last = {};
+        return streamEvents(resp, function (chunk) {
+            var candidate = chunk.candidates && chunk.candidates[0];
+            var parts = (candidate && candidate.content && candidate.content.parts) || [];
+            var added = parts.map(function (p) { return p.text || ''; }).join('');
+            if (added) { text += added; onDelta(text); }
+            if (candidate && candidate.finishReason) last.finishReason = candidate.finishReason;
+            if (chunk.usageMetadata) last.usageMetadata = chunk.usageMetadata;
+            if (chunk.promptFeedback) last.promptFeedback = chunk.promptFeedback;
+        }).then(function () {
+            return {
+                candidates: [{ content: text ? { parts: [{ text: text }] } : null,
+                    finishReason: last.finishReason }],
+                usageMetadata: last.usageMetadata,
+                promptFeedback: last.promptFeedback,
+            };
+        });
+    }
+
+    /** An OpenAI-style chat-completions stream, as one non-streamed reply. */
+    function readOpenAiStream(resp, onDelta) {
+        var text = '';
+        var usage = null;
+        var failure = null;
+        return streamEvents(resp, function (chunk) {
+            if (chunk.error) {
+                failure = failure || new Error(String(chunk.error.message || chunk.error));
+                return;
+            }
+            var choice = chunk.choices && chunk.choices[0];
+            var piece = choice && choice.delta && choice.delta.content;
+            if (piece) { text += piece; onDelta(text); }
+            if (chunk.usage) usage = chunk.usage;
+        }).then(function () {
+            if (failure) throw failure;
+            return { choices: [{ message: { content: text || null } }], usage: usage };
+        });
+    }
+
     /**
      * Shared handler for every OpenAI-compatible chat-completions endpoint.
      * Hugging Face's router and OpenRouter both speak this, so they differ only
@@ -243,9 +435,10 @@ window.Kusanagi = window.Kusanagi || {};
                 model: modelId,
                 messages: messages,
                 temperature: temperature,
-                stream: false,
+                stream: !!(opts && opts.onDelta),
             };
             if (opts && opts.json) body.response_format = { type: 'json_object' };
+            var onDelta = opts && opts.onDelta;
 
             return request(endpoint, {
                 method: 'POST',
@@ -255,7 +448,8 @@ window.Kusanagi = window.Kusanagi || {};
                 },
                 body: JSON.stringify(body),
             }, opts && opts.timeoutMs).then(function (resp) {
-                return readJson(resp).then(function (data) {
+                var read = !resp.ok || !onDelta ? readJson(resp) : readOpenAiStream(resp, onDelta);
+                return read.then(function (data) {
                     if (!resp.ok) throw providerError(data, resp, label);
                     var choice = data.choices && data.choices[0];
                     var text = choice && choice.message && choice.message.content;
@@ -268,6 +462,24 @@ window.Kusanagi = window.Kusanagi || {};
                 });
             });
         };
+    }
+
+    /* Providers that take whole files in a message. Add one here once its
+       handler turns {type: 'file'} parts into that API's own blocks. */
+    var FILE_PROVIDERS = ['anthropic'];
+    function acceptsFiles(provider) { return FILE_PROVIDERS.indexOf(provider) !== -1; }
+
+    /** A provider-neutral part as an Anthropic content block. Sent inline,
+     *  never through the Files API, so no copy waits in a file store. */
+    function anthropicPart(part) {
+        if (part.type !== 'file') return { type: 'text', text: String(part.text || '') };
+        if (part.kind === 'image') {
+            return { type: 'image',
+                source: { type: 'base64', media_type: part.mediaType, data: part.data } };
+        }
+        return { type: 'document', title: part.name, source: part.kind === 'pdf'
+            ? { type: 'base64', media_type: 'application/pdf', data: part.data }
+            : { type: 'text', media_type: 'text/plain', data: part.data } };
     }
 
     /* Models that accept the server-side refusal fallback. Haiku has none. */
@@ -291,7 +503,8 @@ window.Kusanagi = window.Kusanagi || {};
             if (m.role === 'system') { system.push(m.content); return; }
             var role = m.role === 'assistant' ? 'assistant' : 'user';
             if (!turns.length && role === 'assistant') return;
-            turns.push({ role: role, content: m.content });
+            turns.push({ role: role, content: typeof m.content === 'string'
+                ? m.content : m.content.map(anthropicPart) });
         });
         if (!turns.length) return Promise.reject(new Error('Nothing to send.'));
 
@@ -381,6 +594,8 @@ window.Kusanagi = window.Kusanagi || {};
             || (/fable/.test(modelId) ? ANTHROPIC_TIMEOUT_MS * 2 : ANTHROPIC_TIMEOUT_MS);
         var content = [];   // every block across continuations, in order
         var usage = { input_tokens: 0, output_tokens: 0, cache_read: 0, cache_write: 0 };
+        var onDelta = opts && opts.onDelta;
+        if (onDelta) body.stream = true;
 
         // With web tools on, a long search can stop with pause_turn: send the
         // partial answer back and Claude carries on from where it paused.
@@ -390,7 +605,11 @@ window.Kusanagi = window.Kusanagi || {};
                 headers: headers,
                 body: JSON.stringify(body),
             }, timeoutMs).then(function (resp) {
-                return readJson(resp).then(function (data) {
+                var read = !resp.ok || !onDelta ? readJson(resp)
+                    : readAnthropicStream(resp, function (blocks) {
+                        onDelta(textOf(content.concat(blocks)));
+                    });
+                return read.then(function (data) {
                     if (!resp.ok) throw providerError(data, resp, 'Anthropic');
                     content = content.concat(data.content || []);
                     if (data.usage) {
@@ -418,10 +637,7 @@ window.Kusanagi = window.Kusanagi || {};
             }
 
             // Content can include thinking and tool blocks; only text is the answer.
-            var text = content
-                .filter(function (b) { return b && b.type === 'text'; })
-                .map(function (b) { return b.text; })
-                .join('');
+            var text = textOf(content);
             if (!text) {
                 var blank = new Error('Anthropic returned no text.');
                 blank.retryable = true;
@@ -480,9 +696,30 @@ window.Kusanagi = window.Kusanagi || {};
         return out;
     }
 
+    /** Ollama streams one JSON object per line; the last carries the counts. */
+    function readOllamaStream(resp, onDelta) {
+        var text = '';
+        var last = {};
+        var failure = null;
+        return streamLines(resp, function (line) {
+            if (!line.trim()) return;
+            var chunk;
+            try { chunk = JSON.parse(line); } catch (e) { return; }
+            if (chunk.error) { failure = failure || new Error('Ollama: ' + chunk.error); return; }
+            var piece = chunk.message && chunk.message.content;
+            if (piece) { text += piece; onDelta(text); }
+            if (chunk.done) last = chunk;
+        }).then(function () {
+            if (failure) throw failure;
+            return { message: { content: text || null },
+                prompt_eval_count: last.prompt_eval_count, eval_count: last.eval_count };
+        });
+    }
+
     /* For Ollama the "key" field holds the base URL instead. */
     function callOllama(messages, modelId, baseUrl, temperature, opts) {
         var root = String(baseUrl || OLLAMA_DEFAULT).replace(/\/+$/, '');
+        var onDelta = opts && opts.onDelta;
         // /api/chat keeps the turn structure; /api/generate would lose it.
         return request(root + '/api/chat', {
             method: 'POST',
@@ -490,11 +727,12 @@ window.Kusanagi = window.Kusanagi || {};
             body: JSON.stringify({
                 model: modelId,
                 messages: messages,
-                stream: false,
+                stream: !!onDelta,
                 options: { temperature: temperature },
             }),
         }, opts && opts.timeoutMs).then(function (resp) {
-            return readJson(resp).then(function (data) {
+            var read = !resp.ok || !onDelta ? readJson(resp) : readOllamaStream(resp, onDelta);
+            return read.then(function (data) {
                 if (!resp.ok) throw providerError(data, resp, 'Ollama');
                 var text = data.message && data.message.content;
                 if (typeof text !== 'string') {
@@ -549,6 +787,12 @@ window.Kusanagi = window.Kusanagi || {};
 
         var messages = toMessages(p);
         if (!messages.length) return Promise.reject(new Error('Nothing to send.'));
+        if (!acceptsFiles(provider) && messages.some(function (m) {
+            return typeof m.content !== 'string';
+        })) {
+            return Promise.reject(new Error(label(provider) + ' cannot take whole files '
+                + 'here, so nothing was sent.'));
+        }
 
         var temp = Number.isFinite(p.temperature) ? p.temperature : 0.5;
         return handler(messages, p.model, p.apiKey, temp, p);
@@ -579,10 +823,14 @@ window.Kusanagi = window.Kusanagi || {};
         }
 
         var attempts = [];
+        // Once words are on screen, another model would start the answer
+        // over on top of them, so a failure after that is final.
+        var streamed = false;
+        var onDelta = p.onDelta && function (text) { streamed = true; p.onDelta(text); };
 
         function attempt(index) {
             var model = chain[index];
-            return call(provider, Object.assign({}, p, { model: model }))
+            return call(provider, Object.assign({}, p, { model: model, onDelta: onDelta }))
                 .then(function (result) {
                     return Object.assign({}, result, {
                         model: model,
@@ -592,7 +840,7 @@ window.Kusanagi = window.Kusanagi || {};
                 .catch(function (err) {
                     attempts.push({ model: model, error: err.message });
                     var last = index >= chain.length - 1;
-                    if (last || !err.retryable) {
+                    if (last || !err.retryable || streamed) {
                         // Report the original failure, noting what else was tried.
                         if (attempts.length > 1) {
                             err.message += ' (also tried: '
@@ -667,6 +915,7 @@ window.Kusanagi = window.Kusanagi || {};
         ENDPOINTS: ENDPOINTS,
         OLLAMA_DEFAULT: OLLAMA_DEFAULT,
         call: call,
+        acceptsFiles: acceptsFiles,
         callWithFallback: callWithFallback,
         callJson: callJson,
         listFrom: listFrom,
