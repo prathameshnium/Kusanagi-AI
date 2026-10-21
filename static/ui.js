@@ -200,7 +200,8 @@ window.Kusanagi = window.Kusanagi || {};
             });
         }
 
-        var claudeBox = el('div', { class: 'hidden mb-2 pt-3 border-t border-tertiary/60' }, [
+        var claudeBox = el('div', { class: 'hidden mb-2 pt-3 border-t border-tertiary/60 '
+            + 'md:pt-0 md:border-t-0' }, [
             el('p', {
                 class: 'block text-xs font-bold text-fg-secondary uppercase tracking-wide',
                 text: 'Claude options',
@@ -231,37 +232,7 @@ window.Kusanagi = window.Kusanagi || {};
             class: 'mt-2' });
         var voiceNote = el('p', { class: 'text-[11px] text-fg-secondary mt-1' });
 
-        // A form of its own, so the browser's password manager groups these
-        // password fields together instead of taking the page's chat or
-        // search box for a username. It never submits anywhere.
-        var dialog = el('form', {
-            class: 'settings-modal-content p-6 rounded-lg shadow-2xl max-w-md w-full border',
-            role: 'dialog',
-            'aria-modal': 'true',
-            'aria-label': title,
-            autocomplete: 'off',
-            novalidate: 'novalidate',
-            on: { submit: function (e) { e.preventDefault(); } },
-        }, [
-            el('div', { class: 'flex justify-between items-start mb-4' }, [
-                el('h2', { class: 'text-xl font-bold text-accent', text: title }),
-                el('button', {
-                    class: 'text-fg-secondary hover:text-fg-primary transition text-xl leading-none',
-                    type: 'button',
-                    'aria-label': 'Close settings',
-                    text: '✕',
-                    on: { click: function () { close(); } },
-                }),
-            ]),
-
-            el('div', {
-                class: 'bg-success/10 border border-success/30 p-3 rounded mb-5 text-xs text-success',
-            }, [
-                el('strong', { text: 'Privacy: ' }),
-                'Keys stay in this browser and go straight to the provider you pick. '
-                + 'By default they are cleared when you close the tab.',
-            ]),
-
+        var leftColumn = el('div', {}, [
             unlockBox,
 
             el('div', { class: 'mb-4' }, [
@@ -309,8 +280,6 @@ window.Kusanagi = window.Kusanagi || {};
                 chimeToggle.row,
             ]),
 
-            claudeBox,
-
             el('div', { class: 'mb-2 pt-3 border-t border-tertiary/60' }, [
                 el('label', {
                     class: 'block text-xs font-bold text-fg-secondary uppercase tracking-wide mb-2',
@@ -327,6 +296,44 @@ window.Kusanagi = window.Kusanagi || {};
                 voiceSelect,
                 voiceNote,
             ]),
+        ]);
+        // Two columns once Claude's options are showing and there is room:
+        // keys and voice on the left, Claude on the right.
+        var columns = el('div', { class: 'gap-x-6' }, [leftColumn, claudeBox]);
+
+        // A form of its own, so the browser's password manager groups these
+        // password fields together instead of taking the page's chat or
+        // search box for a username. It never submits anywhere.
+        var dialog = el('form', {
+            class: 'settings-modal-content p-6 rounded-lg shadow-2xl max-w-md w-full border '
+                + 'max-h-[calc(100vh-2rem)] overflow-y-auto',
+            role: 'dialog',
+            'aria-modal': 'true',
+            'aria-label': title,
+            autocomplete: 'off',
+            novalidate: 'novalidate',
+            on: { submit: function (e) { e.preventDefault(); } },
+        }, [
+            el('div', { class: 'flex justify-between items-start mb-4' }, [
+                el('h2', { class: 'text-xl font-bold text-accent', text: title }),
+                el('button', {
+                    class: 'text-fg-secondary hover:text-fg-primary transition text-xl leading-none',
+                    type: 'button',
+                    'aria-label': 'Close settings',
+                    text: '✕',
+                    on: { click: function () { close(); } },
+                }),
+            ]),
+
+            el('div', {
+                class: 'bg-success/10 border border-success/30 p-3 rounded mb-5 text-xs text-success',
+            }, [
+                el('strong', { text: 'Privacy: ' }),
+                'Keys stay in this browser and go straight to the provider you pick. '
+                + 'By default they are cleared when you close the tab.',
+            ]),
+
+            columns,
 
             el('div', {
                 class: 'flex justify-between items-center mt-6 pt-4 border-t border-tertiary',
@@ -386,7 +393,12 @@ window.Kusanagi = window.Kusanagi || {};
 
             fallbackBox.checked = window.Kusanagi.prefs.modelFallback();
             chimeToggle.box.checked = prefs.chime();
-            claudeBox.classList.toggle('hidden', provider !== 'anthropic');
+            var claude = provider === 'anthropic';
+            claudeBox.classList.toggle('hidden', !claude);
+            // Full class names, so the stylesheet build keeps them.
+            dialog.classList.toggle('md:max-w-4xl', claude);
+            columns.classList.toggle('md:grid', claude);
+            columns.classList.toggle('md:grid-cols-2', claude);
             effortSelect.value = prefs.claude('effort');
             maxTokensSelect.value = prefs.claude('maxTokens');
             webLimitSelect.value = prefs.claude('webLimit');

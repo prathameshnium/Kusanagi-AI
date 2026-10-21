@@ -236,9 +236,10 @@
         }
         var ext = extensionOf(file.name);
         var image = IMAGE_TYPES[ext];
-        if (ext !== 'pdf' && !image && TEXT_TYPES.concat('html', 'htm').indexOf(ext) === -1) {
-            K.ui.toast('.' + (ext || '?') + ' files cannot be sent whole. Send a PDF, '
-                + 'an image or a text file, or use Load document.', 'error');
+        if (!image && TEXT_TYPES.indexOf(ext) === -1 && PARSED_TYPES.indexOf(ext) === -1) {
+            K.ui.toast('.' + (ext || '?') + ' files cannot be sent whole. Supported: '
+                + PARSED_TYPES.concat(TEXT_TYPES, Object.keys(IMAGE_TYPES)).join(', ') + '.',
+            'error');
             return;
         }
         if (sentFiles[file.name]) {
@@ -255,12 +256,15 @@
             return;
         }
 
-        var read = ext === 'pdf' || image ? base64Of(file) : file.text().then(function (text) {
-            if (text.indexOf('\u0000') !== -1) {
-                throw new Error('This looks like a binary file, not text.');
-            }
-            return text;
-        });
+        // The APIs read PDFs and images as they are. Word, PowerPoint,
+        // OpenDocument, RTF and HTML they do not, so those go as their full
+        // text, pulled out here by the same readers Load document uses.
+        var read = ext === 'pdf' || image ? base64Of(file)
+            : extractText(file, ext).then(function (text) {
+                text = tidy(text);
+                if (!text) throw new Error(file.name + ' contains no readable text.');
+                return text;
+            });
 
         read.then(function (data) {
             sentFiles[file.name] = { provider: to, file: {
@@ -279,6 +283,21 @@
         }).catch(function (err) {
             addSystem(file.name + ': ' + err.message, true);
         });
+    }
+
+    /** A file leaving the device is the user's call each time: say what goes
+     *  where before it does, from the button and from a drop alike. */
+    function confirmSend(files) {
+        if (!K.acceptsFiles(provider())) {
+            K.ui.toast(K.providerLabel(provider()) + ' cannot take whole files here yet. Switch '
+                + 'to Anthropic in Configure API, or use Load document.', 'error');
+            return false;
+        }
+        var size = files.reduce(function (sum, f) { return sum + f.size; }, 0);
+        return window.confirm('Send ' + files.map(function (f) { return f.name; }).join(', ')
+            + ' (' + (size / 1048576).toFixed(1) + ' MB) whole to ' + K.providerLabel(provider())
+            + '?\n\nThe entire file leaves this device with every message in this chat. '
+            + 'Use "Load document" instead to keep it here and send only matching excerpts.');
     }
 
     /** The opening pair that carries the files sent whole to `to`. It comes
@@ -1125,7 +1144,8 @@
         if (!quiet) {
             addSystem(on
                 ? 'No history: this chat is not saved on this device. It is not private: '
-                    + 'the AI provider still receives every message and document excerpt.'
+                    + 'the AI provider still receives every message, document excerpt and file '
+                    + 'sent whole.'
                 : (folder ? 'History on: chats are saved to "' + folder.name + '".'
                     : 'History on: choose a folder in Settings to save chats.'));
         }
@@ -1304,11 +1324,19 @@
     // Full class names, so the stylesheet build sees and keeps them.
     var THINK_ART = [['think-dots', 3], ['think-snake', 5], ['think-orbit', 3],
         ['think-ripple', 2], ['think-flip', 1], ['think-scan', 1]];
-    var THINK_PHRASES = ['Thinking', 'Consulting the scrolls', 'Weaving hand signs',
-        'Shedding old assumptions', 'Reading between the lines', 'Following the thread',
-        'Connecting the dots', 'Checking the sources', 'Sharpening the blade',
-        'Gathering chakra', 'Untangling the question', 'Sketching an answer',
-        'Weighing the evidence', 'Slithering through the details', 'Summoning a reply'];
+    /* Phrases come from thinking.js (1000 of them), dealt like cards from a
+       shuffled deck so none repeats until every one has been shown. */
+    var thinkDeck = [];
+    function nextPhrase() {
+        if (!thinkDeck.length) {
+            thinkDeck = (K.THINKING && K.THINKING.length ? K.THINKING : ['Thinking']).slice();
+            for (var i = thinkDeck.length - 1; i > 0; i--) {
+                var j = Math.floor(Math.random() * (i + 1));
+                var t = thinkDeck[i]; thinkDeck[i] = thinkDeck[j]; thinkDeck[j] = t;
+            }
+        }
+        return thinkDeck.pop() + '...';
+    }
 
     function anyOf(list) { return list[Math.floor(Math.random() * list.length)]; }
 
@@ -1316,7 +1344,7 @@
         var art = anyOf(THINK_ART);
         var bits = [];
         for (var i = 0; i < art[1]; i++) bits.push(el('i'));
-        var phrase = el('span', { class: 'think-phrase', text: anyOf(THINK_PHRASES) + '...' });
+        var phrase = el('span', { class: 'think-phrase', text: nextPhrase() });
         var clock = el('span', { class: 'think-time', text: '0s' });
         var node = el('div', { class: 'flex items-start gap-4 msg-in' }, [
             orochiAvatar(),
@@ -1334,9 +1362,7 @@
             if (ticks % 5) return;   // a new phrase every 2.5 s
             phrase.classList.add('is-swapping');
             setTimeout(function () {
-                var next = phrase.textContent;
-                while (next === phrase.textContent) next = anyOf(THINK_PHRASES) + '...';
-                phrase.textContent = next;
+                phrase.textContent = nextPhrase();
                 phrase.classList.remove('is-swapping');
             }, 250);
         }, 500);
@@ -1491,6 +1517,16 @@
     /** Files dropped on the chat: ask how to load them, private choice first. */
     function bindDrop(zone) {
         var depth = 0;   // dragenter/leave fire for every child crossed
+        // A file dropped anywhere else would make the browser open it in
+        // place of the page, losing every document held in memory.
+        ['dragover', 'drop'].forEach(function (type) {
+            window.addEventListener(type, function (e) {
+                if (hasFiles(e) && !zone.contains(e.target)) {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'none';
+                }
+            });
+        });
         function hasFiles(e) {
             return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types, 'Files') !== -1;
         }
@@ -1520,7 +1556,45 @@
             depth = 0;
             mark(false);
             var files = Array.prototype.slice.call(e.dataTransfer.files);
-            if (files.length) askDropMode(files);
+            if (files.length) takeFiles(files);
+        });
+    }
+
+    function isImage(file) { return !!IMAGE_TYPES[extensionOf(file.name)]; }
+
+    /** Images can only be sent whole (nothing here reads them), so they skip
+     *  the choice and go straight to the confirm; other files are asked. */
+    function takeFiles(files) {
+        var images = files.filter(isImage);
+        var others = files.filter(function (f) { return !isImage(f); });
+        if (images.length && confirmSend(images)) images.forEach(handleSentFile);
+        if (others.length) askDropMode(others);
+    }
+
+    /** Ctrl+V of a screenshot. A pasted image has a generic name such as
+     *  "image.png", so it is renamed by time to keep each paste apart. */
+    var pastes = 0;
+    function bindPaste() {
+        document.addEventListener('paste', function (e) {
+            var items = (e.clipboardData && e.clipboardData.items) || [];
+            var files = [];
+            Array.prototype.forEach.call(items, function (item) {
+                if (item.kind !== 'file') return;
+                var file = item.getAsFile();
+                if (!file) return;
+                var ext = Object.keys(IMAGE_TYPES).filter(function (k) {
+                    return IMAGE_TYPES[k] === file.type;
+                })[0];
+                if (ext) {
+                    pastes += 1;
+                    file = new File([file], 'Screenshot ' + pastes + ' - '
+                        + K.ui.fileStamp(new Date()) + '.' + ext, { type: file.type });
+                }
+                files.push(file);
+            });
+            if (!files.length) return;   // plain text pastes as usual
+            e.preventDefault();
+            takeFiles(files);
         });
     }
 
@@ -1530,6 +1604,7 @@
         function choose(handler) {
             return function () {
                 card.remove();
+                if (handler === handleSentFile && !confirmSend(files)) return;
                 files.forEach(handler);
             };
         }
@@ -2032,10 +2107,12 @@
             sendUpload.click();
         });
         sendUpload.addEventListener('change', function () {
-            Array.prototype.forEach.call(sendUpload.files, handleSentFile);
+            var files = Array.prototype.slice.call(sendUpload.files);
             sendUpload.value = '';
+            if (files.length && confirmSend(files)) files.forEach(handleSentFile);
         });
         bindDrop(document.querySelector('main'));
+        bindPaste();
 
         ui.send.addEventListener('click', send);
         ui.input.addEventListener('keydown', function (e) {

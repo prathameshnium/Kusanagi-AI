@@ -381,6 +381,13 @@ window.Kusanagi = window.Kusanagi || {};
             description: 'Short answers: the point first, no preamble.',
             instruction: 'be brief: lead with the answer, at most a few sentences or '
                 + 'bullets, and no preamble or recap.' },
+        { id: 'shorter', label: 'Shorter (ADHD-friendly)', group: 'voice',
+            description: 'Very short, skimmable answers: the answer first, a few one-line bullets.',
+            instruction: 'keep it short and easy to skim for a reader with ADHD: put the '
+                + 'answer in the first line, then at most 3 to 5 bullets of one short line '
+                + 'each, with the key word in bold. No preamble, no recap, no headings, no '
+                + 'long paragraphs, and leave out background unless asked. If more detail '
+                + 'would help, end with one short line offering it.' },
         { id: 'socratic', label: 'Socratic tutor', group: 'voice',
             description: 'Guides you with questions instead of giving the answer.',
             instruction: 'teach by questions: give a hint and one guiding question at a '
