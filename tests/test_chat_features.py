@@ -132,11 +132,11 @@ def test_every_answer_is_saved_to_the_folder():
     assert "K.chats.write(name, chatDocument())" in body
 
 
-def test_no_history_is_on_by_default_and_says_it_is_not_private():
-    """Nothing is written until the user turns No history off, and the page
-    never lets them mistake that for privacy."""
-    assert "var noHistory = true;" in OROCHIMARU
-    assert 'id="no-history"' in OROCHIMARU_HTML and 'aria-pressed="true"' in OROCHIMARU_HTML
+def test_no_history_is_off_by_default_and_says_it_is_not_private():
+    """Off by default (saving still waits for a chosen folder), and the page
+    never lets the user mistake No history for privacy."""
+    assert "var noHistory = false;" in OROCHIMARU
+    assert 'id="no-history"' in OROCHIMARU_HTML and 'aria-pressed="false"' in OROCHIMARU_HTML
     body = function_body(OROCHIMARU, "function setNoHistory(on, quiet)")
     assert "It is not private" in body
     assert "if (!on) persist();" in body

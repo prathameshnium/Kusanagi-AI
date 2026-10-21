@@ -64,7 +64,7 @@
     var chatStarted = null;                // when it began, for that name
     var chatCategory = '';                 // the user's name for its group, or ''
     var folder = null;                     // {name, ready} once a chat folder is chosen
-    var noHistory = true;                  // on each visit: nothing is written to the folder
+    var noHistory = false;                 // off by default; saving still needs a chosen folder
     var lastQuestion = '';                 // the one before, to make sense of follow-ups
     var busy = false;
     var settings = null;
@@ -1444,8 +1444,10 @@
                     el('li', { text: noHistory
                         ? 'No history is on: nothing is saved here, and a reload clears it. '
                             + 'Not private: the AI provider still sees everything you send.'
-                        : 'History is on: chats save to your folder. The AI provider sees '
-                            + 'everything you send.' }),
+                        : (folder ? 'History is on: chats save to "' + folder.name + '". '
+                            : 'History is on, but nothing is saved until you choose a folder '
+                                + 'in Settings. ')
+                            + 'The AI provider sees everything you send.' }),
                 ]),
             ]),
         ]));
@@ -1743,7 +1745,12 @@
         closeSlash();
         query = runSlash(query);
         if (!query) return;
+        submit(query, query);
+    }
 
+    /** Ask `query`; the chat shows `shown` as what the user said. `redo`
+     *  keeps the question being redone as the one follow-ups build on. */
+    function submit(query, shown, redo) {
         // The system prompt never changes; the excerpts retrieved for this
         // question, the answer mode and the skills that are on go in the turn.
         var chunks = [];
@@ -1751,7 +1758,7 @@
             ui.indicator.classList.remove('is-invisible');
             chunks = retrieve(query, 5, lastQuestion);
         }
-        lastQuestion = query;
+        if (!redo) lastQuestion = query;
         var turn = K.prompts.chatTurn(query, chunks, docNames(), strictMode(), activeSkills);
         var attached = sentPrefix(provider());
         if (attached.length && strictMode()) {
@@ -1766,7 +1773,7 @@
 
         ask([{ role: 'system', content: K.prompts.chatSystemPrompt() }]
             .concat(attached, history, [{ role: 'user', content: turn }]),
-            query, asSources(chunks), keptTurn(turn, query));
+            shown, asSources(chunks), keptTurn(turn, query));
     }
 
     /* Claude's prompt cache needs every earlier turn sent back byte for byte,
@@ -1780,11 +1787,11 @@
 
     /** Run a skill once over the loaded documents. */
     function runSkill(skill) {
-        if (!docNames().length) return;
+        if (!docNames().length) return false;
         var isReview = skill.group === 'review';
         // Style skills (and others with nothing to do on their own) only
         // shape later answers.
-        if (!isReview && skill.id !== 'summarise' && !skill.onDocs) return;
+        if (!isReview && skill.id !== 'summarise' && !skill.onDocs) return false;
         var limit = isReview ? 8 : 6;
         var chunks = retrieve(skill.hint || skill.onDocs, limit);
         if (!chunks.length) chunks = openingChunks(limit);
@@ -1802,6 +1809,7 @@
             messages = [{ role: 'user', content: K.prompts.summarise(chunks) }];
         }
         ask(messages, skill.label + ' of the loaded documents', asSources(chunks));
+        return true;
     }
 
     /** The start of each document, in turn: where a summary or review should
@@ -1945,8 +1953,30 @@
         if (!skill) return;
         ui.input.value = '';
         closeSlash();
-        toggleSkill(skill.id);
+        useSkill(skill);
         ui.input.focus();
+    }
+
+    /**
+     * A skill sent on its own, as "/shorter" or picked from the menu: switch
+     * it on and put it to work at once -- over the loaded documents when it is
+     * a skill for them, otherwise on the last answer, given again in its
+     * style. Turning it off is the chip's or the Skills panel's job.
+     */
+    function useSkill(skill) {
+        if (busy) { K.ui.toast('Wait for the answer to finish.'); return; }
+        var wasOn = activeSkills.indexOf(skill.id) !== -1;
+        if (!wasOn) toggleSkill(skill.id, true);
+        if (runSkill(skill)) return;
+        if (lastAnswer) {
+            // The earlier question goes in too, so document search still
+            // finds the passages that answer was about.
+            submit('Give your last answer again, following the ' + skill.label
+                + ' skill (' + skill.description + '). The question was: '
+                + lastQuestion, '/' + skill.id, true);
+        } else if (wasOn) {
+            addSystem(skill.label + ' is already on. Ask a question to use it.');
+        }
     }
 
     /** True if the key was the menu's to handle. */
@@ -1977,7 +2007,7 @@
         var skill = m && K.prompts.skill(m[1].toLowerCase());
         if (!skill) return query;
         var rest = (m[2] || '').trim();
-        if (!rest) { toggleSkill(skill.id); return null; }
+        if (!rest) { useSkill(skill); return null; }
         if (activeSkills.indexOf(skill.id) === -1) toggleSkill(skill.id, true);
         return rest;
     }
