@@ -408,6 +408,12 @@
         margin: -1rem -1rem 0;
         background-color: var(--secondary);
     }
+    /* Wide screens: the toggle folds the column away. The fixed home and
+       theme buttons then sit over the header, so it makes room for them. */
+    @media (min-width: 1024px) {
+        .app-sidebar.is-collapsed { display: none; }
+        .app-sidebar.is-collapsed ~ main .app-header { padding-left: 3.75rem; }
+    }
     @media (max-width: 1023px) {
         .app-sidebar {
             position: fixed;
@@ -419,18 +425,22 @@
         }
         .app-sidebar.is-open { transform: none; box-shadow: 0 0 40px rgb(0 0 0 / 0.5); }
         .sidebar-scrim { position: fixed; inset: 0; z-index: 55; background: rgb(0 0 0 / 0.5); }
-        /* Clear the fixed home and theme buttons at the top left. */
-        .app-header { padding-left: 8.25rem !important; }
+        /* Clear the fixed home button at the top left. */
+        .app-header { padding-left: 3.75rem !important; }
     }
 
-    .history-list { max-height: 22rem; overflow-y: auto; }
+    .history-list { max-height: 26rem; overflow-y: auto; }
+    /* Chat history leads the sidebar, so it reads larger than the other panels. */
+    .panel-history { border-top: 0; padding-top: 0; }
+    .panel-history > summary { font-size: 0.9rem; color: var(--accent); }
+    .panel-history .history-open { font-size: 0.9rem; padding: 0.4rem 0.5rem; }
     .history-group > summary {
         list-style: none;
         display: flex;
         align-items: center;
         gap: 0.35rem;
         padding: 0.35rem 0.25rem 0.15rem;
-        font-size: 10px;
+        font-size: 0.7rem;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.04em;
@@ -445,7 +455,7 @@
     .history-rename:hover { color: var(--accent); }
     .history-move { padding: 0.2rem 0.35rem; color: var(--fg-secondary); }
     .history-move:hover { color: var(--accent); }
-    .history-select { font-size: 11px !important; padding: 0.15rem 0.3rem !important; margin: 0.15rem 0.5rem 0.35rem; width: auto !important; }
+    .history-select { font-size: 0.75rem !important; padding: 0.15rem 0.3rem !important; margin: 0.15rem 0.5rem 0.35rem; width: auto !important; }
     .history-item { display: flex; align-items: center; border-radius: 0.25rem; }
     .history-item:hover, .history-item.is-current { background-color: var(--tertiary); }
     .history-item.is-current .history-open { color: var(--accent); }
@@ -505,6 +515,10 @@
         white-space: nowrap;
     }
     .header-btn:hover { color: var(--accent); }
+    /* Phones: the buttons scroll sideways rather than run over the toggles. */
+    .header-actions { overflow-x: auto; scrollbar-width: none; }
+    .header-actions > * { flex-shrink: 0; }
+    .header-btn-danger:hover { color: var(--danger-fg); border-color: var(--danger-fg); }
     /* A toggle that is on, such as No history. */
     .header-btn.is-active { color: var(--accent); border-color: var(--accent); }
     @media (min-width: 640px) { .header-btn { font-size: 0.875rem; } }
@@ -526,6 +540,8 @@
         color: var(--fg-secondary);
         padding: 0.4rem 0.6rem 0.1rem;
     }
+    /* Pages that opt in read larger; rem sizes all follow the root. */
+    html.large-text { font-size: 112.5%; }
     .slash-menu {
         position: absolute;
         left: 0;

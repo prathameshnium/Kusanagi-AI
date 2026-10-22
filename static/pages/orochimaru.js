@@ -1147,13 +1147,13 @@
                     + 'the AI provider still receives every message, document excerpt and file '
                     + 'sent whole.'
                 : (folder ? 'History on: chats are saved to "' + folder.name + '".'
-                    : 'History on: choose a folder in Settings to save chats.'));
+                    : 'History on: choose a folder under Chat history to save chats.'));
         }
         renderHistory();
         if (!on) persist();
     }
 
-    /** The Settings row and the Chat history panel. `files` skips a re-read. */
+    /** The Chat history panel and its folder row. `files` skips a re-read. */
     function renderHistory(files) {
         var setup;
         if (!K.chats.supported) {
@@ -1161,9 +1161,9 @@
                 + 'this browser, use Save in the top bar to download a chat.' })];
         } else if (!folder) {
             setup = [
-                el('button', { type: 'button', class: 'btn btn-secondary text-xs w-full',
+                el('button', { type: 'button', class: 'btn btn-secondary text-sm w-full',
                     text: 'Choose a folder...', on: { click: chooseFolder } }),
-                el('p', { class: 'text-[10px] text-fg-secondary mt-1', text: 'Each chat is '
+                el('p', { class: 'text-xs text-fg-secondary mt-1', text: 'Each chat is '
                     + 'saved there as a Markdown file as you go, with a "Kusanagi AI.md" '
                     + 'note on the version. Off until you choose one.' }),
             ];
@@ -1177,15 +1177,18 @@
         }
         dom.replace(ui.historySetup, setup);
 
-        ui.historyPanel.classList.toggle('hidden', !folder);
-        if (!folder) return;
+        if (!folder) {
+            ui.historyCount.textContent = '';
+            dom.replace(ui.historyBody, []);
+            return;
+        }
 
         if (!folder.ready) {
             ui.historyCount.textContent = '';
             dom.replace(ui.historyBody, [
-                el('button', { type: 'button', class: 'btn btn-secondary text-xs w-full',
+                el('button', { type: 'button', class: 'btn btn-secondary text-sm w-full',
                     text: 'Allow access to ' + folder.name, on: { click: reconnectFolder } }),
-                el('p', { class: 'text-[10px] text-fg-secondary mt-1', text: 'The browser '
+                el('p', { class: 'text-xs text-fg-secondary mt-1', text: 'The browser '
                     + 'asks again each visit before the page can read the folder.' }),
             ]);
             return;
@@ -1283,6 +1286,33 @@
         greeting();
     }
 
+    /** Clear: delete this chat's saved file, drop every document and file
+     *  held in memory, and start an empty chat. */
+    function clearAll() {
+        if (!window.confirm('Clear this chat? Its saved file is deleted, loaded documents '
+            + 'and files sent whole are dropped, and a new chat starts. This cannot be undone.')) {
+            return;
+        }
+        var name = folder && folder.ready ? chatFile : '';
+        // resetChat bumps chatToken first, so an answer still arriving cannot
+        // write the chat back after its file is gone.
+        resetChat();
+        [documents, parsing, sentFiles].forEach(function (map) {
+            Object.keys(map).forEach(function (k) { delete map[k]; });
+        });
+        indexCache = new WeakMap();
+        ui.cache.textContent = '--';
+        ui.cache.title = "Share of the last prompt read from Claude's prompt cache";
+        renderDocList();
+        (name ? K.chats.remove(name) : Promise.resolve()).then(function () {
+            addSystem('Cleared. This is a new chat.');
+            renderHistory();
+        }).catch(function (err) {
+            K.ui.toast('Cleared, but could not delete the saved file: ' + err.message, 'error');
+            renderHistory();
+        });
+    }
+
     /* ----------------------------------------------------------- sidebar */
 
     var narrow = window.matchMedia('(max-width: 1023px)');
@@ -1291,7 +1321,7 @@
         var wasOpen = ui.sidebar.classList.contains('is-open');
         ui.sidebar.classList.toggle('is-open', open);
         ui.scrim.classList.toggle('hidden', !open);
-        ui.sidebarToggle.setAttribute('aria-expanded', String(open));
+        syncToggle();
         // Off screen is not hidden: keep a closed drawer out of the Tab order
         // and away from screen readers.
         ui.sidebar.inert = narrow.matches && !open;
@@ -1301,6 +1331,22 @@
         } else if (!open && wasOpen && narrow.matches) {
             ui.sidebarToggle.focus();
         }
+    }
+
+    /** Wide screens: fold the sidebar column away, and remember it. */
+    var COLLAPSED_KEY = 'kusanagi-orochimaru-sidebar';
+
+    function setCollapsed(collapsed) {
+        ui.sidebar.classList.toggle('is-collapsed', collapsed);
+        syncToggle();
+        try { window.localStorage.setItem(COLLAPSED_KEY, collapsed ? 'hidden' : 'shown'); }
+        catch (e) { /* private mode */ }
+    }
+
+    function syncToggle() {
+        var shown = narrow.matches ? ui.sidebar.classList.contains('is-open')
+            : !ui.sidebar.classList.contains('is-collapsed');
+        ui.sidebarToggle.setAttribute('aria-expanded', String(shown));
     }
 
     /** System notices. Filenames land here, so this is text -- the old version
@@ -1446,7 +1492,7 @@
                             + 'Not private: the AI provider still sees everything you send.'
                         : (folder ? 'History is on: chats save to "' + folder.name + '". '
                             : 'History is on, but nothing is saved until you choose a folder '
-                                + 'in Settings. ')
+                                + 'under Chat history. ')
                             + 'The AI provider sees everything you send.' }),
                 ]),
             ]),
@@ -2098,8 +2144,13 @@
         document.getElementById('chat-controls').appendChild(effort.node);
 
         ui.sidebarToggle.addEventListener('click', function () {
-            setSidebar(!ui.sidebar.classList.contains('is-open'));
+            if (narrow.matches) setSidebar(!ui.sidebar.classList.contains('is-open'));
+            else setCollapsed(!ui.sidebar.classList.contains('is-collapsed'));
         });
+        try {
+            ui.sidebar.classList.toggle('is-collapsed',
+                window.localStorage.getItem(COLLAPSED_KEY) === 'hidden');
+        } catch (e) { /* private mode */ }
         ui.scrim.addEventListener('click', function () { setSidebar(false); });
         setSidebar(false);
         narrow.addEventListener('change', function () { setSidebar(false); });
@@ -2155,6 +2206,7 @@
             addSystem(folder ? 'New chat. The last one is in Chat history.' : 'New chat.');
             renderHistory();
         });
+        document.getElementById('clear-all').addEventListener('click', clearAll);
         document.getElementById('open-settings').addEventListener('click', function () {
             settings.open();
         });
