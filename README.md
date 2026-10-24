@@ -49,21 +49,21 @@ Kusanagi-AI was developed to address the growing need for accessible and privacy
   <a href="https://tkdocs.com/index.html" target="_blank" rel="noreferrer"> <img src="http://pascal.ortiz.free.fr/_images/logo_tkinter.png" alt="tkinter" width="40" height="40"/> </a>
 </p>
 Kusanagi-AI is built with a focus on local execution, privacy, and ease of use. The core technologies include:
--   **Python**: The entire frontend and application logic are developed in Python, leveraging its vast ecosystem of libraries for AI development.
+-   **Python + Tkinter**: The desktop apps, fully offline, with native lightweight GUIs.
 -   **Ollama**: Powers the local large language model inference, allowing Kusanagi-AI to run various models efficiently on your machine without cloud dependencies.
--   **Tkinter**: Used for creating the native graphical user interfaces for the applications, ensuring they are lightweight and cross-platform.
--   **Embeddings**: Ships configured for `all-minilm` (small and fast). `mxbai-embed-large` is also recognised if you prefer quality over footprint -- set `embedding_model_name` in `System_Config.json`.
+-   **Plain JavaScript, no build step for scripts**: The browser suite is static HTML with one script per page, self-hosted libraries (pdf.js, KaTeX, marked, DOMPurify) and a precompiled Tailwind stylesheet. No backend, no bundler, no CDN.
+-   **Embeddings** (desktop): Ships configured for `all-minilm` (small and fast). `mxbai-embed-large` is also recognised if you prefer quality over footprint -- set `embedding_model_name` in `System_Config.json`. The browser suite needs no embedding model: it ranks passages with BM25.
 
 ## Features
 
-*   **Local & Private**: All operations are performed 100% offline, guaranteeing your research data remains secure and private on your machine.
+*   **Local & Private**: The desktop apps run 100% offline against Ollama. The browser apps parse documents in the tab and talk straight to the provider you configured; nothing passes through a Kusanagi server, because there is none.
 *   **Efficient Local LLM Inference**: Designed to run up to three large language models concurrently on a decent laptop, providing robust AI capabilities without specialized hardware.
-*   **Research Assistant (Orochimaru)**: A flagship RAG application tailored for academic use, with its frontend developed entirely in Python.
-    *   **PDF Interaction**: Engage in Retrieval-Augmented Generation (RAG) with your PDF documents for in-depth analysis and information extraction.
-    *   **Academic Review**: Generate concise summaries and critical peer reviews of research papers, aiding in literature analysis and understanding.
-    *   **Ollama Integration**: Seamlessly manages a local Ollama instance for efficient model inference, supporting a wide range of open-source language models.
-*   **Experimental Chatbots**: A collection of diverse chatbot scripts for exploring different AI models and conversational paradigms.
-*   **AI Visualizer**: Tools and scripts for visualising AI-related data, concepts, and model outputs, enhancing understanding and interpretation.
+*   **Research Assistant (Orochimaru)**: The flagship, as a desktop app and as a browser app.
+    *   **Multi-document RAG**: Load PDFs, Word, PowerPoint, OpenDocument, HTML, RTF or text files and ask across all of them at once, with `[answer:source]` citations to the excerpts actually used.
+    *   **Skills**: Around 30 toggles -- summary, physicist / chemist / editor review, fact check, literature review, data extraction, BibTeX, quiz, flashcards, LaTeX, code review and more -- picked from a menu or typed as `/command`.
+    *   **Saved chats**: Optionally written as Markdown files to a folder you choose, sorted into categories, and reopened later.
+*   **Agentic Search (Kakashi)**: Searches the open web or academic papers and writes an answer cited against what it found, or skips the AI entirely.
+*   **AI Visualizer**: Shows next-token predictions as you type.
  
 ## Screenshots
 
@@ -116,6 +116,9 @@ nothing on a `file://` document), and Orochimaru's PDF reader, which loads
 pdf.js as an ES module. The command above needs no network — everything it
 serves is in this repository.
 
+Saving chats to a folder uses the File System Access API, so it works in
+Chrome and Edge; Firefox and Safari can still download a chat as Markdown.
+
 ### Prerequisites
 
 *   **Python 3.8+**: The core programming language for Kusanagi-AI.
@@ -147,7 +150,7 @@ serves is in this repository.
     *   Open `System_Config.json` located in the project root.
     *   Ensure `ollama_path` accurately points to your Ollama executable (e.g., `F:\Portable_AI_Assets\ollama_main\ollama.exe`).
     *   Set `model_folder` to the directory where your Ollama models are stored.
-    *   **Download Models**: Pull the necessary models using the Ollama CLI. The default embedding model is `all-minilm`, and you'll need at least one chat model.
+    *   **Download Models**: Pull the necessary models using the Ollama CLI (or the PowerShell helpers in `scripts_to_pull/`). The default embedding model is `all-minilm`, and you'll need at least one chat model.
     <details>
       <summary>Click to expand</summary>
       
@@ -203,10 +206,7 @@ python scripts/serve.py
 
 ## Portability and Included Assets
 
-Kusanagi-AI is designed for maximum portability and ease of use, incorporating several key components directly within the `Portable_AI_Assets` directory. This approach minimizes initial setup time and ensures a self-contained environment.
-
--   **Ollama Executable**: A pre-packaged `ollama.exe` is included for convenience, facilitating local model serving.
--   **Starter Models**: To jumpstart your research, a selection of foundational models such as Gemma, Qwen, and TinyLlama are provided.
+The desktop apps are built to run from a portable `Portable_AI_Assets` directory beside the repository, holding an Ollama executable and its models, so the whole setup can live on one drive. That directory is **not** part of this repository: no binaries or model weights are committed. Download Ollama yourself and pull the models you want (`scripts_to_pull/` has helpers for TinyLlama, Llama 3.2, Phi-3.5, all-minilm and mxbai-embed-large). Models that work well on a laptop include Gemma, Qwen and TinyLlama.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/prathameshnium/static-files/main/icons/Gemma.jpg" alt="Gemma Logo" width="150"/>
@@ -214,7 +214,7 @@ Kusanagi-AI is designed for maximum portability and ease of use, incorporating s
   <img src="https://raw.githubusercontent.com/prathameshnium/static-files/main/icons/Tinylamma.jpg" alt="TinyLlama Logo" width="87"/>
 </p>
 
-**Important Note on Open-Source Projects**: We deeply respect and acknowledge the intellectual property of the original creators of the included open-source projects. Kusanagi-AI merely integrates these tools for enhanced portability and user convenience. We do not claim ownership over these projects.
+**Important Note on Open-Source Projects**: We deeply respect and acknowledge the intellectual property of the original creators of these open-source projects. Kusanagi-AI merely works with these tools for enhanced portability and user convenience. We do not claim ownership over these projects.
 
 Please refer to the original repositories for detailed information and licensing:
 
@@ -237,13 +237,18 @@ Please refer to the original repositories for detailed information and licensing
 ```
 Kusanagi-AI/
 ├── index.html                  Dashboard: configure providers, launch a tool
-├── web_apps/                   The five browser apps
+├── web_apps/                   Kakashi, Orochimaru, Visualize (+ Neji and
+│                               OneTail, which only forward to the merged apps)
 ├── static/
 │   ├── keys.js                 API-key store (session-scoped by default)
-│   ├── providers.js            Gemini / Anthropic / HF / OpenRouter / Ollama
+│   ├── providers.js            Gemini / Anthropic / HF / OpenRouter / Ollama,
+│   │                           streaming, Claude options and web tools
 │   ├── dom.js                  Safe DOM construction + Markdown sanitising
-│   ├── prompts.js              Shared system prompts (rigour + citation rules)
-│   ├── ui.js                   Settings dialog, toasts, result cards
+│   ├── prompts.js              Shared system prompts and the skills list
+│   ├── ui.js                   Settings dialog, toasts, result cards, read aloud
+│   ├── chats.js                Saving chats as Markdown to a chosen folder
+│   ├── theme.js                Black / blue theme switch
+│   ├── thinking.js             "Thinking..." phrases (generated)
 │   ├── pages/                  One script per page
 │   ├── kusanagi.css            Compiled Tailwind (generated)
 │   ├── src/input.css           Stylesheet source — edit this one
@@ -255,7 +260,11 @@ Kusanagi-AI/
 ├── scripts/
 │   ├── serve.py                Local web server for the suite
 │   ├── build_css.py            Compile static/src/input.css → static/kusanagi.css
+│   ├── check_models.py         Validate model IDs against the live APIs
+│   ├── make_thinking.py        Regenerate static/thinking.js
 │   └── fetch_fonts.py          Re-vendor the webfonts
+├── scripts_to_pull/            PowerShell helpers to pull Ollama models
+├── tests/                      pytest suite (no browser, no network)
 ├── Portable_AI_Assets/         Ollama binary + models (not in git)
 ├── System_Config.json
 └── requirements.txt
@@ -341,22 +350,53 @@ comes from outside them; *Documents only* answers from the retrieved excerpts
 and refuses anything they do not cover. Retrieved text is fenced and the model
 is told never to follow instructions inside it.
 
+**Retrieval** runs over every loaded document at once. Documents are cut into
+overlapping ~1,000-character pieces that end on a sentence, and **Search documents by** picks
+how pieces are ranked: *Smart (BM25)*, the default, weights rare words above
+common ones and matches word forms ("measured" meets "measuring"), and folds in
+the previous question so a follow-up finds the passage the chat is about;
+*Original (exact words)* counts the query words as written, for when the
+precise term matters. With Claude as the provider, a file can instead be **sent
+whole**, so the model reads all of it (PDFs and images as they are) — see
+Security and privacy for what that means.
+
 Citations are academic-style: the model writes `[n]` and the page shows it as
 `[answer:source]` (so `[1:2]` is the second source of the first answer), linked
 to that answer's reference list. The page builds the list from the sources it
 actually sent, so no link in it can be invented.
 
-**Skills** (Summarise, and Physicist / Chemist / Editor review) are toggles:
-while one is on it shapes every answer, and switching one on with documents
-loaded also runs it on them once. The moon button beside the home button
-switches every page to **black mode**, a true-black background that is easier
-on the eyes; the choice is remembered.
+**Skills** are toggles, grouped into answer style (Explain simply, Expert depth,
+Concise, Shorter, Socratic tutor — one at a time), review (Summarise, Physicist /
+Chemist / Editor review, Fact check, Devil's advocate), research (Literature
+review, Compare, Extract data, Research plan, BibTeX), study (Quiz me,
+Flashcards, Glossary), writing (Outline, Proofread, Doc co-authoring, Slide
+outline, LaTeX) and code. While one is on it shapes every answer. Type `/` in
+the chat box to pick one: `/skill` on its own switches it on and runs it at once
+(over the loaded documents, or on the last answer), and `/skill question`
+switches it on and asks.
+
+**Chats.** Answers stream in as they are written. Under **Chat history**,
+choose a folder and each chat is saved there as a Markdown file as you go,
+readable anywhere and reopenable later; chats can be filed into categories.
+**No history** pauses saving for the current chat, and **Clear** deletes the
+chat's file and drops every loaded document. Any chat can also be downloaded as
+Markdown. On wide screens the sidebar folds away.
+
+**Claude options.** With Anthropic as the provider, Settings (and the controls
+beside each chat or search box) set thinking **effort**, a **Reasoning** box with
+Claude's summarised thinking, prompt caching (on by default, so each turn
+re-reads the documents and history at about a tenth of the price), US-only
+inference, fast mode, and Claude's own **web search and fetch**, with an
+optional cap per answer.
 
 **Formatting.** Every prose answer is Markdown with all mathematics, symbols and
 chemical formulas in LaTeX, typeset in the page by the vendored KaTeX (with
-`trust` off, so TeX cannot create links). Each answer has **Copy** (the Markdown
-source, LaTeX intact) and **Read aloud** buttons; the chat header has **Copy
-chat** and **Read chat aloud**.
+`trust` off, so TeX cannot create links). Code blocks get a language label and a
+Copy button. Each answer has **Copy** (the Markdown source, LaTeX intact) and
+**Read aloud** buttons; the chat header has **Copy chat** and **Read chat
+aloud**. Read aloud can use voices on this device or the browser's online
+voices, with pause, previous and next. Pages open in **black mode** (true
+black); the moon button switches to the blue theme, and the choice is remembered.
 
 ## Security and privacy
 
@@ -392,10 +432,28 @@ different provider is refused, at save time and again before any request, so a
 mis-pasted key is never sent to the wrong company. *Purge all keys* clears both
 stores.
 
-**Your documents.** Documents opened in Orochimaru are parsed in the browser and held
-in memory. They are never uploaded. Excerpts retrieved for a question are sent to
-whichever provider you configured, as part of the prompt — for work that must not
-leave the machine at all, use the desktop app against a local Ollama.
+**Your documents.** Documents opened with **Load document** (or *Read here
+(private)* on a drop) are parsed in the browser and held in memory; only the
+excerpts retrieved for a question are sent to whichever provider you configured,
+as part of the prompt. **Send whole file to AI** is different: the provider
+(currently Anthropic only) receives the entire file with every message, inline
+rather than through a file store, and the page asks before each file goes. For
+work that must not leave the machine at all, use the desktop app against a local
+Ollama.
+
+**Your chats.** Nothing is saved until you choose a folder; then chats are plain
+Markdown files on your disk. The browser remembers only the folder handle (in
+IndexedDB) and asks for permission again each session. **No history** stops
+saving on this device, but is not private mode: the provider still receives
+every message.
+
+**Read aloud.** Device voices run locally. Online voices send the text being
+read to the browser vendor's speech service (Microsoft for Edge, Google for
+Chrome); the Settings dialog says so where you pick one.
+
+**Claude's web tools.** When web search or fetch is on, Anthropic runs the
+searches and fetches itself; the browser still talks only to
+`api.anthropic.com`. The pages Claude used are listed under the answer.
 
 **Untrusted content.** Paper titles, abstracts and model output are third-party
 text. It is rendered as text nodes, never by assigning to `innerHTML`; the one
@@ -420,8 +478,8 @@ Found something? Please [open an issue](https://github.com/prathameshnium/Kusana
 We are continuously working to enhance Kusanagi-AI. Here are some of the features and improvements on our roadmap:
 
 -   **Enhanced RAG Capabilities**:
-    -   **Multi-Document Chat**: Enable querying and synthesizing information across multiple documents simultaneously.
-    -   **Fact-Checking Mode**: Implement the "Checker" feature to validate statements and claims against the provided text, highlighting supporting evidence.
+    -   **Multi-Document Chat**: Done in the web Orochimaru (retrieval ranks across every loaded document); the desktop app remains.
+    -   **Fact-Checking Mode**: A *Fact check* skill is in the web app; highlighting the supporting passage in the source remains.
     -   **Advanced Reviewer Personas**: Introduce more specialized reviewer roles for nuanced academic feedback.
 
 -   **UI and UX Improvements**:
@@ -440,7 +498,7 @@ We welcome contributions from the community! Whether it's bug reports, feature s
 
 ## License
 
-This project is released under the [MIT License](./License).
+This project is released under the [MIT License](./LICENSE).
 
 ## Disclaimer
 

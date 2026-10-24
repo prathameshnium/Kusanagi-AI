@@ -9,8 +9,9 @@
  * HTML through DOMParser (which never runs scripts), and anything text-based
  * (txt, md, csv, dat, json, ...) as plain text.
  *
- * The conversation lives in `history` and `transcript` and nowhere else: not
- * localStorage, not sessionStorage, not a server. Reloading loses it.
+ * The conversation lives in `history` and `transcript`: not localStorage, not
+ * sessionStorage, not a server. It is written to disk only as a Markdown file in
+ * a folder the user chose (chats.js); without one, reloading loses it.
  *
  * Documents live in `documents` and nowhere else. Filenames are attacker-controlled
  * for our purposes (a file can be named anything), so they are rendered as text and
