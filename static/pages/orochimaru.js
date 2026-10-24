@@ -206,11 +206,22 @@
     // One request may be at most 32 MB, and base64 adds a third.
     var MAX_SENT_BYTES = 20 * 1024 * 1024;
     var MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+    // Text goes as text, about four characters a token (fewer for numbers), so
+    // this keeps text files sent whole to roughly 500k tokens of a 1M context.
+    // A 20 MB data file would be over ten million.
+    var MAX_SENT_CHARS = 2000000;
     var IMAGE_TYPES = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
         gif: 'image/gif', webp: 'image/webp' };
 
     function sentBytes() {
         return sentNames().reduce(function (sum, n) { return sum + sentFiles[n].file.bytes; }, 0);
+    }
+
+    function sentChars() {
+        return sentNames().reduce(function (sum, n) {
+            var f = sentFiles[n].file;
+            return sum + (f.kind === 'text' ? f.data.length : 0);
+        }, 0);
     }
 
     function base64Of(file) {
@@ -264,6 +275,13 @@
             : extractText(file, ext).then(function (text) {
                 text = tidy(text);
                 if (!text) throw new Error(file.name + ' contains no readable text.');
+                if (sentChars() + text.length > MAX_SENT_CHARS) {
+                    throw new Error('too big to send whole (about '
+                        + Math.round(text.length / 4000).toLocaleString() + 'k tokens; '
+                        + 'the limit is about 500k for all text files sent whole). Use '
+                        + 'Load document instead: it keeps the file here and sends only '
+                        + 'the passages that answer each question.');
+                }
                 return text;
             });
 

@@ -300,10 +300,34 @@ window.Kusanagi = window.Kusanagi || {};
             retryable = resp.status === 400 && /model/i.test(msg || '');
         }
 
+        if (/prompt is too long|context length|too many tokens/i.test(msg || '')) {
+            text += ' The chat no longer fits the model. Remove a file sent whole, or '
+                + 'start a new chat; use Load document for big files.';
+            retryable = false;
+        }
+
         var err = new Error(text);
         err.status = resp.status;
         err.retryable = retryable;
         return err;
+    }
+
+    // The largest context any model here takes is 1M tokens. Text runs about
+    // four characters a token, so anything estimated past this cannot fit.
+    var MAX_PROMPT_TOKENS = 1000000;
+
+    /** Rough token count of the text in `messages`. Files sent as base64
+     *  (PDFs, images) are left out: their cost is not their length. */
+    function estimateTokens(messages) {
+        var chars = 0;
+        messages.forEach(function (m) {
+            if (typeof m.content === 'string') chars += m.content.length;
+            else m.content.forEach(function (part) {
+                if (part.type === 'text') chars += String(part.text || '').length;
+                else if (part.kind === 'text') chars += String(part.data || '').length;
+            });
+        });
+        return Math.ceil(chars / 4);
     }
 
     /**
@@ -792,6 +816,14 @@ window.Kusanagi = window.Kusanagi || {};
         })) {
             return Promise.reject(new Error(label(provider) + ' cannot take whole files '
                 + 'here, so nothing was sent.'));
+        }
+        // Checked here, so a hopeless request is never sent at all.
+        var estimate = estimateTokens(messages);
+        if (estimate > MAX_PROMPT_TOKENS) {
+            return Promise.reject(new Error('This message is about '
+                + Math.round(estimate / 1000).toLocaleString() + 'k tokens, more than any '
+                + 'model takes (1,000k), so nothing was sent. Remove a file sent whole, or '
+                + 'start a new chat; use Load document for big files.'));
         }
 
         var temp = Number.isFinite(p.temperature) ? p.temperature : 0.5;
