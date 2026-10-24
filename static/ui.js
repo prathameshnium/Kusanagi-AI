@@ -416,7 +416,8 @@ window.Kusanagi = window.Kusanagi || {};
             vaultFields.classList.toggle('hidden', !persistBox.checked);
             vaultConfirm.classList.toggle('hidden', !creating);
             vaultPassword.placeholder = creating
-                ? 'New vault password (at least ' + vault.MIN_PASSWORD + ' characters)'
+                ? 'New vault password (at least ' + vault.MIN_PASSWORD + ' characters, '
+                    + vault.RECOMMENDED_PASSWORD + '+ recommended)'
                 : 'Vault password';
             persistNote.textContent = persistBox.checked
                 ? 'Encrypted in this browser (AES-256-GCM) with your password. Only the '

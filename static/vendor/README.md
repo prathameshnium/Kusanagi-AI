@@ -15,7 +15,7 @@ visitor being announced to Google Fonts.
 | Path | Version | Upstream |
 |---|---|---|
 | `marked.min.js` | 12.0.2 | https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js |
-| `purify.min.js` | 3.2.7 | https://cdn.jsdelivr.net/npm/dompurify@3.2.7/dist/purify.min.js |
+| `purify.min.js` | 3.4.16 | https://registry.npmjs.org/dompurify/-/dompurify-3.4.16.tgz (`dist/purify.min.js`, tarball sha512 checked against npm) |
 | `katex/katex.min.js`<br>`katex/katex.min.css`<br>`katex/auto-render.min.js`<br>`katex/fonts/*.woff2` | 0.16.22 | https://cdn.jsdelivr.net/npm/katex@0.16.22/dist/ |
 | `pdfjs/pdf.min.mjs`<br>`pdfjs/pdf.worker.min.mjs` | 4.10.38 (legacy build) | https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/legacy/build/ |
 | `fonts/*.woff2`, `fonts/fonts.css` | — | Google Fonts (Inter, JetBrains Mono) |
@@ -33,8 +33,9 @@ subresource-integrity hash, and needs `'unsafe-eval'`.
   which is why Orochimaru imports it dynamically and why that one app needs to be
   served over http rather than opened from `file://`. The reader also passes
   `isEvalSupported: false` as a second line of defence.
-- **DOMPurify 3.2.7, not 3.0.6.** Several sanitiser bypasses were fixed in
-  between. This is the only thing standing between model output and the DOM.
+- **DOMPurify 3.4.16, not 3.2.7.** 3.2.7 is hit by CVE-2026-41238, an XSS
+  bypass under the default config; 3.4.7+ also fixes the later 2026
+  advisories. This is the only thing standing between model output and the DOM.
 - **KaTeX 0.16.22.** Later than the 0.16.9 previously used, which predates the
   `\htmlData` and `maxExpand` advisories.
 - **woff2 only.** The KaTeX stylesheet's `woff` and `ttf` `src` entries were

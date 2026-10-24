@@ -412,8 +412,8 @@ make. Turn it off in Settings.
 
 **Your keys.** A key you enter is held in `sessionStorage` and disappears when the
 tab closes. Ticking *Remember on this device* stores it **encrypted**: the browser
-derives a key from a password you choose (PBKDF2-SHA-256, 600,000 rounds, random
-salt) and seals your keys with AES-256-GCM. Only that ciphertext is written to
+derives a key from a password you choose (at least 8 characters, 12+ recommended;
+PBKDF2-SHA-256, 600,000 rounds, random salt) and seals your keys with AES-256-GCM. Only that ciphertext is written to
 `localStorage`. The password is never stored and never sent anywhere; you type it
 once per tab session to unlock, and if it is lost the keys cannot be recovered —
 purge and re-enter them. Keys an older version saved unencrypted are flagged on the

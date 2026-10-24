@@ -113,9 +113,10 @@ window.Kusanagi = window.Kusanagi || {};
     var VAULT = NS + 'vault';              // localStorage: the sealed blob
     var VAULT_OPEN = NS + 'vault_open';    // sessionStorage: providers unlocked here
     var VAULT_ITERATIONS = 600000;         // OWASP's current figure for PBKDF2-SHA-256
-    // Short by the user's choice. A 4-character password is guessable offline by
-    // anyone who copies this browser's storage; longer ones are still accepted.
-    var VAULT_MIN_PASSWORD = 4;
+    // Anyone who copies this browser's storage can guess offline, so 8 is the
+    // floor and the UI asks for 12.
+    var VAULT_MIN_PASSWORD = 8;
+    var VAULT_RECOMMENDED_PASSWORD = 12;
     // Binds the ciphertext to this purpose, so it cannot be replayed as another blob.
     var VAULT_AAD = new TextEncoder().encode('kusanagi-key-vault-v1');
 
@@ -232,6 +233,7 @@ window.Kusanagi = window.Kusanagi || {};
 
     var vault = {
         MIN_PASSWORD: VAULT_MIN_PASSWORD,
+        RECOMMENDED_PASSWORD: VAULT_RECOMMENDED_PASSWORD,
 
         /** An encrypted vault exists in this browser. */
         exists: function () { return !!readBlob(); },

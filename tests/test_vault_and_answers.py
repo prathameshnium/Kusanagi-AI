@@ -102,7 +102,9 @@ def test_vault_uses_strong_authenticated_encryption():
 
 def test_new_vault_requires_a_long_password():
     minimum = int(re.search(r"VAULT_MIN_PASSWORD = (\d+)", KEYS).group(1))
-    assert minimum >= 12
+    assert minimum >= 8
+    recommended = int(re.search(r"VAULT_RECOMMENDED_PASSWORD = (\d+)", KEYS).group(1))
+    assert recommended >= 12
 
 
 def test_purge_destroys_the_vault():

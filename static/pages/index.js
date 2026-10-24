@@ -120,7 +120,8 @@
     function plaintextWarning(plain) {
         var creating = !vault.exists();
         var pw = pwInput('plain-password', creating
-            ? 'New password (' + vault.MIN_PASSWORD + '+ characters)' : 'Password');
+            ? 'New password (' + vault.MIN_PASSWORD + '+ characters, '
+                + vault.RECOMMENDED_PASSWORD + '+ recommended)' : 'Password');
         var confirm = pwInput('plain-confirm', 'Repeat password');
         var encrypt = el('button', { type: 'button', class: 'btn btn-accent text-xs',
             text: 'Encrypt' });
@@ -213,7 +214,8 @@
         remember.checked = remembered;
         var creating = !vault.exists();
         var password = pwInput('vault-password', creating
-            ? 'New password (' + vault.MIN_PASSWORD + '+ characters)' : 'Your vault password');
+            ? 'New password (' + vault.MIN_PASSWORD + '+ characters, '
+                + vault.RECOMMENDED_PASSWORD + '+ recommended)' : 'Your vault password');
         var confirm = pwInput('vault-confirm', 'Repeat password');
         var pwRow = el('div', { class: 'flex flex-wrap gap-2 mt-2' }, [
             el('div', { class: 'flex-1 min-w-[180px]' }, [password]),
